@@ -81,7 +81,12 @@ void *kmalloc(size_t size) {
                 struct Chunk *previous_chunk = find_free_chunk_predecessor(aligned_size);
                 chunk.next_node = previous_chunk->next_node;
                 previous_chunk->next_node = align_ptr(previous_chunk->ptr + previous_chunk->size);
-                chunk.ptr = (void *) previous_chunk->next_node + sizeof(struct Chunk); //here it goes insane
+                chunk.ptr = (void *) previous_chunk->next_node + sizeof(struct Chunk);
+        }
+
+        size_t heap_size_after_alloc = get_current_heap_size() + chunk.size + sizeof(struct Chunk);
+        if (heap_size_after_alloc >= HEAP_SIZE) {
+                return nullptr;
         }
 
         Allocator.size += chunk.size;
@@ -121,12 +126,12 @@ void kfree(void *ptr) {
         }
 }
 
-size_t get_allocated_size() {
+size_t get_allocated_size(void) {
         return Allocator.size;
 }
 
-size_t get_current_heap_size() {
-        return Allocator.size + Allocator.count * 3;
+size_t get_current_heap_size(void) {
+        return Allocator.size + Allocator.count * sizeof(struct Chunk);
 }
 
 #ifdef TESTS
@@ -345,6 +350,17 @@ void test_kfree_size_info(void) {
         TEST_ASSERT_EQUAL_INT(2 * sizeof(size_t), Allocator.size);
 }
 
+void test_get_current_heap_size(void) {
+        setup_global_allocator();
+
+        kmalloc(sizeof(int));
+        kmalloc(sizeof(int));
+
+        size_t expected_size = 2 * align_size(sizeof(int)) + 2 * sizeof(struct Chunk);
+
+        TEST_ASSERT_EQUAL_INT(expected_size, get_current_heap_size());
+}
+
 int main(void) {
         UNITY_BEGIN();
 
@@ -364,6 +380,7 @@ int main(void) {
         RUN_TEST(test_kfree_middle);
         RUN_TEST(test_kfree_multiple);
         RUN_TEST(test_kfree_size_info);
+        RUN_TEST(test_get_current_heap_size);
 
         return UNITY_END();
 }

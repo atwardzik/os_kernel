@@ -17,8 +17,8 @@ void *krealloc(void *ptr, size_t size);
 
 void kfree(void *ptr);
 
-size_t get_allocated_size();
+size_t get_allocated_size(void);
 
-size_t get_current_heap_size();
+size_t get_current_heap_size(void);
 
 #endif //MEMORY_H
