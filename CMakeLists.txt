@@ -12,6 +12,7 @@ add_executable(debug
         src/drivers/time.s
         src/drivers/uart.s
         src/start.s
+        src/isr.s
         src/resets.s
         src/main.c
         src/stdio.s
@@ -20,6 +21,7 @@ add_executable(debug
 )
 
 set_source_files_properties(src/memory.c PROPERTIES COMPILE_FLAGS -Wno-pointer-arith)
+set_source_files_properties(src/proc.c PROPERTIES COMPILE_FLAGS -Wno-pointer-arith)
 
 target_link_libraries(debug
         -T${LINKER_SCRIPT}
