@@ -9,7 +9,7 @@
 #include "memory.h"
 #include <stddef.h>
 
-enum state {
+enum State {
         running,
         ready,
         blocked,
@@ -17,11 +17,10 @@ enum state {
 
 typedef int pid_t;
 
-struct process {
-        pid_t pid;
+struct Process {
         void *pstack;
-        enum state pstate;
-        struct registers pregs;
+        pid_t pid;
+        enum State pstate;
         size_t allocated_memory;
 };
 
