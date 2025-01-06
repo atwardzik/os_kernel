@@ -16,6 +16,7 @@ add_executable(debug
         src/resets.s
         src/main.c
         src/stdio.s
+        src/divider.s
         src/proc.c
         src/memory.c
 )
