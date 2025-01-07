@@ -2,6 +2,7 @@ MEMORY
 {
     sram_code (rx) : ORIGIN = 0x20000000, LENGTH = 256k     /*four larger banks*/
     sram_data (rw) : ORIGIN = 0x20040000, LENGTH = 4k       /*smaller data bank*/
+    sram_bss (rw) : ORIGIN = 0x20041000, LENGTH = 4k        /*smaller data bank*/
 }
 
 SECTIONS
@@ -19,7 +20,15 @@ SECTIONS
     .data : {
        __data_start = .;
        *(.data)
-       *(.data.*)
+       *(.data*)
        __data_end = .;
     } > sram_data
+
+    .bss : {
+        __bss_start = .;
+        *(.bss)
+        *(.bss*)
+        *(COMMON*)
+        __bss_end = .;
+    } > sram_bss
 }

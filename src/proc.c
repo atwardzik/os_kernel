@@ -8,11 +8,10 @@
 static constexpr size_t MAX_PROCESS_NUMBER = 20; //TODO: change to dynamic processes count
 static constexpr int HASH_MODULO = 3; //has to be coprime with MAX_PROCESS_NUMBER
 static constexpr int DELETED_TRACER = MAX_PROCESS_NUMBER * 2;
-static size_t pid_hash[MAX_PROCESS_NUMBER]; //why is the global array not initialised to 0? Should the kernel worry about it?
 
 static constexpr int DEFAULT_PROCESS_SIZE = 3 * 1024; //3 [KB]
 
-#define THREAD_PSP_CODE = 0xfffffffd;
+#define THREAD_PSP_CODE ((void *) 0xfffffffd);
 
 static struct {
         struct Process *processes;
@@ -23,8 +22,9 @@ static struct {
 } scheduler __attribute__ ((section (".data")));
 
 
-static unsigned int calculate_pid_hash(pid_t pid, size_t i) {
-        unsigned int index = mod(pid, 20);
+static size_t calculate_pid_hash(pid_t pid, size_t i) {
+        static size_t pid_hash[MAX_PROCESS_NUMBER];
+        size_t index = mod(pid, 20);
 
         if (!pid_hash[index] || pid_hash[index] == DELETED_TRACER || pid == 0) {
                 pid_hash[index] = pid;
