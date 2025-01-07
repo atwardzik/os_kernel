@@ -37,10 +37,10 @@ irq_1_31: .fill 32, 4, 0
 
 decl_isr_bkpt isr_nmi
 decl_isr_bkpt isr_hardfault
-decl_isr_bkpt isr_svcall
+@ decl_isr_bkpt isr_svcall
 decl_isr_bkpt isr_invalid
-decl_isr_bkpt isr_pendsv
-decl_isr_bkpt isr_systick
+@ decl_isr_bkpt isr_pendsv
+@ decl_isr_bkpt isr_systick
 
 
 .section .reset, "ax"
@@ -58,14 +58,27 @@ reset:
     ldr  r1, SRAM_STRIPED_END
     mov  sp, r1
 
+clear_bss:
+    ldr  r1, SRAM_BSS
+    ldr  r2, =0x1000        @ size of bss
+    add  r2, r1, r2
+    movs r0, #0
+
+    .clear_loop:
+        strb r0, [r1]
+        adds r1, #1
+        cmp  r1, r2
+        bne  .clear_loop
+
 platform_entry:
     ldr  r1, =main
     blx  r1
     mov  r0, r0
-    bkpt #0     @ should not return
+    bkpt #0                     @ should not return
 
 
 .align 4
 PPB_BASE:           .word 0xe0000000
 VTOR_OFFSET:        .word 0xed08
 SRAM_STRIPED_END:   .word 0x20040000
+SRAM_BSS:           .WORD 0x20041000
