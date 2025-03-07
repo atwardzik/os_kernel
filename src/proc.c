@@ -24,7 +24,7 @@ static struct {
 
 static size_t calculate_pid_hash(pid_t pid, size_t i) {
         static size_t pid_hash[MAX_PROCESS_NUMBER];
-        size_t index = mod(pid, 20);
+        size_t index = hw_mod(pid, 20);
 
         if (!pid_hash[index] || pid_hash[index] == DELETED_TRACER || pid == 0) {
                 pid_hash[index] = pid;

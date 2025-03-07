@@ -21,4 +21,8 @@ size_t get_allocated_size(void);
 
 size_t get_current_heap_size(void);
 
+void memset(void *dst, int value, size_t count);
+
+void memcpy(void *dst, const void *src, size_t count);
+
 #endif //MEMORY_H

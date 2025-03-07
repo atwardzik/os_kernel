@@ -47,9 +47,9 @@ hw_divider_divmod_s32:
  * r1 - divisor
  */
 .thumb_func
-.global mod
+.global hw_mod
 .align 4
-mod:
+hw_mod:
     push {lr}
 
     bl   hw_divider_divmod_s32
@@ -63,9 +63,9 @@ mod:
  * r1 - divisor
  */
 .thumb_func
-.global div
+.global hw_div
 .align 4
-div:
+hw_div:
     push {lr}
 
     bl   hw_divider_divmod_s32

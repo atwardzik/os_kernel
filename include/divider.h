@@ -7,8 +7,8 @@
 
 #include <stdint.h>
 
-uint32_t mod(uint32_t divident, uint32_t divisor);
+uint32_t hw_mod(uint32_t divident, uint32_t divisor);
 
-uint32_t div(uint32_t divident, uint32_t divisor);
+uint32_t hw_div(uint32_t divident, uint32_t divisor);
 
 #endif //DIVIDER_H

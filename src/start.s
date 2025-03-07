@@ -60,7 +60,7 @@ reset:
 
 clear_bss:
     ldr  r1, SRAM_BSS
-    ldr  r2, =0x1000        @ size of bss
+    ldr  r2, =0x1000            @ size of bss
     add  r2, r1, r2
     movs r0, #0
 

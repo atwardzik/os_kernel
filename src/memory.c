@@ -134,6 +134,12 @@ size_t get_current_heap_size(void) {
         return Allocator.size + Allocator.count * sizeof(struct Chunk);
 }
 
+void memset(void *dst, int value, size_t count) {
+        for (size_t i = 0; i < count; ++i) {
+                *((size_t *) dst + i) = value;
+        }
+}
+
 #ifdef TESTS
 
 #include "tests/unity.h"
