@@ -15,8 +15,8 @@ clean:
 time.o: src/drivers/time.s
 	$(ARM)-as $(AS_ARGS) src/drivers/time.s -o build/time.o
 
-gpio_functions.o: src/drivers/gpio_functions.s
-	$(ARM)-as $(AS_ARGS) src/drivers/gpio_functions.s -o build/gpio_functions.o
+gpio_functions.o: src/drivers/gpio_functions.S
+	$(ARM)-gcc $(AS_ARGS) src/drivers/gpio_functions.s -o build/gpio_functions.o
 
 uart.o: src/drivers/uart.s
 	$(ARM)-as $(AS_ARGS) src/drivers/uart.s -o build/uart.o

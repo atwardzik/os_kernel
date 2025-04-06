@@ -2,6 +2,7 @@
 .thumb
 .syntax unified
 
+#ifdef ARCH_RP2040
 .equ GPIO_OE, 0x20
 .equ GPIO_OE_SET, 0x24
 .equ GPIO_OE_CLR, 0x28
@@ -10,6 +11,17 @@
 .equ GPIO_OUT_SET, 0x14
 .equ GPIO_OUT_CLR, 0x18
 .equ GPIO_OUT_XOR, 0x1c
+
+#elifdef ARCH_RP2350
+.equ GPIO_OE, 0x30
+.equ GPIO_OE_SET, 0x38
+.equ GPIO_OE_CLR, 0x40
+.equ GPIO_IN, 0x04
+.equ GPIO_OUT, 0x10
+.equ GPIO_OUT_SET, 0x18
+.equ GPIO_OUT_CLR, 0x20
+.equ GPIO_OUT_XOR, 0x28
+#endif
 
 
 /**
@@ -20,6 +32,7 @@
 .thumb_func
 .global GPIO_function_select
 .align 4
+#ifdef ARCH_RP2040
 GPIO_function_select:
     ldr  r3, IO_BANK0_BASE
 
@@ -31,6 +44,50 @@ GPIO_function_select:
     str  r1, [r3]                   @ write specfied function
 
     bx   lr
+
+
+#elifdef ARCH_RP2350
+GPIO_function_select:
+    push {r4}
+    @ calculate offset for PADS_GPIO_n
+    ldr  r4, PADS_BANK0_BASE
+    movs r3, #4
+    muls r3, r3, r0
+    adds r3, #0x04
+    add  r3, r3, r4
+    ldr  r2, =pads_offset
+    str  r3, [r2]
+
+    @ setup pads
+    ldr  r2, [r3]		    @ read current state of pad
+    movs r4, #0x40		    @ PADS_BANK0_GPIO0_IE_BITS
+    eors r2, r2, r4
+    movs r4, 0xc0		    @ IE_BITS, OD_BITS
+    ands r2, r2, r4
+    str  r2, [r3]
+
+    @ SIO function select
+    ldr  r3, IO_BANK0_BASE
+    movs r2, #8
+    muls r2, r2, r0                 @ calculate offset for GPIO_N_CTRL (minus 0x04)
+    adds r2, #0x04                  @ GPIO0_CTRL offset
+    add  r3, r3, r2                 @ add calculated offset
+    str  r1, [r3]                   @ write specfied function
+
+
+    ldr  r4, pads_offset
+    ldr  r3, =0x3000		    @ atomic register clear
+    adds r4, r4, r3
+    movs r1, #1
+    lsls r1, r1, #8
+    str  r1, [r4]
+
+    pop {r4}
+    bx   lr
+
+.align 4
+pads_offset: .word 0
+#endif
 
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -254,7 +311,15 @@ xor_pin:
 
     bx   lr
 
+
+#ifdef ARCH_RP2040
 .align 4
 IO_BANK0_BASE:      .word 0x40014000
 PADS_BANK0_BASE:    .word 0x4001c000
 SIO_BASE:           .word 0xd0000000
+#elifdef ARCH_RP2350
+.align 4
+IO_BANK0_BASE:      .word 0x40028000
+PADS_BANK0_BASE:    .word 0x40038000
+SIO_BASE:           .word 0xd0000000
+#endif

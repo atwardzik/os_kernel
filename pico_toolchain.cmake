@@ -21,3 +21,23 @@ set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
+macro(preprocess_sources preprocessor_define)
+    set(SOURCE_FILES ${ARGN})
+
+    set(PREPROCESS_OUTPUTS)
+
+    foreach (input_file ${SOURCE_FILES})
+        string(REPLACE ".S" ".s" output_file ${input_file})
+        list(APPEND PREPROCESS_OUTPUTS ${CMAKE_BINARY_DIR}/${output_file})
+
+        add_custom_command(
+                OUTPUT ${CMAKE_BINARY_DIR}/${output_file}
+                COMMAND ${CMAKE_C_COMPILER} -E -P ${preprocessor_define} ${input_file} -o ${CMAKE_BINARY_DIR}/${output_file}
+                DEPENDS ${input_file}
+                COMMENT "Preprocessing ${input_file} -> ${CMAKE_BINARY_DIR}/${output_file}"
+        )
+    endforeach ()
+
+    # Set the variable to be accessed outside the macro
+    set(PREPROCESS_OUTPUTS ${PREPROCESS_OUTPUTS})
+endmacro(preprocess_sources)
