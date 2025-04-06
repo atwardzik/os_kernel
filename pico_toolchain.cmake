@@ -32,8 +32,8 @@ macro(preprocess_sources preprocessor_define)
 
         add_custom_command(
                 OUTPUT ${CMAKE_BINARY_DIR}/${output_file}
-                COMMAND ${CMAKE_C_COMPILER} -E -P ${preprocessor_define} ${input_file} -o ${CMAKE_BINARY_DIR}/${output_file}
-                DEPENDS ${input_file}
+                COMMAND ${CMAKE_C_COMPILER} -E -P ${preprocessor_define} ${CMAKE_CURRENT_SOURCE_DIR}/${input_file} -o ${CMAKE_BINARY_DIR}/${output_file}
+                DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${input_file}
                 COMMENT "Preprocessing ${input_file} -> ${CMAKE_BINARY_DIR}/${output_file}"
         )
     endforeach ()

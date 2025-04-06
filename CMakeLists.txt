@@ -16,7 +16,7 @@ include_directories(${CMAKE_SOURCE_DIR} include tests)
 link_directories(${CMAKE_SOURCE_DIR} include tests)
 
 preprocess_sources(${PREPROCESSOR_DEFINE}
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/drivers/gpio_functions.S
+        src/drivers/gpio_functions.S
 )
 
 add_executable(debug
