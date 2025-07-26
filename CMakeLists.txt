@@ -10,25 +10,26 @@ else ()
     message(FATAL_ERROR "Target architecture should be defined, add -DARCH_RP2040 or -DARCH_RP2350")
 endif ()
 
-project(debug LANGUAGES C ASM)
+project(kernel LANGUAGES C ASM)
 
 include_directories(${CMAKE_SOURCE_DIR} include tests)
 link_directories(${CMAKE_SOURCE_DIR} include tests)
 
 preprocess_sources(${PREPROCESSOR_DEFINE}
         src/drivers/gpio_functions.S
+        src/drivers/time.S
+        src/drivers/uart.S
+        src/drivers/keyboard.S
+        src/resets.S
+        src/divider.S
 )
 
-add_executable(debug
+add_executable(kernel
         ${PREPROCESS_OUTPUTS}
-        src/drivers/time.s
-        src/drivers/uart.s
         src/start.s
         src/isr.s
-        src/resets.s
         src/main.c
         src/stdio.s
-        src/divider.s
         src/proc.c
         src/memory.c
 )
@@ -37,13 +38,13 @@ add_executable(debug
 set_source_files_properties(src/memory.c PROPERTIES COMPILE_FLAGS -Wno-pointer-arith)
 set_source_files_properties(src/proc.c PROPERTIES COMPILE_FLAGS -Wno-pointer-arith)
 
-target_link_libraries(debug
+target_link_libraries(kernel
         -T${LINKER_SCRIPT}
         -nostdlib
 )
 
-set_target_properties(debug PROPERTIES
+set_target_properties(kernel PROPERTIES
         LINK_DEPENDS ${CMAKE_SOURCE_DIR}/${LINKER_SCRIPT}
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
-        OUTPUT_NAME "debug.elf"
+        OUTPUT_NAME "kernel_debug.elf"
 )

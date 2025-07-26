@@ -25,8 +25,8 @@
 .global isr_svcall
 .align 4
 isr_svcall:
-    cmp  r7, YIELD_SVC
-    bx   lr
+        cmp  r7, YIELD_SVC
+        bx   lr
 
 
 
@@ -38,7 +38,7 @@ isr_svcall:
 .align 4
 isr_pendsv:
 
-    bx   lr
+        bx   lr
 
 /**
  *
@@ -48,4 +48,4 @@ isr_pendsv:
 .align 4
 isr_systick:
 
-    bx   lr
+        bx   lr

@@ -49,32 +49,32 @@ decl_isr_bkpt isr_invalid
 .global reset
 .align 4
 reset:
-    ldr  r2, PPB_BASE
-    ldr  r1, VTOR_OFFSET
-    add  r1, r1, r2
-    ldr  r0, =vector_table
-    str  r0, [r1]
+        ldr  r2, PPB_BASE
+        ldr  r1, VTOR_OFFSET
+        add  r1, r1, r2
+        ldr  r0, =vector_table
+        str  r0, [r1]
 
-    ldr  r1, SRAM_STRIPED_END
-    mov  sp, r1
+        ldr  r1, SRAM_STRIPED_END
+        mov  sp, r1
 
 clear_bss:
-    ldr  r1, SRAM_BSS
-    ldr  r2, =0x1000            @ size of bss
-    add  r2, r1, r2
-    movs r0, #0
+        ldr  r1, SRAM_BSS
+        ldr  r2, =0x1000            @ size of bss
+        add  r2, r1, r2
+        movs r0, #0
 
-    .clear_loop:
-        strb r0, [r1]
-        adds r1, #1
-        cmp  r1, r2
-        bne  .clear_loop
+        .clear_loop:
+                strb r0, [r1]
+                adds r1, #1
+                cmp  r1, r2
+                bne  .clear_loop
 
 platform_entry:
-    ldr  r1, =main
-    blx  r1
-    mov  r0, r0
-    bkpt #0                     @ should not return
+        ldr  r1, =main
+        blx  r1
+        mov  r0, r0
+        bkpt #0                     @ should not return
 
 
 .align 4

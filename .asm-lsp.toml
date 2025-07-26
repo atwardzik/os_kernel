@@ -1,0 +1,15 @@
+[default_config]
+version = "0.10.0"
+assembler = "gas"
+instruction_set = "arm"
+
+[default_config.opts]
+compiler = "arm-none-eabi-gcc"
+compile_flags_txt = [
+        "--warn",
+        "-mcpu=cortex-m33",
+        "-mthumb",
+        "-g"
+]
+diagnostics = true
+default_diagnostics = true
