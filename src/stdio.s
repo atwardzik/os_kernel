@@ -62,8 +62,8 @@ puts:
 .align 4
 getc:
         push {lr}
-        bl   uart_Rx
-        @     bl   keyboard_receive_char
+        @ bl   uart_Rx
+        bl   keyboard_receive_char
         pop  {pc}
 
 
@@ -86,7 +86,7 @@ gets:
         movs r6, #0                     @ loop counter
         .get_loop:
                 bl   getc
-                cmp  r0, carriage_return
+                cmp  r0, endl           @ carriage_return OR endline
                 beq  .end_get_loop
                 cmp  r6, r5
                 blt  .save

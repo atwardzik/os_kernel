@@ -6,8 +6,6 @@
 .thumb
 .syntax unified
 
-.equ INTR_OFFSET, 0xf0
-.equ IO_IRQ_BANK0_OFFSET, 0x74              @ IO_IRQ_BANK0 is 13th irq
 
 .equ GPIO_IN, 0x04
 
@@ -16,6 +14,19 @@
 .equ LOWER_NIBBLE_START, 6
 .equ NIBBLE_MASK, 0x0F
 
+
+#ifdef ARCH_RP2040
+.equ IO_IRQ_BANK0, 13
+@@@ VECTOR TABLE: 16 words for isr + 31 words for user irqs isr
+.equ IO_IRQ_BANK0_OFFSET, 0x74              @ IO_IRQ_BANK0 is 13th irq
+
+#elifdef ARCH_RP2350
+.equ IO_IRQ_BANK0, 21
+
+@@@ VECTOR TABLE: 16 words for isr + 52 words for user irqs isr
+.equ IO_IRQ_BANK0_OFFSET, 0x94              @ IO_IRQ_BANK0 is 21st irq
+
+#endif
 
 
 /**
@@ -65,7 +76,8 @@ init_keyboard:
                 lsrs r0, r0, #3                     @ pin / 8 = INTR_n
                 movs r2, #0x04
                 muls r0, r0, r2
-                adds r0, r0, INTR_OFFSET
+                ldr  r3, INTR_OFFSET
+                add  r0, r0, r3
                 add  r0, r0, r1
 
                 ldr  r1, edge_high_bit
@@ -121,7 +133,7 @@ set_pin_interrupt_isr:
         @@@@ enable appropriate interrupt at the CPU by turning off and on again @@@@
 
         movs r0, #1
-        lsls r0, #13                            @ IO_IRQ_BANK0 is 13th irq
+        lsls r0, IO_IRQ_BANK0
         ldr  r2, PPB_BASE
         ldr  r1, NVIC_ICPR_OFFSET               @ unset IRQ
         add  r1, r2
@@ -136,6 +148,7 @@ set_pin_interrupt_isr:
 .thumb_func
 .align 4
 pin_handler:
+        cpsid i
         push {lr}
 
         @ 1) determine INTR_n
@@ -144,7 +157,8 @@ pin_handler:
         lsrs r0, r0, #3                         @ pin / 8 = INTR_n
         movs r2, #0x04
         muls r0, r0, r2
-        adds r0, r0, INTR_OFFSET
+        ldr  r2, INTR_OFFSET
+        adds r0, r0, r2
         add  r0, r0, r1
 
         @ 2) reset interrupt
@@ -152,8 +166,8 @@ pin_handler:
         str  r1, [r0]                           @ clear by setting INTR
 
         @@@@@@@@ do some stuff @@@@@@@@@@
-        movs r0, #25
-        bl   xor_pin
+        @ movs r0, #25
+        @ bl   xor_pin
 
         ldr  r0, keyboard_flags
         ldr  r1, key_release_flag
@@ -197,12 +211,12 @@ pin_handler:
                 tst  r2, r3
                 beq  .select_keymap_normal
                 .select_shifted_keymap:
-                ldr  r1, =keymap_shifted
-                b    .convert_to_keymap
+                        ldr  r1, =keymap_shifted
+                        b    .convert_to_keymap
                 .select_keymap_normal:
-                ldr  r1, =keymap
+                        ldr  r1, =keymap
                 .convert_to_keymap:
-                ldrb r0, [r1, r0]
+                        ldrb r0, [r1, r0]
 
         .write_to_buffer:
                 ldr  r1, =keyboard_buffer
@@ -211,35 +225,35 @@ pin_handler:
                 strb r0, [r1, r3]
                 adds r3, r3, #1
                 strb r3, [r2]
-
                 b    .exit
 
         .shift_pressed:
                 ldr  r0, =keyboard_flags
                 ldr  r1, shift_flag
-                ldrb r2, [r0]
+                ldr  r2, [r0]
                 orrs r2, r2, r1
-                strb r2, [r0]
+                str  r2, [r0]
 
                 b    .exit
 
         .shift_released:
                 ldr  r0, =keyboard_flags
                 ldr  r1, shift_flag
-                ldrb r2, [r0]
+                ldr  r2, [r0]
                 eors r2, r2, r1
-                strb r2, [r0]
+                str  r2, [r0]
 
                 b    .exit
 
         .key_released:
                 ldr  r0, =keyboard_flags
                 ldr  r1, key_release_flag
-                ldrb r2, [r0]
+                ldr  r2, [r0]
                 orrs r2, r2, r1
-                strb r2, [r0]
+                str  r2, [r0]
 
         .exit:
+                cpsie i
                 pop {pc}
 
 
@@ -247,6 +261,7 @@ pin_handler:
 .thumb_func
 .align 4
 read_byte:
+        push {r4, lr}
         ldr  r0, SIO_BASE
         adds r0, r0, GPIO_IN
         ldr  r2, =scancode_read
@@ -271,39 +286,48 @@ read_byte:
 
                 ldrb r1, [r4, r1]                   @ lookup in table
                 ldrb r3, [r2]
-                adds r3, r3, r1
+                add  r3, r3, r1
                 strb r3, [r2]
 
-        bx   lr
+        pop {r4, pc}
 
 .thumb_func
 .global keyboard_receive_char
 .align 4
 keyboard_receive_char:
-        ldr  r0, buffer_offset
+        ldr  r0, =buffer_offset
+        ldrb r0, [r0]
 
         .wait_for_char:
-                ldr  r1, buffer_offset
+                ldr  r1, =buffer_offset
+                ldrb r1, [r1]
                 cmp  r0, r1
                 beq  .wait_for_char
 
         ldr  r0, =keyboard_buffer
-        ldr  r1, buffer_offset
-        ldr  r0, [r0, r1]
+        ldr  r1, =buffer_offset
+        ldrb r1, [r1]
+        subs r1, r1, #1
+        ldrb r0, [r0, r1]
 
         bx   lr
 
 
 #ifdef ARCH_RP2040
 .align 4
-IO_BANK0_BASE:      .word 0x40014000
-PADS_BANK0_BASE:    .word 0x4001c000
+IO_BANK0_BASE:          .word 0x40014000
+PADS_BANK0_BASE:        .word 0x4001c000
+INTR_OFFSET:            .word 0x0f0
+PROC0_INTE0_OFFSET:     .word 0x100
+
 #elifdef ARCH_RP2350
-IO_BANK0_BASE:      .word 0x40028000
-PADS_BANK0_BASE:    .word 0x40038000
+IO_BANK0_BASE:          .word 0x40028000
+PADS_BANK0_BASE:        .word 0x40038000
+INTR_OFFSET:            .word 0x230
+PROC0_INTE0_OFFSET:     .word 0x248
+
 #endif
 
-PROC0_INTE0_OFFSET: .word 0x100
 SIO_BASE:           .word 0xd0000000
 PPB_BASE:           .word 0xe0000000
 VTOR_OFFSET:        .word 0xed08
