@@ -1,4 +1,8 @@
+#ifdef ARCH_RP2040
+.cpu cortex-m0
+#elifdef ARCH_RP2350
 .cpu cortex-m33
+#endif
 .thumb
 .syntax unified
 
@@ -15,7 +19,6 @@
 .equ XOSC_CTRL, 0x00
 .equ XOSC_STATUS, 0x04
 .equ XOSC_STARTUP, 0x0c
-//.equ STARTUP_DELAY, 0xc4
 .equ STARTUP_DELAY, 47
 
 .equ XOSC_CLKSRC, 0x02
@@ -92,16 +95,16 @@ setup_internal_clk:
                         tst  r3, r2
                         bne  .wait_for_clk_ref                  @ reset state is 0x1
 
-        /*
-        movs r2, #1
-        lsls r2, #16
-        .wait_for_clk_ref_div:
-                ldr  r3, [r0, CLK_REF_DIV]
-                tst  r3, r2
-                bne  .wait_for_clk_ref_div
-        */
+                /*
+                movs r2, #1
+                lsls r2, #16
+                .wait_for_clk_ref_div:
+                        ldr  r3, [r0, CLK_REF_DIV]
+                        tst  r3, r2
+                        bne  .wait_for_clk_ref_div
+                */
 
-        @ 2) setup PLL; in SDK rp2_common/hardware_pll/pll.c:42-69 also with check for disrupting already working pLL
+                @ 2) setup PLL; in SDK rp2_common/hardware_pll/pll.c:42-69 also with check for disrupting already working pLL
                 bl   reset_pll
 
                 ldr  r0, PLL_SYS_BASE
@@ -131,9 +134,9 @@ setup_internal_clk:
                         beq  .wait_for_refdiv_lock
 
 
-        @ 5) setup pll divisor?
+                @ 5) setup pll divisor?
 
-        @ 6) switch sys clk to use the pll
+                @ 6) switch sys clk to use the pll
                 ldr  r0, CLOCKS_BASE
                 movs r1, #1                                     @ CLKSRC_CLK_SYS_AUX
                 str  r1, [r0, CLK_SYS_CTRL]
@@ -144,39 +147,18 @@ setup_internal_clk:
                         tst  r1, r2
                         bne  .wait_for_clk_sys_change           @ reset on 0x1
 
-        pop {pc}
 
-/*
-        @ 3) CLK SYS source = clk_ref
-        movs r1, CLK_SYS_CTRL
-        adds r1, r1, r0
+                @ 7) CLK PERI
+                movs r1, #1
+                lsls r1, r1, #11                                @ ENABLE - Starts and stops the clock generator cleanly
 
-        movs r2, #0                     @ 0 - clk_ref
-        str  r2, [r1]
+                movs r2, #4
+                lsls r2, r2, #5                                 @ Bits 7:5 - 0x4 -> xosc_clksrc
 
-        @ 2) CLK REF Divisor = 1
-        movs r1, CLK_REF_DIV
-        adds r1, r1, r0
+                orrs r1, r1, r2
+                str  r1, [r0, CLK_PERI_CTRL]
 
-        movs r2, #1
-        lsls r2, r2, #8
-        str  r2, [r1]
-
-        @ 4) CLK PERI
-        movs r1, CLK_PERI_CTRL
-        adds r1, r1, r0
-
-        movs r2, #1
-        lsls r2, r2, #11                @ ENABLE - Starts and stops the clock generator cleanly
-
-        movs r3, #4
-        lsls r3, r3, #5                 @ Bits 7:5 - 0x4 -> xosc_clksrc
-
-        orrs r2, r2, r3
-        str  r2, [r1]
-
-        bx   lr
-*/
+                pop  {pc}
 
 
 
@@ -209,13 +191,13 @@ XOSC_ENABLE:        .word 0xfab000
 .global delay_ms
 .align 4
 delay_ms:
-    push {lr}
+        push {lr}
 
-    ldr  r1, =1000
-    muls r0, r0, r1
-    bl   delay_us
+        ldr  r1, =1000
+        muls r0, r0, r1
+        bl   delay_us
 
-    pop  {pc}
+        pop  {pc}
 
 
 /**
@@ -225,16 +207,16 @@ delay_ms:
 .global delay_us
 .align 4
 delay_us:
-    ldr  r3, TIMER_BASE
-    ldr  r1, [r3, TIMER_TIMERAWL_OFFSET]        @ get TIMERAWL
-    add  r1, r1, r0                             @ TIMERAWL + desired alarm
+        ldr  r3, TIMER_BASE
+        ldr  r1, [r3, TIMER_TIMERAWL_OFFSET]        @ get TIMERAWL
+        add  r1, r1, r0                             @ TIMERAWL + desired alarm
 
-    .delay_loop:
-        ldr r2, [r3, TIMER_TIMERAWL_OFFSET]
-        cmp r2, r1
-        blt .delay_loop
+        .delay_loop:
+                ldr r2, [r3, TIMER_TIMERAWL_OFFSET]
+                cmp r2, r1
+                blt .delay_loop
 
-    bx  lr
+        bx  lr
 
 
 /**
@@ -244,43 +226,43 @@ delay_us:
 .global set_alarm0_isr
 .align 4
 set_alarm0_isr:
-    ldr  r2, PPB_BASE
-    ldr  r1, VTOR_OFFSET
-    add  r2, r2, r1
-    ldr  r1, [r2]                   @ read the address of IVT from VTOR hardware register
+        ldr  r2, PPB_BASE
+        ldr  r1, VTOR_OFFSET
+        add  r2, r2, r1
+        ldr  r1, [r2]                   @ read the address of IVT from VTOR hardware register
 
-    movs r2, ALARM0_IVT_OFFSET
-    add  r2, r2, r1
-    ldr  r0, =alarm0_handler
-    str  r0, [r2]                   @ write interrupt handler
+        movs r2, ALARM0_IVT_OFFSET
+        add  r2, r2, r1
+        ldr  r0, =alarm0_handler
+        str  r0, [r2]                   @ write interrupt handler
 
-    @@@@ enable appropriate interrupt at the CPU by turning off and on again @@@@
+        @@@@ enable appropriate interrupt at the CPU by turning off and on again @@@@
 
-    movs r0, #1                     @ alarm 0 is irq0
-    ldr  r2, PPB_BASE
-    ldr  r1, NVIC_ICPR_OFFSET       @ unset IRQ
-    add  r1, r2
-    str  r0, [r1]
-    ldr  r1, NVIC_ISER_OFFSET       @ set IRQ
-    add  r1, r2
-    str  r0, [r1]
+        movs r0, #1                     @ alarm 0 is irq0
+        ldr  r2, PPB_BASE
+        ldr  r1, NVIC_ICPR_OFFSET       @ unset IRQ
+        add  r1, r2
+        str  r0, [r1]
+        ldr  r1, NVIC_ISER_OFFSET       @ set IRQ
+        add  r1, r2
+        str  r0, [r1]
 
-    bx   lr
+        bx   lr
 
 
 .thumb_func
 .align 4
 alarm0_handler:
-    ldr  r3, TIMER_BASE
-    adds r3, r3, TIMER_INTR
-    movs r2, #1
-    str  r2, [r3]                   @ reset interrupt for alarm0
+        ldr  r3, TIMER_BASE
+        adds r3, r3, TIMER_INTR
+        movs r2, #1
+        str  r2, [r3]                   @ reset interrupt for alarm0
 
-    ldr  r3, =alarm_fired
-    movs r2, #1                     @ alarm_fired = True
-    strb r2, [r3]
+        ldr  r3, =alarm_fired
+        movs r2, #1                     @ alarm_fired = True
+        strb r2, [r3]
 
-    bx  lr
+        bx  lr
 
 
 .align 4
