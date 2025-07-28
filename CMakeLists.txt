@@ -20,6 +20,8 @@ preprocess_sources(${PREPROCESSOR_DEFINE}
         src/drivers/time.S
         src/drivers/uart.S
         src/drivers/keyboard.S
+        src/drivers/pio.S
+        src/drivers/vga.S
         src/resets.S
         src/divider.S
 )
