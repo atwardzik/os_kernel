@@ -25,11 +25,35 @@ load_pio_prog:
         ldr     r2, PIO0_BASE
         add     r2, r2, r3
 
+@@@ It is left as is, because it was a test for IT instruction
+@@@  and I don't want to delete this elegant assembly code.
+@@@ Normally one would leave code backward-compatible (for rp2040)
 #ifdef ARCH_RP2040
         ldr     r3, PIO1_BASE
+        cmp     r2, r3
+        bgt     .exit_failure
+
+        .copy_loop:
+                cmp     r1, #0
+                beq     .exit_success
+
+                str     r0, [r2]
+                adds    r0, r0, #4
+                adds    r2, r2, #4
+                subs    r1, r1, #1
+
+                b       .copy_loop
+
+        .exit_failure:
+                movs    r0, #1
+                bx      lr
+
+        .exit_success:
+                movs    r0, #0
+                bx      lr
+
 #elifdef ARCH_RP2350
         ldr     r3, PIO2_BASE
-#endif
         cmp     r2, r3
         itt     gt
         movsgt  r0, #1
@@ -49,9 +73,11 @@ load_pio_prog:
                 b       .copy_loop
 
         .exit:
-                bx lr
+                bx      lr
+#endif
 
 
+.align 4
 PIO0_BASE:      .word 0x50200000
 PIO1_BASE:      .word 0x50300000
 #ifdef ARCH_RP2350
