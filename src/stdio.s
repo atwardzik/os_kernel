@@ -9,6 +9,8 @@
 .equ eol, 0x00
 .equ endl, 0x0A
 .equ carriage_return, 0x0D
+.equ backspace, 0x08
+.equ empty_space, 0x20
 
 /**
  * Writes single character to output stream
@@ -20,14 +22,22 @@ putc:
         push {lr}
         bl   uart_Tx
 
+        cmp  r0, backspace
+        beq  .put_backspace
+
         cmp  r0, endl
         bne  .not_endl
         movs r0, carriage_return
         bl   uart_Tx
 
-        .not_endl:
+        .put_backspace:
+                movs r0, empty_space
+                bl   uart_Tx
+                movs r0, backspace
+                bl   uart_Tx
 
-        pop  {pc}
+        .not_endl:
+                pop  {pc}
 
 
 /**
@@ -86,6 +96,11 @@ gets:
         movs r6, #0                     @ loop counter
         .get_loop:
                 bl   getc
+
+                mov  r7, r0
+                bl   putc
+                mov  r0, r7
+
                 cmp  r0, endl           @ carriage_return OR endline
                 beq  .end_get_loop
                 cmp  r6, r5
@@ -93,8 +108,16 @@ gets:
                 b    .get_loop
 
         .save:
+                cmp  r0, backspace
+                beq  .save_backspace
                 strb r0, [r4, r6]
                 adds r6, r6, #1
+                b    .get_loop
+
+        .save_backspace:
+                cmp  r6, #0
+                beq  .get_loop
+                subs r6, r6, #1
                 b    .get_loop
 
         .end_get_loop:
