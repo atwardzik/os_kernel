@@ -1,11 +1,14 @@
 cmake_minimum_required(VERSION 3.30)
 set(CMAKE_TOOLCHAIN_FILE pico_toolchain.cmake)
-set(LINKER_SCRIPT "linker.ld")
 
 if (DEFINED ARCH_RP2040)
     set(PREPROCESSOR_DEFINE "-D ARCH_RP2040=1")
+    set(LINKER_SCRIPT "linker_rp2040.ld")
+
 elseif (DEFINED ARCH_RP2350)
     set(PREPROCESSOR_DEFINE "-D ARCH_RP2350=1")
+    set(LINKER_SCRIPT "linker_rp2350.ld")
+
 else ()
     message(FATAL_ERROR "Target architecture should be defined, add -DARCH_RP2040 or -DARCH_RP2350")
 endif ()

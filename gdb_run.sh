@@ -5,5 +5,6 @@ arm-none-eabi-gdb --quiet \
     -ex "load" \
     -ex "break main" \
     -ex "continue" \
-		-ex "layout split" \
     -ex "layout regs" $1
+#		-ex "layout split" \
+#    -ex "layout regs" $1

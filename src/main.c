@@ -4,6 +4,7 @@
 #include "drivers/time.h"
 #include "drivers/uart.h"
 #include "drivers/keyboard.h"
+#include "drivers/pio.h"
 #include "syscalls.h"
 #include "proc.h"
 #include "divider.h"
@@ -13,6 +14,9 @@
 
 
 extern unsigned int calculate_pid_hash(pid_t pid, size_t i);
+
+extern uint8_t __data_start[];
+extern uint8_t __bss_start[];
 
 int main(void) {
         setup_internal_clk();
@@ -25,6 +29,8 @@ int main(void) {
         //int *i = (int *) kmalloc(sizeof(int));
 
         puts("Welcome string\n");
+        uint8_t *data_start_ptr = __data_start;
+        uint8_t *bss_start_ptr = __bss_start;
 
         // for (size_t i = 0; i < 40; i += 5) {
         //         int res = 0; //calculate_pid_hash(i, 0);
@@ -39,6 +45,8 @@ int main(void) {
         //         str_hash[2] = 0;
         //         puts(str_hash);
         // }
+
+        load_pio_prog(1,2,3);
 
         char buffer[255];
         while (1) {
