@@ -1,6 +1,8 @@
 .idea/
 cmake-build-debug/
 cmake-build-*/
+build/
+.cache/
 .DS_Store
 *.o
 *.elf

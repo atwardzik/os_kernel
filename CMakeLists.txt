@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 3.30)
 set(CMAKE_TOOLCHAIN_FILE pico_toolchain.cmake)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if (DEFINED ARCH_RP2040)
-    set(PREPROCESSOR_DEFINE "-D ARCH_RP2040=1")
+    add_compile_definitions(ARCH_RP2040=1 VGA_640x480)
     set(LINKER_SCRIPT "linker_rp2040.ld")
 
 elseif (DEFINED ARCH_RP2350)
-    set(PREPROCESSOR_DEFINE "-D ARCH_RP2350=1")
+    add_compile_definitions(ARCH_RP2350=1 VGA_640x480)
     set(LINKER_SCRIPT "linker_rp2350.ld")
 
 else ()
@@ -18,7 +20,7 @@ project(kernel LANGUAGES C ASM)
 include_directories(${CMAKE_SOURCE_DIR} include tests)
 link_directories(${CMAKE_SOURCE_DIR} include tests)
 
-preprocess_sources(${PREPROCESSOR_DEFINE}
+add_executable(kernel
         src/drivers/gpio_functions.S
         src/drivers/time.S
         src/drivers/uart.S
@@ -27,10 +29,7 @@ preprocess_sources(${PREPROCESSOR_DEFINE}
         src/drivers/vga.S
         src/resets.S
         src/divider.S
-)
 
-add_executable(kernel
-        ${PREPROCESS_OUTPUTS}
         src/start.s
         src/isr.s
         src/main.c
