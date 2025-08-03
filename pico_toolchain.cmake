@@ -4,7 +4,7 @@ set(CMAKE_SYSTEM_PROCESSOR arm)
 set(CMAKE_C_COMPILER "/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/bin/arm-none-eabi-gcc" CACHE INTERNAL "")
 set(CMAKE_ASM_COMPILER "/Applications/ArmGNUToolchain/14.2.rel1/arm-none-eabi/bin/arm-none-eabi-gcc" CACHE INTERNAL "")
 
-set(CMAKE_C_FLAGS "-Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -Wno-error=unused-parameter -std=c23 -mcpu=cortex-m33 -ffreestanding -mthumb -g -O0" CACHE INTERNAL "")
+set(CMAKE_C_FLAGS " -Wno-unused-variable -Wno-error=unused-parameter -std=c23 -mcpu=cortex-m33 -ffreestanding -mthumb -g -O0" CACHE INTERNAL "")
 set(CMAKE_ASM_FLAGS "-Wa,-warn,-fatal-warnings -mcpu=cortex-m33 -mthumb -g" CACHE INTERNAL "")
 set(CMAKE_EXE_LINKER_FLAGS "" CACHE INTERNAL "")
 

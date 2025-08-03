@@ -1,17 +1,18 @@
-#include "resets.h"
-#include "stdio.h"
+#include "divider.h"
 #include "drivers/gpio.h"
-#include "drivers/time.h"
-#include "drivers/uart.h"
 #include "drivers/keyboard.h"
 #include "drivers/pio.h"
-#include "syscalls.h"
-#include "proc.h"
-#include "divider.h"
+#include "drivers/time.h"
+#include "drivers/uart.h"
+#include "drivers/vga.h"
 #include "memory.h"
+#include "proc.h"
+#include "resets.h"
+#include "stdio.h"
+#include "syscalls.h"
 
-#include <stdlib.h>
-
+#include <stddef.h>
+#include <stdint.h>
 
 extern unsigned int calculate_pid_hash(pid_t pid, size_t i);
 
@@ -19,14 +20,16 @@ extern uint8_t __data_start[];
 extern uint8_t __bss_start[];
 
 int main(void) {
-        setup_internal_clk();
         reset_subsys();
+        setup_internal_clk();
         uart_init();
         init_keyboard(15);
 
         init_pin_output(25);
 
-        //int *i = (int *) kmalloc(sizeof(int));
+        hsync_gen_init(13);
+
+        // int *i = (int *) kmalloc(sizeof(int));
 
         puts("Welcome string\n");
         uint8_t *data_start_ptr = __data_start;
@@ -46,7 +49,7 @@ int main(void) {
         //         puts(str_hash);
         // }
 
-        load_pio_prog(1,2,3);
+        load_pio_prog(1, 2, 3);
 
         char buffer[255];
         while (1) {

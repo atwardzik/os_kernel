@@ -51,18 +51,18 @@ setup_internal_clk:
         .enable_xosc:
                 ldr  r0, XOSC_BASE
 
-                @ 1) Set frequency range
-                movs r1, XOSC_CTRL
-                adds r1, r1, r0
-
-                ldr  r2, FREQ_RANGE
-                str  r2, [r1]
-
-                @ 2) Startup delay
+                @ 1) Startup delay
                 movs r1, XOSC_STARTUP
                 adds r1, r1, r0
 
                 movs r2, STARTUP_DELAY
+                str  r2, [r1]
+
+                @ 2) Set frequency range
+                movs r1, XOSC_CTRL
+                adds r1, r1, r0
+
+                ldr  r2, FREQ_RANGE
                 str  r2, [r1]
 
                 @ 3) Enable crystall oscillator
@@ -89,20 +89,20 @@ setup_internal_clk:
                 movs r2, XOSC_CLKSRC
                 str  r2, [r0, CLK_REF_CTRL]
 
-                movs r2, #1
+                movs r2, #4                                     @ CLK_REF_SELECTED: XOSC
                 .wait_for_clk_ref:
                         ldr  r3, [r0, CLK_REF_SELECTED]
                         tst  r3, r2
-                        bne  .wait_for_clk_ref                  @ reset state is 0x1
+                        beq  .wait_for_clk_ref                  @ reset state is 0x1
 
-                /*
-                movs r2, #1
-                lsls r2, #16
-                .wait_for_clk_ref_div:
-                        ldr  r3, [r0, CLK_REF_DIV]
-                        tst  r3, r2
-                        bne  .wait_for_clk_ref_div
-                */
+
+                @ ???
+                @ movs r2, #1
+                @ lsls r2, #16
+                @ .wait_for_clk_ref_div:
+                @         ldr  r3, [r0, CLK_REF_DIV]
+                @         tst  r3, r2
+                @         bne  .wait_for_clk_ref_div
 
                 @ 2) setup PLL; in SDK rp2_common/hardware_pll/pll.c:42-69 also with check for disrupting already working pLL
                 bl   reset_pll
@@ -122,7 +122,7 @@ setup_internal_clk:
                 @ 3) power up PLL
                 ldr  r2, ATOMIC_BITMASK_CLR
                 adds r2, r0, r2
-                mov  r1, #0x21		                        @ clear PD, VCOPD in PLL: PWR
+                movs r1, #0x21		                        @ clear PD, VCOPD in PLL: PWR
                 str  r1, [r2, PLL_PWR]
 
                 @ 4) wait for a stable state as in 8.6.5 PLL:CS
@@ -136,10 +136,16 @@ setup_internal_clk:
 
                 @ 5) setup pll divisor?
 
+                @ enable the pll_lock
+                ldr  r1, ATOMIC_BITMASK_CLR
+                adds r1, r1, r0
+                movs r2, #0x08
+                str  r2, [r1, PLL_PWR]
+
                 @ 6) switch sys clk to use the pll
                 ldr  r0, CLOCKS_BASE
                 movs r1, #1                                     @ CLKSRC_CLK_SYS_AUX
-                str  r1, [r0, CLK_SYS_CTRL]
+                str  r1, [r0, CLK_SYS_CTRL]                     @ BREAK!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
                 movs r2, #1
                 .wait_for_clk_sys_change:
