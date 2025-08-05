@@ -145,7 +145,7 @@ setup_internal_clk:
                 @ 6) switch sys clk to use the pll
                 ldr  r0, CLOCKS_BASE
                 movs r1, #1                                     @ CLKSRC_CLK_SYS_AUX
-                str  r1, [r0, CLK_SYS_CTRL]                     @ BREAK!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                str  r1, [r0, CLK_SYS_CTRL]
 
                 movs r2, #1
                 .wait_for_clk_sys_change:

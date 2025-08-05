@@ -16,6 +16,13 @@ hsync_gen_init:
         push    {lr}
         @@@ According to squarewave example from SDK -
         @@@ pp. 313 (rp2040) / 877 (rp2350) in the datasheet.
+        @@@
+        @@@ The sequence of operations is taken straight from the SDK.
+
+        @ 0) Disable State Machine!!!
+        ldr     r0,
+        movs    r1, #1                  @ clear bit zero (sm0)
+        bl      atomic_clr
 
         @ 1) Load program
         ldr     r0, =hsync_gen
@@ -23,37 +30,44 @@ hsync_gen_init:
         movs    r2, #0                  @ PIO0
         bl      load_pio_prog
 
-        @ 2) Set clock divisor
+        @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
+        movs    r0, #0
+        movs    r1, #0
+        ldr     r2, =0x8100             @ bottom wrap at 1, top wrap at 8
+        bl      setup_pio_execctrl
+
+        @ 3) Set state machine pin ctrl
+        movs    r0, #1                  @ one pin affected
+        lsls    r0, #26                 @ SET_COUNT_BITS
+        movs    r1, #13                 @ HSYNC will be on pin 13
+        lsls    r1, #5                  @ SET_BASE_BITS
+        orrs    r2, r0, r1              @ control bits
+        movs    r1, #0                  @ State Machine 0
+        movs    r0, #0                  @ PIO BLOCK 0
+        bl      setup_pio_pinctrl
+
+        @ 4) Set clock divisor
         movs    r0, #0                  @ PIO BLOCK 0
         movs    r1, #0                  @ State Machine 0
         movs    r2, #5                  @ 125 MHz / 5 = 25 MHz
         lsls    r2, #16
         bl      setup_pio_clkdiv
 
-        @ 3) Set state machine pin ctrl and GPIO PIO funcsel
-        movs    r0, #1                  @ one pin affected
-        lsls    r0, #26                 @ SET_COUNT
-        movs    r1, #13                 @ HSYNC on pin 13
-        lsls    r1, #5                  @ SET_BASE
-        orrs    r2, r0, r1              @ control bits
-        movs    r1, #0                  @ State Machine 0
-        movs    r0, #0                  @ PIO BLOCK 0
-        bl      setup_pio_pinctrl
-
+        @ 5) Init GPIO
         movs    r0, #13                 @ GPIO 13
         movs    r1, #6                  @ Funcsel: PIO0
         bl      GPIO_function_select
 
-        @ 4) Set state machine exec ctrl with wrap (SM0_EXECCTRL)
-        movs    r0, #0
-        movs    r1, #0
-        ldr     r2, =0x9100             @ bottom wrap at 1, top wrap at 9
-        bl      setup_pio_execctrl
+        @ 6) Set consecutive pindirs to output
+        ldr     r0,
+
+        @ 7) PIO State Machine init - load and jump to first instruction
 
         @ 5) Set state machine running
         movs    r0, #0
         movs    r1, #0
-        bl      set_sm_running
+        movs    r2, #1
+        bl      set_sm_enabled
 
         pop     {pc}
 

@@ -18,6 +18,8 @@
 .equ SM0_PINCTRL, 0xdc
 .equ NEXT_SM_OFFSET, 24
 
+.equ SM0_EXECCTRL_OUT_STICKY_BIT, 17
+
 
 /**
  * Load program to pio state machine
@@ -157,11 +159,11 @@ load_pio_prog:
 .align 4
 setup_pio_clkdiv:
         push    {r4, lr}
-        mov     r2, r4
+        mov     r4, r2
 
-        mov     r2, SM0_CLKDIV
+        movs    r2, SM0_CLKDIV
         bl      determine_pio_sm_register
-        cmp     r0, #1
+        cmp     r0, #0
         beq     .exit_clk
 
         str     r4, [r0]
@@ -186,11 +188,11 @@ setup_pio_clkdiv:
 .align 4
 setup_pio_pinctrl:
         push    {r4, lr}
-        mov     r2, r4
+        mov     r4, r2
 
-        mov     r2, SM0_PINCTRL
+        movs    r2, SM0_PINCTRL
         bl      determine_pio_sm_register
-        cmp     r0, #1
+        cmp     r0, #0
         beq     .exit_pinctrl
 
         str     r4, [r0]
@@ -198,6 +200,79 @@ setup_pio_pinctrl:
 
         .exit_pinctrl:
                 pop     {r4, pc}
+
+/**
+ * Set the same pin direction for multiple consecutive pins for the PIO instance
+ *  r0 - PIO BLOCK
+ *  r1 - state machine
+ *  r2 - pin start
+ *  r3 - pin count
+ */
+.thumb_func
+.global set_consecutive_pindirs_out
+.align 4
+set_consecutive_pindirs_out:
+        push    {r4-r7, lr}
+        subs    sp, sp, #16
+        mov     r4, r0
+        mov     r5, r1
+        mov     r6, r2
+        mov     r7, r3
+
+        bl      determine_pio_block_address
+        cmp     r0, #0
+        beq     .exit_consecutive_pindirs
+        str     r0, [sp]
+        ldr     r2, =0x168                      @ gpiobase offset
+        ldr     r2, [r0, r2]
+#ifdef ARCH_RP2350
+        subs    r6, r6, r2                      @ according to SDK
+#endif
+        @ Save pinctrl
+        @ movs    r2, SM0_PINCTRL
+        @ bl      determine_pio_sm_register
+        @ cmp     r0, #0
+        @ beq     .exit_consecutive_pindirs
+        @ str     r0, [sp, #4]                    @ offset 4, store PINCTRL address
+        @ ldr     r0, [r0]
+        @ str     r0, [sp, #8]                    @ offset 8, store old PINCTRL
+
+        @ Save execctrl
+        mov     r0, r4
+        mov     r1, r5
+        movs    r2, SM0_EXECCTRL
+        bl      determine_pio_sm_register
+        cmp     r0, #0
+        beq     .exit_consecutive_pindirs
+        str     r0, [sp, #8]                    @ offset 8, store EXECCTRL address
+        ldr     r0, [r0]
+        str     r0, [sp, #12]                   @ offset 12, store old EXECCTRL
+
+        @ Clear sticky bit
+        ldr     r0, [sp]                        @ load base address
+        movs    r1, #1
+        lsls    r1, SM0_EXECCTRL_OUT_STICKY_BIT
+        bl      atomic_clr
+
+        @ Set outputs
+        mov     r0, r4
+        mov     r1, r5
+        movs    r2, SM0_INSTR
+        bl      determine_pio_sm_register
+        cmp     r0, #0
+        beq     .exit_consecutive_pindirs
+        ldr     r1, instr_set_pindirs_out
+        str     r1, [r0]                        @ WILL IT WORK IF THE SM IS HALTED?!
+
+        .restore_ctrls:
+        ldr     r0, [sp, #8]
+        ldr     r1, [sp, #12]
+        str     r1, [r0]
+
+
+        .exit_consecutive_pindirs:
+                pop     {r4-r7, pc}
+
 
 /**
  * Setup PIO execctrl for specified state machine pp. PIO0_EXECCTRL
@@ -214,11 +289,11 @@ setup_pio_pinctrl:
 .align 4
 setup_pio_execctrl:
         push    {r4, lr}
-        mov     r2, r4
+        mov     r4, r2
 
-        mov     r2, SM0_EXECCTRL
+        movs    r2, SM0_EXECCTRL
         bl      determine_pio_sm_register
-        cmp     r0, #1
+        cmp     r0, #0
         beq     .exit_execctrl
 
         str     r4, [r0]
@@ -229,21 +304,23 @@ setup_pio_execctrl:
 
 
 /**
- * Set State Machine Running
+ * Set State Machine Enabled
  *  r0 - PIO BLOCK
  *  r1 - state machine
+ *  r2 - enabled?
  *
  * Returns:
  *  0 - success
  *  1 - failure, no such PIO or SM exists
  */
  .thumb_func
-.global set_sm_running
+.global set_sm_enabled
 .align 4
-set_sm_running:
+set_sm_enabled:
         push    {r4, lr}
-        movs    r4, r1
+        mov     r4, r1
 
+        bl      determine_pio_block_address
         cmp     r0, #0
         beq     .exit_sm_set_failure
         cmp     r1, #3
@@ -251,13 +328,20 @@ set_sm_running:
 
 
 
-        ldr     r1, =0x2000             @ atomic bitmask set
-        adds    r0, r0, r1
-        str     r4, [r0]
-        movs    r0, #0
-        pop     {r4, pc}
+        movs    r1, #1
+        lsls    r1, r4
+        cmp     r2, #0
+        bge     .sm_disable
+        bl      atomic_set
+        b       .exit_sm_enabled_success
+        bl      atomic_clr
 
-        .exit_sm_set_failure:
+
+        .exit_sm_enabled_success:
+                movs    r0, #0
+                pop     {r4, pc}
+
+        .exit_sm_enabled_failure:
                 movs    r0, #1
                 pop     {r4, pc}
 
@@ -269,8 +353,8 @@ set_sm_running:
  *  r2 - register
  *
  * Returns:
- *  0 - success
- *  1 - failure, no such PIO or SM exists
+ *  NULL(0) - failure, no such PIO or SM exists
+ *  address - success
  */
 .thumb_func
 .global determine_pio_sm_register
@@ -287,14 +371,15 @@ determine_pio_sm_register:
         movs    r3, NEXT_SM_OFFSET
         muls    r1, r1, r3
         adds    r1, r1, r2
+        adds    r0, r0, r1
 
         b       .exit_reg_success
 
         .exit_reg_failure:
-                movs    r0, #1
+                movs    r0, #0
                 pop     {pc}
         .exit_reg_success:
-                movs    r0, #0
+
                 pop     {pc}
 
 
@@ -347,7 +432,9 @@ PIO1_BASE:      .word 0x50300000
 PIO2_BASE:      .word 0x50400000
 #endif
 
-.section data
+instr_set_pindirs_out:          .word 0xe09f    @ set PINDIRS, 0x1f
+
+.section .data
 .align 4
 current_pio0_instr_offset:      .byte 0
 current_pio1_instr_offset:      .byte 0

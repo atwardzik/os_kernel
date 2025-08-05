@@ -30,6 +30,7 @@ add_executable(kernel
         src/resets.S
         src/divider.S
 
+        src/atomic.s
         src/start.s
         src/isr.s
         src/main.c

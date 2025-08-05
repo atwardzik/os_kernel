@@ -63,14 +63,14 @@ GPIO_function_select:
         str  r3, [r2]
 
         @ setup pads
-        ldr  r2, [r3]		    @ read current state of pad
-        movs r4, #0x40		    @ PADS_BANK0_GPIO0_IE_BITS
+        ldr  r2, [r3]		        @ read current state of pad
+        movs r4, #0x40		        @ PADS_BANK0_GPIO0_IE_BITS
         eors r2, r2, r4
-        movs r4, 0xc0		    @ IE_BITS, OD_BITS
+        movs r4, 0xc0		        @ IE_BITS, OD_BITS
         ands r2, r2, r4
         str  r2, [r3]
 
-        @ SIO function select
+        @ function select
         ldr  r3, IO_BANK0_BASE
         movs r2, #8
         muls r2, r2, r0                 @ calculate offset for GPIO_N_CTRL (minus 0x04)
