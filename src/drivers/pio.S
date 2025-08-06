@@ -7,6 +7,8 @@
 .syntax unified
 
 .equ PIO_CTRL, 0x00
+.equ PIO_FDEBUG, 0x08
+.equ PIO_TXF0, 0x10
 .equ INSTR_MEM0_OFFSET, 0x48
 .equ INSTR_MAX_OFFSET, 0xc4
 
@@ -164,13 +166,16 @@ setup_pio_clkdiv:
         movs    r2, SM0_CLKDIV
         bl      determine_pio_sm_register
         cmp     r0, #0
-        beq     .exit_clk
+        beq     .exit_clk_failure
 
         str     r4, [r0]
         movs    r0, #0
 
         .exit_clk:
                 pop     {r4, pc}
+        .exit_clk_failure:
+                movs    r0, #1
+                pop     {r4, lr}
 
 
 /**
@@ -193,12 +198,15 @@ setup_pio_pinctrl:
         movs    r2, SM0_PINCTRL
         bl      determine_pio_sm_register
         cmp     r0, #0
-        beq     .exit_pinctrl
+        beq     .exit_pinctrl_failure
 
         str     r4, [r0]
         movs    r0, #0
 
         .exit_pinctrl:
+                pop     {r4, pc}
+        .exit_pinctrl_failure:
+                movs    r0, #1
                 pop     {r4, pc}
 
 /**
@@ -263,14 +271,18 @@ set_consecutive_pindirs_out:
         beq     .exit_consecutive_pindirs
         ldr     r1, instr_set_pindirs_out
         str     r1, [r0]                        @ WILL IT WORK IF THE SM IS HALTED?!
-
-        .restore_ctrls:
+                                                @ According to the SDK, PIO: CTRL register bit 0:3
+                                                @ When disabled, a state machine will cease executing
+                                                @ instructions, except those written directly to
+                                                @ SMx_INSTR by the system.
+        @ Restore Ctrls:
         ldr     r0, [sp, #8]
         ldr     r1, [sp, #12]
         str     r1, [r0]
 
 
         .exit_consecutive_pindirs:
+                adds    sp, sp, #16
                 pop     {r4-r7, pc}
 
 
@@ -288,20 +300,167 @@ set_consecutive_pindirs_out:
 .global setup_pio_execctrl
 .align 4
 setup_pio_execctrl:
-        push    {r4, lr}
+        push    {r4, r5, lr}
         mov     r4, r2
 
         movs    r2, SM0_EXECCTRL
         bl      determine_pio_sm_register
         cmp     r0, #0
-        beq     .exit_execctrl
+        beq     .exit_execctrl_failure
+        mov     r5, r0
 
-        str     r4, [r0]
+        ldr     r1, =0x1ff80                    @ clear wrap bits
+        bl      atomic_clr
+
+        mov     r0, r5
+        mov     r1, r4
+        bl      atomic_set
+        @ str     r4, [r0]
         movs    r0, #0
 
         .exit_execctrl:
-                pop     {r4, pc}
+                pop     {r4, r5, pc}
 
+        .exit_execctrl_failure:
+                movs    r0, #1
+                pop     {r4, r5, pc}
+
+
+/**
+ * Clear current fifo for specified state machine and clear PIO FDEBUG register
+ *  r0 - PIO BLOCK
+ *  r1 - state machine
+ *
+ * Returns:
+ *  0 - success
+ *  1 - failure, no such PIO or SM exists
+ */
+.thumb_func
+.global clear_pio_sm_fifo
+.align 4
+clear_pio_sm_fifo:
+        push    {r4-r7, lr}
+        mov     r4, r0
+        mov     r5, r1
+
+        movs    r2, SM0_SHIFTCTRL
+        bl      determine_pio_sm_register
+        cmp     r0, #0
+        beq     .exit_clear_fifo_failure
+        mov     r6, r0
+        movs    r1, #1
+        lsls    r1, r1, #31
+        bl      atomic_xor
+        mov     r0, r6
+        bl      atomic_xor
+
+
+        mov     r0, r4
+        bl      determine_pio_block_address
+        cmp     r0, #0
+        beq     .exit_clear_fifo_failure
+        adds    r0, r0, PIO_FDEBUG
+
+        ldr     r1, =0x1010101                  @ mask for clearing fdebug
+        lsls    r1, r1, r5                      @ clear fdebug for specified sm
+
+        str     r1, [r0]
+
+        movs    r0, #0
+        pop     {r4-r7, pc}
+
+        .exit_clear_fifo_failure:
+                movs    r0, #1
+                pop     {r4-r7, pc}
+
+
+/**
+ * Clear internal state and jump to code
+ *  r0 - PIO BLOCK
+ *  r1 - state machine
+ *  r2 - address begin, initial pc (max 0x1f)
+ *
+ * Returns:
+ *  0 - success
+ *  1 - failure, no such PIO or SM exists
+ */
+.thumb_func
+.global clear_internal_and_jump
+.align 4
+clear_internal_and_jump:
+        push    {r4-r7, lr}
+        mov     r4, r0
+        mov     r5, r1
+        mov     r6, r2
+
+        bl      determine_pio_block_address
+        cmp     r0, #0
+        beq     .exit_clear_jump_failure
+        adds    r0, r0, PIO_CTRL
+        mov     r7, r0
+
+        movs    r1, #1
+        movs    r2, #8                          @ SM_RESTART_BIT
+        adds    r2, r2, r5
+        lsls    r1, r1, r2
+        bl      atomic_set
+
+        mov     r0, r7
+        movs    r1, #1
+        movs    r2, #0x80                       @ CLKDIV_RESTART_BIT
+        adds    r2, r2, r5
+        lsls    r1, r1, r2
+        bl      atomic_set
+
+        @ TBH pure address of instruction is also encoded version of jump to this address
+        mov     r0, r4
+        mov     r1, r5
+        mov     r2, SM0_INSTR
+        bl      determine_pio_sm_register
+        cmp     r0, #0
+        beq     .exit_clear_jump_failure
+        str     r6, [r0]                        @ jump
+
+        movs    r0, #0
+        pop     {r4-r7, pc}
+
+        .exit_clear_jump_failure:
+                movs    r0, #1
+                pop     {r4-r7, pc}
+
+
+/**
+ * Put a word to the fifo for specified sm
+ *  r0 - PIO BLOCK
+ *  r1 - state machine
+ *  r2 - word
+ *
+ * Returns:
+ *  0 - success
+ *  1 - failure, no such PIO or SM exists
+ */
+.thumb_func
+.global sm_put
+.align 4
+sm_put:
+        push    {lr}
+
+        bl      determine_pio_block_address
+        cmp     r0, #0
+        beq     .sm_put_failure
+        movs    r3, #4
+        muls    r3, r3, r1
+        adds    r0, r0, PIO_TXF0
+        adds    r0, r0, r3
+
+        str     r2, [r0]
+
+        movs    r0, #0
+        pop     {pc}
+
+        .sm_put_failure:
+                movs    r0, #1
+                pop     {pc}
 
 /**
  * Set State Machine Enabled
@@ -313,7 +472,7 @@ setup_pio_execctrl:
  *  0 - success
  *  1 - failure, no such PIO or SM exists
  */
- .thumb_func
+.thumb_func
 .global set_sm_enabled
 .align 4
 set_sm_enabled:
@@ -322,19 +481,20 @@ set_sm_enabled:
 
         bl      determine_pio_block_address
         cmp     r0, #0
-        beq     .exit_sm_set_failure
+        beq     .exit_sm_enabled_failure
         cmp     r1, #3
-        bgt     .exit_sm_set_failure
+        bgt     .exit_sm_enabled_failure
 
 
 
         movs    r1, #1
         lsls    r1, r4
         cmp     r2, #0
-        bge     .sm_disable
+        beq     .sm_disable
         bl      atomic_set
         b       .exit_sm_enabled_success
-        bl      atomic_clr
+        .sm_disable:
+                bl      atomic_clr
 
 
         .exit_sm_enabled_success:

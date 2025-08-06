@@ -20,9 +20,10 @@ hsync_gen_init:
         @@@ The sequence of operations is taken straight from the SDK.
 
         @ 0) Disable State Machine!!!
-        ldr     r0,
-        movs    r1, #1                  @ clear bit zero (sm0)
-        bl      atomic_clr
+        movs    r0, #0
+        movs    r1, #0
+        movs    r2, #0
+        bl      set_sm_enabled
 
         @ 1) Load program
         ldr     r0, =hsync_gen
@@ -33,7 +34,7 @@ hsync_gen_init:
         @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
         movs    r0, #0
         movs    r1, #0
-        ldr     r2, =0x8100             @ bottom wrap at 1, top wrap at 8
+        ldr     r2, =0x8080             @ bottom wrap at 1, top wrap at 8
         bl      setup_pio_execctrl
 
         @ 3) Set state machine pin ctrl
@@ -59,11 +60,28 @@ hsync_gen_init:
         bl      GPIO_function_select
 
         @ 6) Set consecutive pindirs to output
-        ldr     r0,
+        movs    r0, #0
+        movs    r1, #0
+        movs    r2, #13
+        movs    r3, #1
+        bl      set_consecutive_pindirs_out
 
         @ 7) PIO State Machine init - load and jump to first instruction
+        movs    r0, #0
+        movs    r1, #0
+        bl      clear_pio_sm_fifo
+
+        movs    r0, #0
+        movs    r1, #0
+        movs    r2, #0                  @ address begin
+        bl      clear_internal_and_jump
 
         @ 5) Set state machine running
+        movs    r0, #0
+        movs    r1, #0
+        ldr     r2, =0x28f              @ 655 = 640 pixels + 16 frontporch - 1
+        bl      sm_put
+
         movs    r0, #0
         movs    r1, #0
         movs    r2, #1
