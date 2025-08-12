@@ -43,8 +43,9 @@ hsync_gen_init:
         movs    r1, #13                 @ HSYNC will be on pin 13
         lsls    r1, #5                  @ SET_BASE_BITS
         orrs    r2, r0, r1              @ control bits
-        movs    r1, #0                  @ State Machine 0
+
         movs    r0, #0                  @ PIO BLOCK 0
+        movs    r1, #0                  @ State Machine 0
         bl      setup_pio_pinctrl
 
         @ 4) Set clock divisor
@@ -76,7 +77,7 @@ hsync_gen_init:
         movs    r2, #0                  @ address begin
         bl      clear_internal_and_jump
 
-        @ 5) Set state machine running
+        @ 8) Set state machine running
         movs    r0, #0
         movs    r1, #0
         ldr     r2, =0x28f              @ 655 = 640 pixels + 16 frontporch - 1
@@ -91,6 +92,99 @@ hsync_gen_init:
 
 
 
+.thumb_func
+.global vsync_gen_init
+.align 4
+vsync_gen_init:
+        push    {lr}
+
+        @ 0) Disable State Machine!!!
+        movs    r0, #0
+        movs    r1, #1
+        movs    r2, #0
+        bl      set_sm_enabled
+
+        @ 1) Load program
+        ldr     r0, =vsync_gen
+        movs    r1, #14                 @ Total of 14 words
+        movs    r2, #0                  @ PIO0
+        bl      load_pio_prog
+
+        @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
+        movs    r0, #0
+        movs    r1, #1
+        ldr     r2, =0x16500            @ bottom wrap at 1, top wrap at 14 + OFFSET
+        @ add info about SIDE_EN
+        movs    r3, #1
+        lsls    r3, r3, #30             @ SIDE_EN bit
+        orrs    r2, r2, r3
+        bl      setup_pio_execctrl
+
+        @ 3) Set state machine pin ctrl
+        @ add info about SET_COUNT
+        movs    r0, #1                  @ one pin affected
+        lsls    r0, #26                 @ SET_COUNT_BITS
+
+        @ add info about SET_BASE
+        movs    r1, #14                 @ VSYNC will be on pin 14
+        lsls    r1, #5                  @ SET_BASE_BITS
+        orrs    r2, r0, r1              @ control bits
+
+        @ add info about SIDESET_COUNT
+        movs    r0, #2                  @ two pins affected (inclusive the enable bit)
+        lsls    r0, #29                 @ SIDESET_COUNT_BITS
+        orrs    r2, r2, r0
+
+        @ add info about SIDESET_BASE
+        movs    r0, #14                 @ VSYNC will be on pin 14
+        lsls    r0, #10                 @ SIDESET_BASE_BITS
+        orrs    r2, r2, r0              @ control bits
+
+        movs    r0, #0                  @ PIO BLOCK 0
+        movs    r1, #1                  @ State Machine 1
+        bl      setup_pio_pinctrl
+
+        @ 4) Set clock divisor
+        movs    r0, #0                  @ PIO BLOCK 0
+        movs    r1, #1                  @ State Machine 1
+        movs    r2, #5                  @ 125 MHz / 5 = 25 MHz
+        lsls    r2, #16
+        bl      setup_pio_clkdiv
+
+        @ 5) Init GPIO
+        movs    r0, #14                 @ GPIO 14
+        movs    r1, #6                  @ Funcsel: PIO0
+        bl      GPIO_function_select
+
+        @ 6) Set consecutive pindirs to output
+        movs    r0, #0
+        movs    r1, #1
+        movs    r2, #14
+        movs    r3, #1
+        bl      set_consecutive_pindirs_out
+
+        @ 7) PIO State Machine init - load and jump to first instruction
+        movs    r0, #0
+        movs    r1, #1
+        bl      clear_pio_sm_fifo
+
+        movs    r0, #0
+        movs    r1, #1
+        movs    r2, #9                  @ address begin
+        bl      clear_internal_and_jump
+
+        @ 8) Set state machine running
+        movs    r0, #0
+        movs    r1, #1
+        ldr     r2, =0x1df              @ 479 = 480 pixels - 1
+        bl      sm_put
+
+        movs    r0, #0
+        movs    r1, #1
+        movs    r2, #1
+        bl      set_sm_enabled
+
+        pop     {pc}
 
 #ifdef VGA_640x480
 /**
@@ -98,16 +192,16 @@ hsync_gen_init:
  */
 .align 4
 hsync_gen:
-        .word 0x80a0    @               pull   block
+        .word 0x80a0    @ 0:            pull   block
                         @       .wrap_target
-        .word 0xa027    @               mov    x, osr
-        .word 0x0042    @  activeporch: jmp    x--, activeporch
-        .word 0xff00    @  pulse:       set    pins, 0 [31]
-        .word 0xff00    @               set    pins, 0 [31]
-        .word 0xff00    @               set    pins, 0 [31]
-        .word 0xff01    @  backporch:   set    pins, 1 [31]
-        .word 0xec01    @               set    pins, 1 [12]
-        .word 0xc100    @               irq    0[1]
+        .word 0xa027    @ 1:            mov    x, osr
+        .word 0x0042    @ 2:activeporch:jmp    x--, activeporch
+        .word 0xff00    @ 3: pulse:     set    pins, 0 [31]
+        .word 0xff00    @ 4:            set    pins, 0 [31]
+        .word 0xff00    @ 5:            set    pins, 0 [31]
+        .word 0xff01    @ 6: backporch: set    pins, 1 [31]
+        .word 0xec01    @ 7:            set    pins, 1 [12]
+        .word 0xc100    @ 8:            irq    0[1]
                         @       .wrap
 
 
@@ -117,21 +211,21 @@ hsync_gen:
  */
 .align 4
 vsync_gen:
-        .word 0x80a0    @               pull   block
+        .word 0x80a0    @ 9:            pull   block
                         @       .wrap_target
-        .word 0xa027    @               mov    x, osr
-        .word 0x20c0    @  active:      wait   1 irq, 0
-        .word 0xc001    @               irq    1
-        .word 0x0042    @               jmp    x--, active
-        .word 0xe049    @               set    y, 9
-        .word 0x20c0    @  frontporch:  wait   1 irq, 0
-        .word 0x0086    @               jmp    y--, frontporch
-        .word 0xe000    @  syncpulse:   set    pins, 0
-        .word 0x20c0    @               wait   1 irq, 0
-        .word 0x20c0    @               wait   1 irq, 0
-        .word 0xe05f    @  backporch:   set    y, 31
-        .word 0x38c0    @               wait   1 irq, 0        side 1
-        .word 0x008c    @               jmp    y--, backporch
+        .word 0xa027    @ 10:           mov    x, osr
+        .word 0x20c0    @ 11: active:   wait   1 irq, 0
+        .word 0xc001    @ 12:           irq    1
+        .word 0x004b    @ 13:           jmp    x--, active
+        .word 0xe049    @ 14:           set    y, 9
+        .word 0x20c0    @ 15:frontporch:wait   1 irq, 0
+        .word 0x008f    @ 16:           jmp    y--, frontporch
+        .word 0xe000    @ 17:syncpulse: set    pins, 0
+        .word 0x20c0    @ 18:           wait   1 irq, 0
+        .word 0x20c0    @ 19:           wait   1 irq, 0
+        .word 0xe05f    @ 20:           set    y, 31
+        .word 0x38c0    @ 21:backporch  wait   1 irq, 0        side 1
+        .word 0x0095    @ 22:           jmp    y--, backporch
                         @       .wrap
 
 

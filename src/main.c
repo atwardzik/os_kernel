@@ -28,6 +28,7 @@ int main(void) {
         init_pin_output(25);
 
         hsync_gen_init(13);
+        vsync_gen_init(14);
 
         // int *i = (int *) kmalloc(sizeof(int));
 
