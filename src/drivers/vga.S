@@ -186,6 +186,104 @@ vsync_gen_init:
 
         pop     {pc}
 
+
+/**
+ *
+ */
+.thumb_func
+.global rgb_gen_init
+.align 4
+rgb_gen_init:
+        push    {lr}
+        @ 0) Disable State Machine!!!
+        movs    r0, #0
+        movs    r1, #2
+        movs    r2, #0
+        bl      set_sm_enabled
+
+        @ 1) Load program
+        ldr     r0, =rgb_gen
+        movs    r1, #8                  @ Total of 8 words
+        movs    r2, #0                  @ PIO0
+        bl      load_pio_prog
+
+        @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
+        movs    r0, #0
+        movs    r1, #2
+        ldr     r2, =0x1ec80            @ bottom wrap at 1, top wrap at 8
+        bl      setup_pio_execctrl
+
+        @ 3) Set state machine pin ctrl
+        movs    r0, #5                  @ one pin affected
+        lsls    r0, #26                 @ SET_COUNT_BITS
+        movs    r1, #16                 @ RGB will start on pin 16
+        lsls    r1, #5                  @ SET_BASE_BITS
+        orrs    r2, r0, r1              @ control bits
+        ldr     r0, =0x500010           @ OUT_COUNT_BITS and OUT_BASE_BITS
+        orrs    r2, r2, r0
+
+        movs    r0, #0                  @ PIO BLOCK 0
+        movs    r1, #2                  @ State Machine 0
+        bl      setup_pio_pinctrl
+
+        @ 4) Set clock divisor
+        @movs    r0, #0                  @ PIO BLOCK 0
+        @movs    r1, #2                  @ State Machine 0
+        @movs    r2, #1                  @ 125 MHz / 1 = 125 MHz
+        @lsls    r2, #16
+        @bl      setup_pio_clkdiv
+
+        @ 5) Init GPIO
+        movs    r0, #16                 @ GPIO 16
+        movs    r1, #6                  @ Funcsel: PIO0
+        bl      GPIO_function_select
+
+        movs    r0, #17                 @ GPIO 17
+        movs    r1, #6                  @ Funcsel: PIO0
+        bl      GPIO_function_select
+
+        movs    r0, #18                 @ GPIO 18
+        movs    r1, #6                  @ Funcsel: PIO0
+        bl      GPIO_function_select
+
+        movs    r0, #19                 @ GPIO 19
+        movs    r1, #6                  @ Funcsel: PIO0
+        bl      GPIO_function_select
+
+        movs    r0, #20                 @ GPIO 20
+        movs    r1, #6                  @ Funcsel: PIO0
+        bl      GPIO_function_select
+
+        @ 6) Set consecutive pindirs to output
+        movs    r0, #0
+        movs    r1, #2
+        movs    r2, #16
+        movs    r3, #5
+        bl      set_consecutive_pindirs_out
+
+        @ 7) PIO State Machine init - load and jump to first instruction
+        movs    r0, #0
+        movs    r1, #2
+        bl      clear_pio_sm_fifo
+
+        movs    r0, #0
+        movs    r1, #2
+        movs    r2, #23                 @ address begin
+        bl      clear_internal_and_jump
+
+        @ 8) Set state machine running
+        movs    r0, #0
+        movs    r1, #2
+        ldr     r2, =0x27f              @ 639 = 640 pixels - 1
+        bl      sm_put
+
+        movs    r0, #0
+        movs    r1, #2
+        movs    r2, #1
+        bl      set_sm_enabled
+
+        pop     {pc}
+
 #ifdef VGA_640x480
 /**
  * Generating Hsync signal. Total of 9 instructions.
@@ -228,9 +326,29 @@ vsync_gen:
         .word 0x0095    @ 22:           jmp    y--, backporch
                         @       .wrap
 
+/**
+ * Generating RGB signals. Total of 8 instructions. Running at 125[MHz]
+ */
+.align 4
+rgb_gen:
 
+        .word 0x80a0    @ 23:           pull   block
+        .word 0xa047    @ 24:           mov    y, osr
+                        @       .wrap_target
+        .word 0xe000    @ 25:           set    pins, 0
+        .word 0xa022    @ 26:           mov    x, y
+        .word 0x23c1    @ 27:           wait   1 irq, 1 [3]
+        .word 0xa042
+        .word 0xe203
+        @ .word 0x80a0    @ 28: colorout: pull   block
+        @ .word 0x6205    @ 29:           out    pins, 5  [2]      @ for 5-bit mode
+        @ .word 0x6203    @ 29:           out    pins, 3 [2]       @ for 3-bit mode
+        .word 0x005c    @ 30:           jmp    x--, colorout
+                        @       .wrap
 
-
+/*
+ * TODO: fix and check in future
+ */
 #elifdef VGA_800x600
 /**
  * Generating Hsync signal. Total of 10 instructions.
@@ -272,21 +390,3 @@ vsync_gen:
                         @       .wrap
 
 #endif
-
-/**
- * Generating RGB signals. Total of 8 instructions
- */
-.align 4
-rgb_gen:
-
-        .word 0x80a0    @               pull   block
-        .word 0xa047    @               mov    y, osr
-                        @       .wrap_target
-        .word 0xe000    @               set    pins, 0
-        .word 0xa022    @               mov    x, y
-        .word 0x22c1    @               wait   1 irq, 1               [2]
-        .word 0x80a0    @  colorout:    pull   block
-        .word 0x6006    @               out    pins, 6          @ for 6-bit mode
-        @ .word 0x6003    @               out    pins, 3          @ for 3-bit mode
-        .word 0x0045    @               jmp    x--, colorout
-                        @       .wrap
