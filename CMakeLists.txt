@@ -31,7 +31,7 @@ add_executable(kernel
         src/divider.S
 
         src/atomic.s
-        src/start.s
+        src/start.S
         src/isr.s
         src/main.c
         src/stdio.s

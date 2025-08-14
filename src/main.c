@@ -29,6 +29,23 @@ int main(void) {
 
         hsync_gen_init(13);
         vsync_gen_init(14);
+        rgb_gen_init(16);
+
+        // uint8_t colors[] = { 0x00, 0x55, 0xff };
+        for (size_t i = 0; i < 640 * 4; ++i) {
+                *(uint8_t *)(0x20035000 + i) = 3;
+        }
+
+        setup_vga_dma();
+        __asm__("movs r0, #7");                 // start all state machines in sync
+        __asm__("lsls r0, r0, #8");
+        __asm__("adds r0, r0, #7");
+        __asm__("ldr  r1, =0x50202000");        // atomic set
+        __asm__("str  r0, [r1]");
+
+        __asm__("movs r0, #1");                 // start DMA channel
+        __asm__("ldr  r1, =0x50000450");
+        __asm__("str  r0, [r1]");
 
         // int *i = (int *) kmalloc(sizeof(int));
 
@@ -60,6 +77,12 @@ int main(void) {
                 puts(buffer);
                 puts("\n");
                 __asm__("svc #0");
+                /*for (int i = 0; i < 160; ++i) {
+                        sm_put(0, 2, 0xff);
+                }
+                for (int i = 0; i < 160; ++i) {
+                        sm_put(0, 2, 0x00);
+                }*/
         }
         return 0;
 }

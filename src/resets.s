@@ -8,14 +8,16 @@
 .syntax unified
 
 #ifdef ARCH_RP2040
-.equ BIT_IO_BANK0, 5 
-.equ BIT_PADS_BANK0, 8 
+.equ BIT_DMA, 2
+.equ BIT_IO_BANK0, 5
+.equ BIT_PADS_BANK0, 8
 .equ BIT_PIO0, 10
 .equ BIT_PLL_SYS, 12
 .equ BIT_IO_UART0, 22
 #elifdef ARCH_RP2350
-.equ BIT_IO_BANK0, 6 
-.equ BIT_PADS_BANK0, 9 
+.equ BIT_DMA, 2
+.equ BIT_IO_BANK0, 6
+.equ BIT_PADS_BANK0, 9
 .equ BIT_PIO0, 11
 .equ BIT_PLL_SYS, 14
 .equ BIT_IO_UART0, 26
@@ -38,7 +40,7 @@ reset_subsys:
         bl   hw_reset
 
         @ 2) Reset PADS
-        movs r0, BIT_PADS_BANK0 
+        movs r0, BIT_PADS_BANK0
         bl   hw_reset
 
         @ 3) Reset UART0
@@ -47,6 +49,10 @@ reset_subsys:
 
         @ 4) Reset PIO
         movs r0, BIT_PIO0
+        bl   hw_reset
+
+        @ 5) Reset DMA
+        movs r0, BIT_DMA
         bl   hw_reset
 
 

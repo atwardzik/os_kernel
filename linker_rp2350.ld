@@ -19,9 +19,13 @@ SECTIONS
 
     .vectors : {
         . = ALIGN(256);
-        __vectors_start = .;
+        __vectors_start = .; 
         *(.vectors*)
     } > code
+
+    .vidram : {
+            *(.vidram*)
+    } > vidram
 
     .data : {
        __data_start = .;

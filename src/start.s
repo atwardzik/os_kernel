@@ -12,7 +12,11 @@
 .global vector_table
 .thumb_func
 vector_table:
-.word 0x20040000        @ ? let's assume it's the end of RAM, and we'll see
+#ifdef ARCH_RP2040
+.word 0x20040000
+#elifdef ARCH_RP2350
+.word 0x20035000
+#endif
 .word reset             @
 .word isr_nmi           @
 .word isr_hardfault     @
@@ -84,5 +88,14 @@ platform_entry:
 .align 4
 PPB_BASE:           .word 0xe0000000
 VTOR_OFFSET:        .word 0xed08
+
+#ifdef ARCH_RP2040
+SRAM_STACK:         .word 0x2001a800
 SRAM_STRIPED_END:   .word 0x20040000
-SRAM_BSS:           .WORD 0x20041000
+SRAM_BSS:           .word 0x20041000
+
+#elifdef ARCH_RP2350
+SRAM_STACK:         .word 0x20035000
+SRAM_STRIPED_END:   .word 0x20080000
+SRAM_BSS:           .word 0x20081000
+#endif

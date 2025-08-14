@@ -86,7 +86,7 @@ hsync_gen_init:
         movs    r0, #0
         movs    r1, #0
         movs    r2, #1
-        bl      set_sm_enabled
+        @ bl      set_sm_enabled
 
         pop     {pc}
 
@@ -182,7 +182,7 @@ vsync_gen_init:
         movs    r0, #0
         movs    r1, #1
         movs    r2, #1
-        bl      set_sm_enabled
+        @ bl      set_sm_enabled
 
         pop     {pc}
 
@@ -280,9 +280,53 @@ rgb_gen_init:
         movs    r0, #0
         movs    r1, #2
         movs    r2, #1
-        bl      set_sm_enabled
+        @ bl      set_sm_enabled
 
         pop     {pc}
+
+.thumb_func
+.global setup_vga_dma
+.align 4
+setup_vga_dma:
+        @ CH0
+        ldr     r0, =0x50000000         @ CH0_READ_ADDR
+        ldr     r1, =0x20035000         @ address start
+        str     r1, [r0]
+
+        adds    r0, r0, #4              @ CH0_WRITE_ADDR
+        ldr     r1, =0x50200018         @ rgb pio tx fifo
+        str     r1, [r0]
+
+        adds    r0, r0, #4              @ CH0_TRANSFER_COUNT
+        ldr     r1, =307200             @ vidram size
+        str     r1, [r0]
+
+        adds    r0, r0, #8              @ CH0_AL1_CTRL
+        ldr     r1, =0x42011
+        str     r1, [r0]
+
+        @ CH1
+        ldr     r0, =0x50000040         @ CH1_READ_ADDR
+        ldr     r1, =VIDRAM_START       @ TODO: CHANGE TO BE LINKER DEPENDENT
+        str     r1, [r0]
+
+        adds    r0, r0, #4              @ CH1_WRITE_ADDR
+        ldr     r1, =0x50000000         @ CH0_READ_ADDR
+        str     r1, [r0]
+
+        adds    r0, r0, #4              @ CH1_TRANSFER_COUNT
+        movs    r1, #1                  @ vidram size
+        str     r1, [r0]
+
+        adds    r0, r0, #8              @ CH1_AL1_CTRL
+        ldr     r1, =0x7e0009
+        str     r1, [r0]
+
+        bx      lr
+
+.align 4
+VIDRAM_START:   .word 0x20035000
+
 
 #ifdef VGA_640x480
 /**
@@ -338,10 +382,10 @@ rgb_gen:
         .word 0xe000    @ 25:           set    pins, 0
         .word 0xa022    @ 26:           mov    x, y
         .word 0x23c1    @ 27:           wait   1 irq, 1 [3]
-        .word 0xa042
-        .word 0xe203
-        @ .word 0x80a0    @ 28: colorout: pull   block
-        @ .word 0x6205    @ 29:           out    pins, 5  [2]      @ for 5-bit mode
+        @ .word 0xa042
+        @ .word 0xe203
+        .word 0x80a0    @ 28: colorout: pull   block
+        .word 0x6205    @ 29:           out    pins, 5  [2]      @ for 5-bit mode
         @ .word 0x6203    @ 29:           out    pins, 3 [2]       @ for 3-bit mode
         .word 0x005c    @ 30:           jmp    x--, colorout
                         @       .wrap
@@ -390,3 +434,6 @@ vsync_gen:
                         @       .wrap
 
 #endif
+
+.section .vidram
+.incbin "transformed.raw"

@@ -13,4 +13,6 @@ void vsync_gen_init(uint32_t pin);
 
 void rgb_gen_init(uint32_t pin_red0);
 
+void setup_vga_dma(void);
+
 #endif //KERNEL_VGA_H
