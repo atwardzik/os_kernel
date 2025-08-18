@@ -63,7 +63,7 @@ reset:
         ldr  r0, =vector_table
         str  r0, [r1]
 
-        ldr  r1, SRAM_STRIPED_END
+        ldr  r1, SRAM_STACK
         mov  sp, r1
 
 clear_bss:

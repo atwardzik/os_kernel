@@ -1,15 +1,15 @@
-#include "divider.h"
+#include "drivers/divider.h"
 #include "drivers/gpio.h"
 #include "drivers/keyboard.h"
 #include "drivers/pio.h"
 #include "drivers/time.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
-#include "memory.h"
-#include "proc.h"
-#include "resets.h"
+#include "kernel/memory.h"
+#include "kernel/proc.h"
+#include "kernel/resets.h"
+#include "kernel/syscalls.h"
 #include "stdio.h"
-#include "syscalls.h"
 
 #include <stddef.h>
 #include <stdint.h>

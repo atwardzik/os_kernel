@@ -3,7 +3,7 @@
 //
 
 #include "proc.h"
-#include "divider.h"
+#include "drivers/divider.h"
 
 static constexpr size_t MAX_PROCESS_NUMBER = 20; //TODO: change to dynamic processes count
 static constexpr int HASH_MODULO = 3; //has to be coprime with MAX_PROCESS_NUMBER
