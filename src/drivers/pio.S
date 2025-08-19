@@ -221,7 +221,7 @@ setup_pio_pinctrl:
 .align 4
 set_consecutive_pindirs_out:
         push    {r4-r7, lr}
-        subs    sp, sp, #16
+        subs    sp, sp, #24
         mov     r4, r0
         mov     r5, r1
         mov     r6, r2
@@ -230,31 +230,31 @@ set_consecutive_pindirs_out:
         bl      determine_pio_block_address
         cmp     r0, #0
         beq     .exit_consecutive_pindirs
-        str     r0, [sp]
+        str     r0, [sp]                        @ offset 0, store PIO block base
         ldr     r2, =0x168                      @ gpiobase offset
         ldr     r2, [r0, r2]
 #ifdef ARCH_RP2350
         subs    r6, r6, r2                      @ according to SDK
 #endif
         @ Save pinctrl
-        @ movs    r2, SM0_PINCTRL
-        @ bl      determine_pio_sm_register
-        @ cmp     r0, #0
-        @ beq     .exit_consecutive_pindirs
-        @ str     r0, [sp, #4]                    @ offset 4, store PINCTRL address
-        @ ldr     r0, [r0]
-        @ str     r0, [sp, #8]                    @ offset 8, store old PINCTRL
+        mov     r0, r4
+        mov     r1, r5
+        movs    r2, SM0_PINCTRL
+        bl      determine_pio_sm_register
+        cmp     r0, #0                          @ we can check it once, as when it fails, all next will fail
+                                                @ if it succeeds, all next will succeed as well.
+        beq     .exit_consecutive_pindirs
+        str     r0, [sp, #4]                    @ offset 4, store PINCTRL address
+        ldr     r0, [r0]
+        str     r0, [sp, #8]                    @ offset 8, store old PINCTRL
 
         @ Save execctrl
         mov     r0, r4
         mov     r1, r5
         movs    r2, SM0_EXECCTRL
-        bl      determine_pio_sm_register
-        cmp     r0, #0
-        beq     .exit_consecutive_pindirs
-        str     r0, [sp, #8]                    @ offset 8, store EXECCTRL address
+        str     r0, [sp, #12]                   @ offset 12, store EXECCTRL address
         ldr     r0, [r0]
-        str     r0, [sp, #12]                   @ offset 12, store old EXECCTRL
+        str     r0, [sp, #16]                   @ offset 16, store old EXECCTRL
 
         @ Clear sticky bit
         ldr     r0, [sp]                        @ load base address
@@ -267,22 +267,62 @@ set_consecutive_pindirs_out:
         mov     r1, r5
         movs    r2, SM0_INSTR
         bl      determine_pio_sm_register
-        cmp     r0, #0
-        beq     .exit_consecutive_pindirs
-        ldr     r1, instr_set_pindirs_out
-        str     r1, [r0]                        @ WILL IT WORK IF THE SM IS HALTED?!
-                                                @ According to the SDK, PIO: CTRL register bit 0:3
-                                                @ When disabled, a state machine will cease executing
-                                                @ instructions, except those written directly to
-                                                @ SMx_INSTR by the system.
-        @ Restore Ctrls:
-        ldr     r0, [sp, #8]
-        ldr     r1, [sp, #12]
+
+        .set_middle_pindirs:
+                cmp     r7, #5
+                ble     .set_last_pindirs
+                movs    r1, #5                  @ five pins affected
+                lsls    r1, #26                 @ SET_COUNT_BITS
+                lsls    r2, r6, #5              @ pin_start << SET_BASE_BITS
+                orrs    r2, r1, r2              @ control bits
+                ldr     r1, [sp, #4]            @ load PINCTRL address
+                str     r2, [r1]
+
+                ldr     r1, instr_set_pindirs_out
+                str     r1, [r0]
+
+                subs    r7, r7, #5              @ pin_count -= 5
+                adds    r6, r6, #5              @ pin_start += 5
+                movs    r2, #0x1f
+                ands    r6, r6, r2              @ pin_start &= 0x1f
+
+                b       .set_middle_pindirs
+
+        @ while (count > 5) {
+        @         pio->sm[sm].pinctrl = (5u << PIO_SM0_PINCTRL_SET_COUNT_LSB) | (pin << PIO_SM0_PINCTRL_SET_BASE_LSB);
+        @         pio_sm_exec(pio, sm, pio_encode_set(pio_pindirs, pindir_val));
+        @         count -= 5;
+        @         pin = (pin + 5) & 0x1f;
+        @ }
+        @ pio->sm[sm].pinctrl = (count << PIO_SM0_PINCTRL_SET_COUNT_LSB) | (pin << PIO_SM0_PINCTRL_SET_BASE_LSB);
+        @ pio_sm_exec(pio, sm, pio_encode_set(pio_pindirs, pindir_val));
+
+        .set_last_pindirs:
+                lsls    r1, r7, #26             @ pin_count << SET_COUNT_BITS
+                lsls    r2, r6, #5              @ pin_start << SET_BASE_BITS
+                orrs    r2, r1, r2              @ control bits
+                ldr     r1, [sp, #4]            @ load PINCTRL address
+                str     r2, [r1]
+
+                ldr     r1, instr_set_pindirs_out
+                str     r1, [r0]                        @ WILL IT WORK IF THE SM IS HALTED?!
+                                                        @ According to the SDK, PIO: CTRL register bit 0:3
+                                                        @ When disabled, a state machine will cease executing
+                                                        @ instructions, except those written directly to
+                                                        @ SMx_INSTR by the system.
+        @ Restore PINCTRL
+        ldr     r0, [sp, #4]
+        ldr     r1, [sp, #8]
+        str     r1, [r0]
+
+        @ Restore EXECCTRL
+        ldr     r0, [sp, #12]
+        ldr     r1, [sp, #16]
         str     r1, [r0]
 
 
         .exit_consecutive_pindirs:
-                adds    sp, sp, #16
+                adds    sp, sp, #24
                 pop     {r4-r7, pc}
 
 

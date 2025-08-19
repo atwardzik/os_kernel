@@ -179,11 +179,6 @@ vsync_gen_init:
         ldr     r2, =0x1df              @ 479 = 480 pixels - 1
         bl      sm_put
 
-        movs    r0, #0
-        movs    r1, #1
-        movs    r2, #1
-        @ bl      set_sm_enabled
-
         pop     {pc}
 
 
@@ -203,35 +198,28 @@ rgb_gen_init:
 
         @ 1) Load program
         ldr     r0, =rgb_gen
-        movs    r1, #8                  @ Total of 8 words
+        movs    r1, #9                  @ Total of 9 words
         movs    r2, #0                  @ PIO0
         bl      load_pio_prog
 
         @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
         movs    r0, #0
         movs    r1, #2
-        ldr     r2, =0x1ec80            @ bottom wrap at 1, top wrap at 8
+        ldr     r2, =0x1fc80            @ bottom wrap at 25, top wrap at 31
         bl      setup_pio_execctrl
 
         @ 3) Set state machine pin ctrl
-        movs    r0, #5                  @ one pin affected
+        movs    r0, #5                  @ five pins affected
         lsls    r0, #26                 @ SET_COUNT_BITS
         movs    r1, #16                 @ RGB will start on pin 16
         lsls    r1, #5                  @ SET_BASE_BITS
         orrs    r2, r0, r1              @ control bits
-        ldr     r0, =0x500010           @ OUT_COUNT_BITS and OUT_BASE_BITS
+        ldr     r0, =0x600010           @ OUT_COUNT_BITS and OUT_BASE_BITS
         orrs    r2, r2, r0
 
         movs    r0, #0                  @ PIO BLOCK 0
-        movs    r1, #2                  @ State Machine 0
+        movs    r1, #2                  @ State Machine 2
         bl      setup_pio_pinctrl
-
-        @ 4) Set clock divisor
-        @movs    r0, #0                  @ PIO BLOCK 0
-        @movs    r1, #2                  @ State Machine 0
-        @movs    r2, #1                  @ 125 MHz / 1 = 125 MHz
-        @lsls    r2, #16
-        @bl      setup_pio_clkdiv
 
         @ 5) Init GPIO
         movs    r0, #16                 @ GPIO 16
@@ -254,11 +242,16 @@ rgb_gen_init:
         movs    r1, #6                  @ Funcsel: PIO0
         bl      GPIO_function_select
 
+        movs    r0, #21                 @ GPIO 21
+        movs    r1, #6                  @ Funcsel: PIO0
+        bl      GPIO_function_select
+
+
         @ 6) Set consecutive pindirs to output
         movs    r0, #0
         movs    r1, #2
         movs    r2, #16
-        movs    r3, #5
+        movs    r3, #6
         bl      set_consecutive_pindirs_out
 
         @ 7) PIO State Machine init - load and jump to first instruction
@@ -276,11 +269,6 @@ rgb_gen_init:
         movs    r1, #2
         ldr     r2, =0x27f              @ 639 = 640 pixels - 1
         bl      sm_put
-
-        movs    r0, #0
-        movs    r1, #2
-        movs    r2, #1
-        @ bl      set_sm_enabled
 
         pop     {pc}
 
@@ -379,15 +367,17 @@ rgb_gen:
         .word 0x80a0    @ 23:           pull   block
         .word 0xa047    @ 24:           mov    y, osr
                         @       .wrap_target
-        .word 0xe000    @ 25:           set    pins, 0
-        .word 0xa022    @ 26:           mov    x, y
-        .word 0x23c1    @ 27:           wait   1 irq, 1 [3]
+        @ .word 0xe000    @ 25:           set    pins, 0
+        .word 0xe020    @ 25:           set    x, 0
+        .word 0xa001    @ 26:           mov    pins, x
+        .word 0xa022    @ 27:           mov    x, y
+        .word 0x22c1    @ 28:           wait   1 irq, 1 [2]
         @ .word 0xa042
         @ .word 0xe203
-        .word 0x80a0    @ 28: colorout: pull   block
-        .word 0x6205    @ 29:           out    pins, 5  [2]      @ for 5-bit mode
+        .word 0x80a0    @ 29: colorout: pull   block
+        .word 0x6206    @ 30:           out    pins, 6  [2]      @ for 5-bit mode
         @ .word 0x6203    @ 29:           out    pins, 3 [2]       @ for 3-bit mode
-        .word 0x005c    @ 30:           jmp    x--, colorout
+        .word 0x005d    @ 31:           jmp    x--, colorout
                         @       .wrap
 
 /*
@@ -435,5 +425,7 @@ vsync_gen:
 
 #endif
 
-.section .vidram
-.incbin "transformed.raw"
+#ifdef DEBUG_VIDEO
+.section .vidram, "wa"
+.incbin "transformed_pico.raw"
+#endif
