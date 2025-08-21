@@ -7,4 +7,6 @@
 
 void setup_internal_clk(void);
 
+void delay_ms(unsigned int ms);
+
 #endif //TIME_H

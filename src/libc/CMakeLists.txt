@@ -1,5 +1,5 @@
 add_library(libc OBJECT
-        stdio.s
+        stdio.S
         stdio.c
 )
 

@@ -32,8 +32,11 @@ vector_table:
 .word isr_invalid       @ Reserved, should never fire
 .word isr_pendsv
 .word isr_systick
-irq_1_31: .fill 32, 4, 0
-
+#ifdef ARCH_RP2040
+irq_0_31: .fill 32, 4, 0
+#elifdef ARCH_RP2350
+irq_0_51: .fill 52, 4, 0
+#endif
 
 .macro decl_isr_bkpt name
 .weak \name

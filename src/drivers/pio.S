@@ -547,6 +547,43 @@ set_sm_enabled:
 
 
 /**
+ * Sets multiple state machines enabled in sync.
+ *  r0 - PIO BLOCK
+ *  r1 - state machines bits
+ *  r2 - enabled?
+ */
+.thumb_func
+.global set_multiple_sm_enabled
+.align 4
+set_multiple_sm_enabled:
+        push    {lr}
+
+        bl      determine_pio_block_address
+        cmp     r0, #0
+        beq     .exit_multiple_sm_enabled_failure
+        cmp     r1, #15
+        bgt     .exit_multiple_sm_enabled_failure
+
+        mov     r2, r1
+        lsls    r1, r1, #8                              @ reset state machines clocks
+        adds    r1, r1, r2                              @ enable bits
+
+        cmp     r2, #0
+        beq     .multiple_sm_disable
+        bl      atomic_set
+        b       .exit_multiple_sm_enabled_success
+        .multiple_sm_disable:
+                bl      atomic_clr
+
+        .exit_multiple_sm_enabled_success:
+                movs    r0, #0
+                pop     {pc}
+
+        .exit_multiple_sm_enabled_failure:
+                movs    r0, #1
+                pop     {pc}
+
+/**
  * Determine specified PIO register
  *  r0 - PIO BLOCK
  *  r1 - state machine

@@ -27,21 +27,9 @@ int main(void) {
         init_keyboard(15);
 
         init_pin_output(25);
+        init_pin_output(11);
 
-        hsync_gen_init(13);
-        vsync_gen_init(14);
-        rgb_gen_init(16);
-
-        setup_vga_dma();
-        __asm__("movs r0, #7"); // start all state machines in sync
-        __asm__("lsls r0, r0, #8");
-        __asm__("adds r0, r0, #7");
-        __asm__("ldr  r1, =0x50202000"); // atomic set
-        __asm__("str  r0, [r1]");
-
-        __asm__("movs r0, #1"); // start DMA channel
-        __asm__("ldr  r1, =0x50000450");
-        __asm__("str  r0, [r1]");
+        vga_init(13, 14, 16);
 
         int *i = (int *) kmalloc(sizeof(int));
 
@@ -63,29 +51,13 @@ int main(void) {
         //         puts(str_hash);
         // }
 
-        load_pio_prog(1, 2, 3);
-
         char buffer[255];
         while (1) {
-                xor_pin(25);
                 puts(" > ");
                 gets(buffer, 255);
                 puts(buffer);
-                // char *ptr = buffer;
-                // int i = 0;
-                // while (*ptr) {
-                //         put_letter(i, *ptr);
-                //         ptr += 1;
-                //         i += 1;
-                // }
                 puts("\n");
-                __asm__("svc #0");
-                /*for (int i = 0; i < 160; ++i) {
-                        sm_put(0, 2, 0xff);
-                }
-                for (int i = 0; i < 160; ++i) {
-                        sm_put(0, 2, 0x00);
-                }*/
+                // __asm__("svc #0");
         }
         return 0;
 }

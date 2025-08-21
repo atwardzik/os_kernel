@@ -6,14 +6,57 @@
 .thumb
 .syntax unified
 
+.thumb_func
+.global vga_clear
+.align 4
+vga_clear:
+        push    {lr}
+
+        movs    r0, #0                  @ PIO BLOCK 0
+        movs    r1, #7                  @ sm 0, 1, 2
+        movs    r2, #0                  @ enabled=false
+        bl      set_multiple_sm_enabled
+
+        ldr     r0, =0x20035000
+        movs    r1, #0
+        ldr     r2, =307200
+
+        .loop_clear:
+                str     r1, [r0]
+                adds    r0, r0, #4
+                subs    r2, r2, #4
+                cmp     r2, #0
+                bne     .loop_clear
+
+        pop     {pc}
+
+.thumb_func
+.global vga_start
+.align 4
+vga_start:
+        push    {lr}
+
+        movs    r0, #0                  @ PIO BLOCK 0
+        movs    r1, #7                  @ sm 0, 1, 2
+        movs    r2, #1                  @ enabled=true
+        bl      set_multiple_sm_enabled
+
+        movs    r0, #1                  @ start DMA channel
+        ldr     r1, =0x50000450
+        str     r0, [r1]
+
+        pop     {pc}
+
 /**
- *
+ * Setup the HSYNC signal
+ *   r0 - pin
  */
 .thumb_func
 .global hsync_gen_init
 .align 4
 hsync_gen_init:
-        push    {lr}
+        push    {r4, lr}
+        mov     r4, r0
         @@@ According to squarewave example from SDK -
         @@@ pp. 313 (rp2040) / 877 (rp2350) in the datasheet.
         @@@
@@ -40,7 +83,7 @@ hsync_gen_init:
         @ 3) Set state machine pin ctrl
         movs    r0, #1                  @ one pin affected
         lsls    r0, #26                 @ SET_COUNT_BITS
-        movs    r1, #13                 @ HSYNC will be on pin 13
+        mov     r1, r4
         lsls    r1, #5                  @ SET_BASE_BITS
         orrs    r2, r0, r1              @ control bits
 
@@ -88,15 +131,20 @@ hsync_gen_init:
         movs    r2, #1
         @ bl      set_sm_enabled
 
-        pop     {pc}
+        pop     {r4, pc}
 
 
-
+/**
+ * Setup the VSYNC signal
+ *   r0 - pin
+ */
 .thumb_func
 .global vsync_gen_init
 .align 4
 vsync_gen_init:
-        push    {lr}
+        push    {r4, lr}
+        mov     r4, r0
+
 
         @ 0) Disable State Machine!!!
         movs    r0, #0
@@ -126,7 +174,7 @@ vsync_gen_init:
         lsls    r0, #26                 @ SET_COUNT_BITS
 
         @ add info about SET_BASE
-        movs    r1, #14                 @ VSYNC will be on pin 14
+        mov     r1, r4
         lsls    r1, #5                  @ SET_BASE_BITS
         orrs    r2, r0, r1              @ control bits
 
@@ -179,17 +227,20 @@ vsync_gen_init:
         ldr     r2, =0x1df              @ 479 = 480 pixels - 1
         bl      sm_put
 
-        pop     {pc}
+        pop     {r4, pc}
 
 
 /**
- *
+ * Setup the RGB analog signal
+ *   r0 - pin
  */
 .thumb_func
 .global rgb_gen_init
 .align 4
 rgb_gen_init:
-        push    {lr}
+        push    {r4, lr}
+        mov     r4, r0
+
         @ 0) Disable State Machine!!!
         movs    r0, #0
         movs    r1, #2
@@ -211,7 +262,7 @@ rgb_gen_init:
         @ 3) Set state machine pin ctrl
         movs    r0, #5                  @ five pins affected
         lsls    r0, #26                 @ SET_COUNT_BITS
-        movs    r1, #16                 @ RGB will start on pin 16
+        mov     r1, r4
         lsls    r1, #5                  @ SET_BASE_BITS
         orrs    r2, r0, r1              @ control bits
         ldr     r0, =0x600010           @ OUT_COUNT_BITS and OUT_BASE_BITS
@@ -270,15 +321,15 @@ rgb_gen_init:
         ldr     r2, =0x27f              @ 639 = 640 pixels - 1
         bl      sm_put
 
-        pop     {pc}
+        pop     {r4, pc}
 
 .thumb_func
 .global setup_vga_dma
 .align 4
 setup_vga_dma:
         @ CH0
-        ldr     r0, =0x50000000         @ CH0_READ_ADDR
-        ldr     r1, =0x20035000         @ address start
+        ldr     r0, CH0_READ_ADDR
+        ldr     r1, VIDRAM_START
         str     r1, [r0]
 
         adds    r0, r0, #4              @ CH0_WRITE_ADDR
@@ -294,16 +345,16 @@ setup_vga_dma:
         str     r1, [r0]
 
         @ CH1
-        ldr     r0, =0x50000040         @ CH1_READ_ADDR
+        ldr     r0, CH1_READ_ADDR
         ldr     r1, =VIDRAM_START       @ TODO: CHANGE TO BE LINKER DEPENDENT
         str     r1, [r0]
 
         adds    r0, r0, #4              @ CH1_WRITE_ADDR
-        ldr     r1, =0x50000000         @ CH0_READ_ADDR
+        ldr     r1, CH0_READ_ADDR
         str     r1, [r0]
 
         adds    r0, r0, #4              @ CH1_TRANSFER_COUNT
-        movs    r1, #1                  @ vidram size
+        movs    r1, #1
         str     r1, [r0]
 
         adds    r0, r0, #8              @ CH1_AL1_CTRL
@@ -312,17 +363,10 @@ setup_vga_dma:
 
         bx      lr
 
-/*
-.thumb_func
-.global vga_put_letter
-.align 4
-vga_put_letter:
-        mov     r0, #1
-        bx      lr
-*/
-
 .align 4
 VIDRAM_START:   .word 0x20035000
+CH0_READ_ADDR:  .word 0x50000000
+CH1_READ_ADDR:  .word 0x50000040
 
 
 #ifdef VGA_640x480

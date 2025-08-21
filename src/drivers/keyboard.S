@@ -17,15 +17,8 @@
 
 #ifdef ARCH_RP2040
 .equ IO_IRQ_BANK0, 13
-@@@ VECTOR TABLE: 16 words for isr + 31 words for user irqs isr
-.equ IO_IRQ_BANK0_OFFSET, 0x74              @ IO_IRQ_BANK0 is 13th irq
-
 #elifdef ARCH_RP2350
 .equ IO_IRQ_BANK0, 21
-
-@@@ VECTOR TABLE: 16 words for isr + 52 words for user irqs isr
-.equ IO_IRQ_BANK0_OFFSET, 0x94              @ IO_IRQ_BANK0 is 21st irq
-
 #endif
 
 
@@ -99,7 +92,9 @@ init_keyboard:
                 str  r1, [r0]                       @ set irq enabled - INTE
 
                 @ 4) set interrupt subroutine
-                bl   set_pin_interrupt_isr
+                movs    r0, IO_IRQ_BANK0
+                ldr     r1, =pin_handler
+                bl      set_isr
 
         .init_keyboard_input_pins:
                 .init_upper_word:
@@ -115,34 +110,6 @@ init_keyboard:
                 bl   init_multiple_pin_inputs
 
         pop {pc}
-
-
-.thumb_func
-.align 4
-set_pin_interrupt_isr:
-        ldr  r2, PPB_BASE
-        ldr  r1, VTOR_OFFSET
-        add  r2, r2, r1
-        ldr  r1, [r2]                           @ read the address of IVT from VTOR hardware register
-
-        movs r2, IO_IRQ_BANK0_OFFSET
-        add  r2, r2, r1
-        ldr  r0, =pin_handler
-        str  r0, [r2]                           @ write interrupt handler
-
-        @@@@ enable appropriate interrupt at the CPU by turning off and on again @@@@
-
-        movs r0, #1
-        lsls r0, IO_IRQ_BANK0
-        ldr  r2, PPB_BASE
-        ldr  r1, NVIC_ICPR_OFFSET               @ unset IRQ
-        add  r1, r2
-        str  r0, [r1]
-        ldr  r1, NVIC_ISER_OFFSET               @ set IRQ
-        add  r1, r2
-        str  r0, [r1]
-
-        bx   lr
 
 
 .thumb_func
