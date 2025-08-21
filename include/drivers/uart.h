@@ -7,4 +7,8 @@
 
 void uart_init(void);
 
+void uart_Tx(char c);
+
+char uart_Rx(void);
+
 #endif //UART_H

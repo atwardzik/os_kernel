@@ -27,13 +27,9 @@ add_subdirectory(src/libc)
 add_executable(os
         src/start.S
         src/main.c
-)
-
-
-target_link_libraries(os
-        kernel
-        drivers
-        libc
+        $<TARGET_OBJECTS:drivers>
+        $<TARGET_OBJECTS:kernel>
+        $<TARGET_OBJECTS:libc>
 )
 
 target_link_options(os PRIVATE

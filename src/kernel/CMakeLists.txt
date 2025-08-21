@@ -1,4 +1,4 @@
-add_library(kernel STATIC
+add_library(kernel OBJECT
         memory.c
         proc.c
         ctx.s

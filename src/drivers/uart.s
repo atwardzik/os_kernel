@@ -53,7 +53,7 @@ uart_init:
 
 /**
  * UART send single character
- * r0 - character to be sent
+ * r0 - character to be sent, does not change r0
  */
 .thumb_func
 .global uart_Tx
@@ -73,7 +73,7 @@ uart_Tx:
 
 
 /**
- * UART receive single character, does not change r0
+ * UART receive single character
  */
 .thumb_func
 .global uart_Rx

@@ -1,4 +1,4 @@
-add_library(drivers STATIC
+add_library(drivers OBJECT
         atomic.S
         resets.S
         time.S
@@ -9,6 +9,7 @@ add_library(drivers STATIC
         divider.S
 
         keyboard.S
+        vga.c
         vga.S
 )
 

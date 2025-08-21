@@ -312,6 +312,15 @@ setup_vga_dma:
 
         bx      lr
 
+/*
+.thumb_func
+.global vga_put_letter
+.align 4
+vga_put_letter:
+        mov     r0, #1
+        bx      lr
+*/
+
 .align 4
 VIDRAM_START:   .word 0x20035000
 
