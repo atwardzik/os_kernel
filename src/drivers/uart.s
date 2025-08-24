@@ -13,6 +13,12 @@
 .equ UART_LCR_H, 0x2c
 .equ UART_CR, 0x30
 
+.equ eol, 0x00
+.equ endl, 0x0A
+.equ carriage_return, 0x0D
+.equ backspace, 0x08
+.equ empty_space, 0x20
+
 /**
  * Init uart, set uart0
  */
@@ -56,7 +62,6 @@ uart_init:
  * r0 - character to be sent, does not change r0
  */
 .thumb_func
-.global uart_Tx
 .align 4
 uart_Tx:
         ldr  r3, UART0_BASE
@@ -71,12 +76,67 @@ uart_Tx:
 
         bx   lr
 
+/**
+ * Put character into UART
+ *   r0 - char or char sequence (e.g. Arrows)
+ */
+.thumb_func
+.global uart_putc
+.align 4
+uart_putc:
+        push    {r4, r5, lr}
+        mov     r4, r0
+
+        cmp     r0, #0xff
+        ble     .putc_normal_char
+
+        .putc_escape_sequence:
+                movs    r5, #0xff
+                lsrs    r0, r4, #16
+                ands    r0, r0, r5
+                bl      uart_Tx
+
+                lsrs    r0, r4, #8
+                ands    r0, r0, r5
+                bl      uart_Tx
+
+                ands    r0, r4, r5
+                bl      uart_Tx
+
+                b       .exit_putc
+
+        .putc_normal_char:
+                bl      uart_Tx
+
+                cmp     r4, backspace
+                beq     .putc_backspace
+
+                cmp     r4, endl
+                beq     .putc_endl
+
+                b       .exit_putc
+
+        .putc_backspace:
+                movs    r0, empty_space
+                bl      uart_Tx
+
+                movs    r0, backspace
+                bl      uart_Tx
+
+                b       .exit_putc
+
+        .putc_endl:
+                movs    r0, carriage_return
+                bl      uart_Tx
+
+        .exit_putc:
+                pop     {r4, r5, pc}
+
 
 /**
  * UART receive single character
  */
 .thumb_func
-.global uart_Rx
 .align 4
 uart_Rx:
         ldr  r3, UART0_BASE
@@ -90,6 +150,19 @@ uart_Rx:
         ldrb  r0, [r3, UART_DR]
 
         bx   lr
+
+/**
+ * Get character from UART (alias for uart_Rx)
+ */
+.thumb_func
+.global uart_getc
+.align 4
+uart_getc:
+        push    {lr}
+        bl      uart_Rx
+        pop     {pc}
+
+
 
 #ifdef ARCH_RP2040
 .align 4
