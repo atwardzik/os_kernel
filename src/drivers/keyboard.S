@@ -9,7 +9,17 @@
 
 #include "kernel/syscalls.h"
 
-.equ GPIO_IN, 0x04
+/**
+ * +--------------+------------------+---------------------+
+ * | Key          | (Set 2) Make Code| (Set 2) Break Code  |
+ * +--------------+------------------+---------------------+
+ * | "A"          | 1C               | F0,1C               |
+ * | "5"          | 2E               | F0,2E               |
+ * | "F10"        | 09               | F0,09               |
+ * | Right Arrow  | E0,74            | E0,F0,74            |
+ * | Right "Ctrl" | E0,14            | E0,F0,14            |
+ * +--------------+------------------+---------------------+
+ */
 
 @ Please note that the pins are consecutive, e.g. when starting at pin 2, pins {2,3,4,5} will be treaded as input
 .equ UPPER_NIBBLE_START, 2
@@ -17,6 +27,7 @@
 .equ NIBBLE_MASK, 0x0F
 
 
+.equ GPIO_IN, 0x04
 #ifdef ARCH_RP2040
 .equ IO_IRQ_BANK0, 13
 #elifdef ARCH_RP2350
@@ -126,7 +137,7 @@ pin_handler:
         ldr     r1, IO_BANK0_BASE
         ldr     r0, =interrupt_pin
         ldr     r0, [r0]
-        lsrs    r0, r0, #3                         @ pin / 8 = INTR_n
+        lsrs    r0, r0, #3                              @ pin / 8 = INTR_n
         movs    r2, #0x04
         muls    r0, r0, r2
         ldr     r2, INTR_OFFSET
@@ -136,25 +147,30 @@ pin_handler:
         @ 2) reset interrupt
         ldr     r1, =edge_high_bit
         ldr     r1, [r1]
-        str     r1, [r0]                           @ clear by setting INTR
+        str     r1, [r0]                                @ clear by setting INTR
 
         @ 3) Proper handle
         ldr     r0, =keyboard_flags
         ldr     r0, [r0]
         ldr     r1, key_release_flag
         tst     r0, r1
-        beq     .read_key
+        bne     .reset_flags
+
+        ldr     r1, escape_flag
+        tst     r0, r1
+        bne     .manage_escape_sequence
+
+        b       .read_key
 
         .reset_flags:
-                eors    r0, r0, r1                         @ reset release flag
-                ldr     r1, =keyboard_flags
-                str     r0, [r1]
+                ldr     r0, key_release_flag
+                bl      clr_flag
 
                 bl      read_byte
                 ldr     r1, =scancode_read
                 ldr     r1, [r1]
                 cmp     r1, #0x12
-                beq     .shift_released
+                beq    .shift_released
                 cmp     r1, #0x59
                 beq     .shift_released
                 cmp     r1, #0x14
@@ -179,14 +195,8 @@ pin_handler:
                 cmp     r0, #0x14
                 beq     .ctrl_pressed
 
-                cmp     r0, #0xE0
-                beq     .escape_code_sequence
-
-                ldr     r1, =keyboard_flags
-                ldr     r1, [r1]
-                ldr     r2, ctrl_flag
-                tst     r1, r2
-                bne     .escape_code_sequence
+                cmp     r0, #0xe0
+                beq     .escape_code_sequence_pressed
 
         .scancode_to_ascii:
                 ldr     r1, =scancode_read
@@ -197,6 +207,7 @@ pin_handler:
                 ldr     r3, shift_flag
                 tst     r2, r3
                 beq     .select_keymap_normal
+
                 .select_shifted_keymap:
                         ldr     r1, =keymap_shifted
                         b       .convert_to_keymap
@@ -214,59 +225,14 @@ pin_handler:
                 strb    r3, [r2]
                 b       .exit
 
-        .shift_pressed:
-                ldr     r0, =keyboard_flags
-                ldr     r1, shift_flag
-                ldr     r2, [r0]
-                orrs    r2, r2, r1
-                str     r2, [r0]
+        .manage_escape_sequence:
+                ldr     r0, escape_flag
+                bl      clr_flag
 
-                b       .exit
+                bl      read_byte
 
-        .shift_released:
-                ldr     r0, =keyboard_flags
-                ldr     r1, shift_flag
-                ldr     r2, [r0]
-                eors    r2, r2, r1
-                str     r2, [r0]
-
-                b       .exit
-
-        .ctrl_pressed:
-                ldr     r0, =keyboard_flags
-                ldr     r1, ctrl_flag
-                ldr     r2, [r0]
-                orrs    r2, r2, r1
-                str     r2, [r0]
-
-                b       .exit
-
-        .ctrl_released:
-                ldr     r0, =keyboard_flags
-                ldr     r1, ctrl_flag
-                ldr     r2, [r0]
-                eors    r2, r2, r1
-                str     r2, [r0]
-
-                b       .exit
-
-        .key_released:
-                ldr     r0, =keyboard_flags
-                ldr     r1, key_release_flag
-                ldr     r2, [r0]
-                orrs    r2, r2, r1
-                str     r2, [r0]
-
-                b       .exit
-
-        .escape_code_sequence:
-                cmp     r0, #0xE0
-                bne     .signal_special
-
-                .wait_for_next_byte:
-                        bl      read_byte
-                        cmp     r0, #0xE0
-                        beq     .wait_for_next_byte
+                cmp     r0, #0xf0               @ is it key release?
+                beq     .key_released
 
                 @ RIGHT KEYS
 
@@ -292,20 +258,19 @@ pin_handler:
 
         .case_arrow_up:
                 movs    r0, ARROW_UP
-                b       .write_escape_code_sequence
+                beq     .write_escape_code_sequence
 
         .case_arrow_down:
                 movs    r0, ARROW_DOWN
-                b       .write_escape_code_sequence
+                beq     .write_escape_code_sequence
 
         .case_arrow_left:
                 movs    r0, ARROW_LEFT
-                b       .write_escape_code_sequence
+                beq     .write_escape_code_sequence
 
         .case_arrow_right:
                 movs    r0, ARROW_RIGHT
-                b       .write_escape_code_sequence
-
+                beq     .write_escape_code_sequence
 
         .write_escape_code_sequence:
                 ldr     r1, =keyboard_buffer
@@ -323,12 +288,40 @@ pin_handler:
                 strb    r0, [r1, r2]
                 adds    r2, r2, #1
 
-
                 ldr     r0, =buffer_offset
                 strb    r2, [r0]
 
                 b       .exit
 
+        .shift_pressed:
+                ldr     r0, shift_flag
+                bl      set_flag
+                b       .exit
+
+        .shift_released:
+                ldr     r0, shift_flag
+                bl      clr_flag
+                b       .exit
+
+        .ctrl_pressed:
+                ldr     r0, ctrl_flag
+                bl      set_flag
+                b       .exit
+
+        .ctrl_released:
+                ldr     r0, ctrl_flag
+                bl      clr_flag
+                b       .exit
+
+        .key_released:
+                ldr     r0, key_release_flag
+                bl      set_flag
+                b       .exit
+
+        .escape_code_sequence_pressed:
+                ldr     r0, escape_flag
+                bl      set_flag
+                b       .exit
 
         .signal_special:
                 @ SIGNALS LIKE ^C, ^D, ^Z
@@ -336,6 +329,35 @@ pin_handler:
         .exit:
                 cpsie   i
                 pop     {pc}
+
+
+/**
+ * Sets keyboard flag
+ *   r0 - flag to be set
+ */
+.thumb_func
+.align 4
+set_flag:
+        ldr     r1, =keyboard_flags
+        ldr     r2, [r1]
+        orrs    r2, r2, r0
+        str     r2, [r1]
+
+        bx      lr
+
+/**
+ * Clears keyboard flag
+ *   r0 - flag to be set
+ */
+.thumb_func
+.align 4
+clr_flag:
+        ldr     r1, =keyboard_flags
+        ldr     r2, [r1]
+        eors    r2, r2, r0
+        str     r2, [r1]
+
+        bx      lr
 
 
 
@@ -438,6 +460,7 @@ NVIC_ISER_OFFSET:       .word 0xe100            @ interrupt set-enable register
 key_release_flag:       .word 0b0001
 shift_flag:             .word 0b0010
 ctrl_flag:              .word 0b0100
+escape_flag:            .word 0b1000
 
 .align 4
 nibble_reverse_lookup:  .byte 0x0, 0x8, 0x4, 0xC, 0x2, 0xA, 0x6, 0xE, 0x1, 0x9, 0x5, 0xD, 0x3, 0xB, 0x7, 0xF
