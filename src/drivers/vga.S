@@ -6,6 +6,9 @@
 .thumb
 .syntax unified
 
+.extern __vidram_start
+.extern __vidram_length
+
 .thumb_func
 .global vga_clear
 .align 4
@@ -350,7 +353,7 @@ setup_vga_dma:
         str     r1, [r0]
 
         adds    r0, r0, #4              @ CH0_TRANSFER_COUNT
-        ldr     r1, =307200             @ vidram size
+        ldr     r1, =__vidram_length
         str     r1, [r0]
 
         adds    r0, r0, #8              @ CH0_AL1_CTRL
@@ -359,7 +362,7 @@ setup_vga_dma:
 
         @ CH1
         ldr     r0, CH1_READ_ADDR
-        ldr     r1, =VIDRAM_START       @ TODO: CHANGE TO BE LINKER DEPENDENT
+        ldr     r1, =VIDRAM_START
         str     r1, [r0]
 
         adds    r0, r0, #4              @ CH1_WRITE_ADDR
@@ -377,7 +380,7 @@ setup_vga_dma:
         bx      lr
 
 .align 4
-VIDRAM_START:   .word 0x20035000
+VIDRAM_START:   .word __vidram_start
 CH0_READ_ADDR:  .word 0x50000000
 CH1_READ_ADDR:  .word 0x50000040
 

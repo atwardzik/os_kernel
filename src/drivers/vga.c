@@ -6,10 +6,12 @@
 #include "drivers/gpio.h"
 #include "drivers/time.h"
 
+#include <stdint.h>
 #include <stddef.h>
 
 
-#define VIDRAM_ADDRESS_BEGIN ((void *) 0x2003'5000)
+extern const uint8_t __vidram_start[];
+const uint8_t *const vidram_start_ptr = __vidram_start;
 
 extern void hsync_gen_init(uint32_t pin);
 
@@ -52,11 +54,11 @@ void vga_put_letter(const char letter, unsigned int row_position, unsigned int c
                 const uint8_t pixel_line = letter_lookup[i];
                 for (size_t j = 0; j < 8; ++j) {
                         if (pixel_line & (1 << j)) {
-                                *(uint8_t *) (VIDRAM_ADDRESS_BEGIN + i * SCREEN_WIDTH + j + position) =
+                                *(uint8_t *) (vidram_start_ptr + i * SCREEN_WIDTH + j + position) =
                                                 foreground_color;
                         }
                         else {
-                                *(uint8_t *) (VIDRAM_ADDRESS_BEGIN + i * SCREEN_WIDTH + j + position) =
+                                *(uint8_t *) (vidram_start_ptr + i * SCREEN_WIDTH + j + position) =
                                                 background_color;
                         }
                 }

@@ -7,16 +7,15 @@
 
 .syntax unified
 
+.extern __stack_end
+.extern __bss_start
+
 .section .vectors, "ax"
 .align 2
 .global vector_table
 .thumb_func
 vector_table:
-#ifdef ARCH_RP2040
-.word 0x20040000
-#elifdef ARCH_RP2350
-.word 0x20035000
-#endif
+.word __stack_end
 .word reset             @
 .word isr_nmi           @
 .word isr_hardfault     @
@@ -60,45 +59,34 @@ decl_isr_bkpt isr_invalid
 .global reset
 .align 4
 reset:
-        ldr  r2, PPB_BASE
-        ldr  r1, VTOR_OFFSET
-        add  r1, r1, r2
-        ldr  r0, =vector_table
-        str  r0, [r1]
+        ldr     r2, PPB_BASE
+        ldr     r1, VTOR_OFFSET
+        add     r1, r1, r2
+        ldr     r0, =vector_table
+        str     r0, [r1]
 
-        ldr  r1, SRAM_STACK
-        mov  sp, r1
+        ldr     r1, =__stack_end
+        mov     sp, r1
 
 clear_bss:
-        ldr  r1, SRAM_BSS
-        ldr  r2, =0x1000            @ size of bss
-        add  r2, r1, r2
-        movs r0, #0
+        ldr     r1, =__bss_start
+        ldr     r2, =0x1000            @ size of bss
+        add     r2, r1, r2
+        movs    r0, #0
 
         .clear_loop:
-                strb r0, [r1]
-                adds r1, #1
-                cmp  r1, r2
-                bne  .clear_loop
+                strb    r0, [r1]
+                adds    r1, #1
+                cmp     r1, r2
+                bne     .clear_loop
 
 platform_entry:
-        ldr  r1, =main
-        blx  r1
-        mov  r0, r0
-        bkpt #0                     @ should not return
+        ldr     r1, =main
+        blx     r1
+        mov     r0, r0
+        bkpt    #0                     @ should not return
 
 
 .align 4
-PPB_BASE:           .word 0xe0000000
-VTOR_OFFSET:        .word 0xed08
-
-#ifdef ARCH_RP2040
-SRAM_STACK:         .word 0x2001a800
-SRAM_STRIPED_END:   .word 0x20040000
-SRAM_BSS:           .word 0x20041000
-
-#elifdef ARCH_RP2350
-SRAM_STACK:         .word 0x20035000
-SRAM_STRIPED_END:   .word 0x20080000
-SRAM_BSS:           .word 0x20081000
-#endif
+PPB_BASE:               .word 0xe0000000
+VTOR_OFFSET:            .word 0xed08
