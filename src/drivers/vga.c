@@ -178,7 +178,7 @@ static void set_colors_from_escape(Color *foreground_color, Color *background_co
                                 *foreground_color = PHYSICAL_LIGHT_GRAY;
                                 break;
                         default:
-                                *foreground_color = PHYSICAL_GREEN;
+                                *foreground_color = PHYSICAL_WHITE;
                                 break;
                 }
         }
@@ -209,7 +209,7 @@ static void set_colors_from_escape(Color *foreground_color, Color *background_co
                                 *foreground_color = PHYSICAL_WHITE;
                                 break;
                         default:
-                                *foreground_color = PHYSICAL_GREEN;
+                                *foreground_color = PHYSICAL_WHITE;
                                 break;
                 }
         }
@@ -241,7 +241,7 @@ static void set_colors_from_escape(Color *foreground_color, Color *background_co
                                 *background_color = PHYSICAL_LIGHT_GRAY;
                                 break;
                         default:
-                                *background_color = PHYSICAL_GREEN;
+                                *background_color = PHYSICAL_BLACK;
                                 break;
                 }
         }
@@ -272,7 +272,7 @@ static void set_colors_from_escape(Color *foreground_color, Color *background_co
                                 *background_color = PHYSICAL_WHITE;
                                 break;
                         default:
-                                *background_color = PHYSICAL_GREEN;
+                                *background_color = PHYSICAL_BLACK;
                                 break;
                 }
         }
@@ -284,8 +284,8 @@ static int screen_column_position = 0;
 void vga_putc(const int c) {
         static uint8_t escape_sequence[10] = {};
         static size_t escape_sequence_position = 0;
-        static Color foreground_color = 3 << 2;
-        static Color background_color = 0x00;
+        static Color foreground_color = PHYSICAL_WHITE;
+        static Color background_color = PHYSICAL_BLACK;
 
         if (c > 0xff) {
                 const uint8_t direction = c & 0xff;
@@ -305,8 +305,8 @@ void vga_putc(const int c) {
         if (escape_sequence_position || c == ESC) {
                 if (c == 'm') {
                         if (escape_sequence[2] == '0' && escape_sequence_position == 3) {
-                                foreground_color = 3 << 2;
-                                background_color = 0x00;
+                                foreground_color = PHYSICAL_WHITE;
+                                background_color = PHYSICAL_BLACK;
                                 escape_sequence_position = 0;
                                 return;
                         }
