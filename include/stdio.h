@@ -22,8 +22,8 @@ int getc(void);
 
 void gets(char *buffer, uint32_t size);
 
-void xor_cursor(void);
+void vga_xor_cursor(void);
 
-void clr_cursor(void);
+void vga_clr_cursor(void);
 
 #endif //STDIO_H
