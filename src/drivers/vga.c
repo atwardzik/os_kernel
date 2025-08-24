@@ -280,12 +280,12 @@ static void set_colors_from_escape(Color *foreground_color, Color *background_co
 
 static int screen_row_position = 0;
 static int screen_column_position = 0;
+static Color foreground_color = PHYSICAL_WHITE;
+static Color background_color = PHYSICAL_BLACK;
 
 void vga_putc(const int c) {
         static uint8_t escape_sequence[10] = {};
         static size_t escape_sequence_position = 0;
-        static Color foreground_color = PHYSICAL_WHITE;
-        static Color background_color = PHYSICAL_BLACK;
 
         if (c > 0xff) {
                 const uint8_t direction = c & 0xff;
@@ -357,15 +357,15 @@ void vga_xor_cursor() {
         static bool cursor_on = false;
 
         if (cursor_on) {
-                vga_put_letter(CURSOR_FULL, screen_row_position, screen_column_position, 0x00, 3 << 2);
+                vga_put_letter(CURSOR_FULL, screen_row_position, screen_column_position, background_color, foreground_color);
                 cursor_on = false;
         }
         else {
-                vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, 0x00, 3 << 2);
+                vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, background_color, foreground_color);
                 cursor_on = true;
         }
 }
 
 void vga_clr_cursor() {
-        vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, 0x00, 3 << 2);
+        vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, background_color, foreground_color);
 }
