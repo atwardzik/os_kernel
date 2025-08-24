@@ -3,8 +3,11 @@
 //
 
 #include "drivers/vga.h"
+#include "drivers/gpio.h"
+#include "drivers/time.h"
 
 #include <stddef.h>
+
 
 #define VIDRAM_ADDRESS_BEGIN ((void *) 0x2003'5000)
 

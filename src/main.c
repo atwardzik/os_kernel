@@ -57,7 +57,7 @@ int main(void) {
                 gets(buffer, 255);
                 puts(buffer);
                 puts("\n");
-                // __asm__("svc #0");
+                __asm__("svc #0");
         }
         return 0;
 }

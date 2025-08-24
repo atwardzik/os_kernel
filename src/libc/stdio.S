@@ -71,19 +71,28 @@ puts:
 .align 4
 gets:
         push    {r4-r7, lr}
-        mov     r4, r0                     @ save pointer
-        mov     r5, r1                     @ save max size
-        subs    r5, r5, #1                 @ max_index = max_size - 1
+        subs    sp, sp, #8
+        mov     r4, r0                          @ save pointer
+        mov     r5, r1                          @ save max size
+        subs    r5, r5, #1                      @ max_index = max_size - 1
 
-        movs    r6, #0                     @ loop counter
+        movs    r6, #0                          @ loop counter
+        movs    r7, #0                          @ loop counter MAX
         .get_loop:
                 bl      getc
 
-                mov     r7, r0
-                bl      putc
-                mov     r0, r7
+                ldr     r1, =0x1b5b43
+                cmp     r0, r1
+                beq     .arrow_right
+                ldr     r1, =0x1b5b44
+                cmp     r0, r1
+                beq     .arrow_left
 
-                cmp     r0, endl           @ carriage_return OR endline
+                str     r0, [sp]
+                bl      putc
+                ldr     r0, [sp]
+
+                cmp     r0, endl                @ carriage_return OR endline
                 beq     .end_get_loop
                 cmp     r6, r5
                 blt     .save
@@ -94,18 +103,37 @@ gets:
                 beq     .save_backspace
                 strb    r0, [r4, r6]
                 adds    r6, r6, #1
+                adds    r7, r7, #1
                 b       .get_loop
 
         .save_backspace:
                 cmp     r6, #0
                 beq     .get_loop
                 subs    r6, r6, #1
+                subs    r7, r7, #1
+                b       .get_loop
+
+        .arrow_left:
+                cmp     r6, #0
+                beq     .get_loop
+
+                bl      putc
+                subs    r6, r6, #1
+                b       .get_loop
+
+        .arrow_right:
+                cmp     r6, r7
+                bge     .get_loop
+
+                bl      putc
+                adds    r6, r6, #1
                 b       .get_loop
 
         .end_get_loop:
                 movs    r0, eol
                 strb    r0, [r4, r6]
 
+        adds    sp, sp, #8
         pop     {r4-r7, pc}
 
 

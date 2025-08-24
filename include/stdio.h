@@ -14,11 +14,11 @@ constexpr char BACKSPACE = 0x08;
 constexpr char EMPTY_SPACE = 0x20;
 constexpr char CURSOR_FULL = 0x81;
 
-void putc(char c);
+void putc(int c);
 
 void puts(const char *str);
 
-char getc(void);
+int getc(void);
 
 void gets(char *buffer, uint32_t size);
 

@@ -258,19 +258,19 @@ pin_handler:
 
         .case_arrow_up:
                 movs    r0, ARROW_UP
-                beq     .write_escape_code_sequence
+                b       .write_escape_code_sequence
 
         .case_arrow_down:
                 movs    r0, ARROW_DOWN
-                beq     .write_escape_code_sequence
+                b       .write_escape_code_sequence
 
         .case_arrow_left:
                 movs    r0, ARROW_LEFT
-                beq     .write_escape_code_sequence
+                b       .write_escape_code_sequence
 
         .case_arrow_right:
                 movs    r0, ARROW_RIGHT
-                beq     .write_escape_code_sequence
+                b       .write_escape_code_sequence
 
         .write_escape_code_sequence:
                 ldr     r1, =keyboard_buffer
