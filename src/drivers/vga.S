@@ -21,9 +21,9 @@
 
 
 .thumb_func
-.global vga_clear
+.global vga_clr_screen
 .align 4
-vga_clear:
+vga_clr_screen:
         push    {lr}
 
         movs    r0, #0                  @ PIO BLOCK 0

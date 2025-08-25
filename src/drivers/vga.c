@@ -24,8 +24,6 @@ extern void rgb_gen_init(uint32_t pin_red0);
 
 extern void setup_vga_dma(void);
 
-extern void vga_clear(void);
-
 extern void vga_start(void);
 
 constexpr uint8_t BACKSPACE = 0x08;
@@ -55,26 +53,26 @@ enum EscapeColor {
 };
 
 enum PhysicalColor {
-        PHYSICAL_BLACK         = 0b000000,
-        PHYSICAL_RED           = 0b000011,
-        PHYSICAL_GREEN         = 0b001100,
-        PHYSICAL_YELLOW        = 0b001111,
-        PHYSICAL_BLUE          = 0b110000,
-        PHYSICAL_MAGENTA       = 0b110011,
-        PHYSICAL_CYAN          = 0b111100,
-        PHYSICAL_WHITE         = 0b111111,
-        PHYSICAL_DARK_GRAY     = 0b010101,
-        PHYSICAL_RED_LIGHT     = 0b000001,
-        PHYSICAL_GREEN_LIGHT   = 0b000100,
-        PHYSICAL_YELLOW_LIGHT  = 0b000101,
-        PHYSICAL_BLUE_LIGHT    = 0b010000,
-        PHYSICAL_MAGENTA_LIGHT = 0b010001,
-        PHYSICAL_CYAN_LIGHT    = 0b010100,
-        PHYSICAL_LIGHT_GRAY    = 0b101010,
+        PHYSICAL_BLACK         = 0b000000, // #000000
+        PHYSICAL_RED           = 0b000010, // #aa0000
+        PHYSICAL_GREEN         = 0b001001, // #55aa00
+        PHYSICAL_YELLOW        = 0b001010, // #aaaa00
+        PHYSICAL_BLUE          = 0b100000, // #0000aa
+        PHYSICAL_MAGENTA       = 0b100010, // #aa00aa
+        PHYSICAL_CYAN          = 0b101001, // #55aaaa
+        PHYSICAL_WHITE         = 0b111111, // #ffffff
+        PHYSICAL_DARK_GRAY     = 0b010101, // #555555
+        PHYSICAL_RED_LIGHT     = 0b000011, // #ff0000
+        PHYSICAL_GREEN_LIGHT   = 0b001100, // #00ff00
+        PHYSICAL_YELLOW_LIGHT  = 0b001111, // #ffff00
+        PHYSICAL_BLUE_LIGHT    = 0b110000, // #0000ff
+        PHYSICAL_MAGENTA_LIGHT = 0b110011, // #ff00ff
+        PHYSICAL_CYAN_LIGHT    = 0b111101, // #55ffff
+        PHYSICAL_LIGHT_GRAY    = 0b101010, // #aaaaaa
 };
 
 void vga_init(const uint32_t hsync_pin, const uint32_t vsync_pin, const uint32_t pin_red0) {
-        vga_clear();
+        vga_clr_screen();
 
         hsync_gen_init(hsync_pin);
         vsync_gen_init(vsync_pin);
@@ -114,7 +112,7 @@ void vga_put_letter(const char letter, unsigned int row_letter_position, unsigne
 
 
 static inline bool is_foreground_light_palette(const uint8_t *color_escape_sequence) {
-        if (color_escape_sequence[2] - 0x30 == 1) {
+        if (color_escape_sequence[2] - 0x30 == 9) {
                 return true;
         }
 
@@ -122,7 +120,7 @@ static inline bool is_foreground_light_palette(const uint8_t *color_escape_seque
 }
 
 static inline bool is_background_light_palette(const uint8_t *color_escape_sequence) {
-        if (color_escape_sequence[2] - 0x30 == 5) {
+        if (color_escape_sequence[5] - 0x30 == 1) {
                 return true;
         }
 
@@ -136,12 +134,12 @@ static struct EscapeColorCode decode_escape_colors(const uint8_t *color_escape_s
         color_code.foreground_light = is_foreground_light_palette(color_escape_sequence);
         color_code.background_light = is_background_light_palette(color_escape_sequence);
 
-        if (color_code.foreground_light || color_code.background_light) {
-                color_code.foreground_color = color_escape_sequence[5] - 0x30;
-                color_code.background_color = color_escape_sequence[8] - 0x30;
+        color_code.foreground_color = color_escape_sequence[3] - 0x30;
+
+        if (color_code.background_light) {
+                color_code.background_color = color_escape_sequence[7] - 0x30;
         }
         else {
-                color_code.foreground_color = color_escape_sequence[3] - 0x30;
                 color_code.background_color = color_escape_sequence[6] - 0x30;
         }
 
@@ -278,8 +276,8 @@ static void set_colors_from_escape(Color *foreground_color, Color *background_co
         }
 }
 
-static int screen_row_position = 0;
-static int screen_column_position = 0;
+static size_t screen_row_position = 0;
+static size_t screen_column_position = 0;
 static Color foreground_color = PHYSICAL_WHITE;
 static Color background_color = PHYSICAL_BLACK;
 
@@ -301,7 +299,6 @@ void vga_putc(const int c) {
                 return;
         }
 
-        // TODO: implement other escape sequences than changing color
         if (escape_sequence_position || c == ESC) {
                 if (c == 'm') {
                         if (escape_sequence[2] == '0' && escape_sequence_position == 3) {
@@ -357,15 +354,29 @@ void vga_xor_cursor() {
         static bool cursor_on = false;
 
         if (cursor_on) {
-                vga_put_letter(CURSOR_FULL, screen_row_position, screen_column_position, background_color, foreground_color);
+                vga_put_letter(CURSOR_FULL, screen_row_position, screen_column_position, background_color,
+                               foreground_color);
                 cursor_on = false;
         }
         else {
-                vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, background_color, foreground_color);
+                vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, background_color,
+                               foreground_color);
                 cursor_on = true;
         }
 }
 
 void vga_clr_cursor() {
         vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, background_color, foreground_color);
+}
+
+void vga_clr_position() {
+        screen_row_position = 0;
+        screen_column_position = 0;
+}
+
+void vga_clr_all() {
+        vga_clr_cursor();
+        vga_set_cursor_off();
+        vga_clr_position();
+        vga_clr_screen();
 }

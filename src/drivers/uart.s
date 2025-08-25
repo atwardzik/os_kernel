@@ -17,6 +17,7 @@
 .equ endl, 0x0A
 .equ carriage_return, 0x0D
 .equ backspace, 0x08
+.equ escape, 0x1b
 .equ empty_space, 0x20
 
 /**
@@ -160,6 +161,31 @@ uart_Rx:
 uart_getc:
         push    {lr}
         bl      uart_Rx
+        pop     {pc}
+
+
+
+/**
+ * Clears the screen and moves the cursor to the home position (0,0)
+ */
+.thumb_func
+.global uart_clr_screen
+.align 4
+uart_clr_screen:
+        push    {lr}
+
+        movs    r0, escape
+        bl      uart_Tx
+
+        movs    r0, 0x5b
+        bl      uart_Tx
+
+        movs    r0, 0x32
+        bl      uart_Tx
+
+        movs    r0, 0x4a
+        bl      uart_Tx
+
         pop     {pc}
 
 

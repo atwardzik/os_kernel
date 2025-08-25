@@ -7,8 +7,10 @@
 
 void uart_init(void);
 
-void uart_Tx(char c);
+void uart_putc(int c);
 
-char uart_Rx(void);
+const int uart_getc(void);
+
+void uart_clr_screen(void);
 
 #endif //UART_H

@@ -9,4 +9,6 @@
 
 void init_keyboard(uint32_t pin);
 
+const int keyboard_receive_char(void);
+
 #endif //KERNEL_KEYBOARD_H
