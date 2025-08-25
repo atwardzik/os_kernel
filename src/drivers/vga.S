@@ -26,23 +26,23 @@
 vga_clr_screen:
         push    {lr}
 
-        movs    r0, #0                  @ PIO BLOCK 0
-        movs    r1, #7                  @ sm 0, 1, 2
-        movs    r2, #0                  @ enabled=false
-        bl      set_multiple_sm_enabled
+        @ movs    r0, #0                  @ PIO BLOCK 0
+        @ movs    r1, #7                  @ sm 0, 1, 2
+        @ movs    r2, #0                  @ enabled=false
+        @ bl      set_multiple_sm_enabled
 
-        ldr     r0, =0x502000d8         @ hsync
-        ldr     r1, =0xe001             @ set pins, 0
-        str     r1, [r0]
+        @ ldr     r0, =0x502000d8         @ hsync
+        @ ldr     r1, =0xe001             @ set pins, 0
+        @ str     r1, [r0]
 
-        ldr     r0, =0x502000f0         @ vsync
-        str     r1, [r0]
+        @ ldr     r0, =0x502000f0         @ vsync
+        @ str     r1, [r0]
 
-        ldr     r0, =0x50200108
-        ldr     r1, =0xe020             @ set x, 0
-        str     r1, [r0]
-        ldr     r1, =0xa001             @ mov pins, x
-        str     r1, [r0]
+        @ ldr     r0, =0x50200108
+        @ ldr     r1, =0xe020             @ set x, 0
+        @ str     r1, [r0]
+        @ ldr     r1, =0xa001             @ mov pins, x
+        @ str     r1, [r0]
 
         ldr     r0, =0x20035000
         movs    r1, #0

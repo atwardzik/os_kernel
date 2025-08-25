@@ -134,6 +134,25 @@ uart_putc:
                 pop     {r4, r5, pc}
 
 
+.thumb_func
+.global uart_puts
+.align 4
+uart_puts:
+        push    {r4, lr}
+        mov     r4, r0
+
+        .putc_loop:
+                ldrb    r0, [r4]
+                cmp     r0, #0
+                beq     .exit_puts
+                bl      uart_putc
+                adds    r4, r4, #1
+                b       .putc_loop
+
+        .exit_puts:
+                pop     {r4, pc}
+
+
 /**
  * UART receive single character
  */

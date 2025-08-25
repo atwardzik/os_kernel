@@ -7,6 +7,7 @@
 #include "drivers/time.h"
 #include "font.h"
 #include "ctype.h"
+#include "escape_codes.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -34,25 +35,7 @@ constexpr uint8_t ESC = 0x1b;
 constexpr uint8_t ARROW_LEFT = 0x44;
 constexpr uint8_t ARROW_RIGHT = 0x43;
 
-struct EscapeColorCode {
-        uint8_t background_color;
-        bool background_light;
-        uint8_t foreground_color;
-        bool foreground_light;
-};
-
-enum EscapeColor {
-        ESCAPE_BLACK   = 0,
-        ESCAPE_RED     = 1,
-        ESCAPE_GREEN   = 2,
-        ESCAPE_YELLOW  = 3,
-        ESCAPE_BLUE    = 4,
-        ESCAPE_MAGENTA = 5,
-        ESCAPE_CYAN    = 6,
-        ESCAPE_WHITE   = 7,
-};
-
-enum PhysicalColor {
+enum PhysicalColorCode {
         PHYSICAL_BLACK         = 0b000000, // #000000
         PHYSICAL_RED           = 0b000010, // #aa0000
         PHYSICAL_GREEN         = 0b001001, // #55aa00
@@ -83,9 +66,145 @@ void vga_init(const uint32_t hsync_pin, const uint32_t vsync_pin, const uint32_t
         vga_start();
 }
 
-void vga_put_letter(const char letter, unsigned int row_letter_position, unsigned int column_letter_position,
-                    const Color background_color,
-                    const Color foreground_color
+static void set_colors_from_escape(PhysicalColor *foreground_color, PhysicalColor *background_color,
+                                   const ByteColorCode escape_color_code
+) {
+        const uint8_t foreground_color_encoded = escape_color_code & FOREGROUND_COLOR_BITS;
+        const bool foreground_color_light = foreground_color_encoded & FOREGROUND_LIGHT_COLOR_BIT;
+        const uint8_t background_color_encoded = escape_color_code & BACKGROUND_COLOR_BITS;
+        const bool background_color_light = background_color_encoded & BACKGROUND_LIGHT_COLOR_BIT;
+
+        if (foreground_color_light) {
+                switch (foreground_color_encoded) {
+                        case BLACK:
+                                *foreground_color = PHYSICAL_DARK_GRAY;
+                                break;
+                        case RED:
+                                *foreground_color = PHYSICAL_RED_LIGHT;
+                                break;
+                        case GREEN:
+                                *foreground_color = PHYSICAL_GREEN_LIGHT;
+                                break;
+                        case YELLOW:
+                                *foreground_color = PHYSICAL_YELLOW_LIGHT;
+                                break;
+                        case BLUE:
+                                *foreground_color = PHYSICAL_BLUE_LIGHT;
+                                break;
+                        case MAGENTA:
+                                *foreground_color = PHYSICAL_MAGENTA_LIGHT;
+                                break;
+                        case CYAN:
+                                *foreground_color = PHYSICAL_CYAN_LIGHT;
+                                break;
+                        case WHITE:
+                                *foreground_color = PHYSICAL_LIGHT_GRAY;
+                                break;
+                        default:
+                                *foreground_color = PHYSICAL_WHITE;
+                                break;
+                }
+        }
+        else {
+                switch (foreground_color_encoded) {
+                        case BLACK:
+                                *foreground_color = PHYSICAL_BLACK;
+                                break;
+                        case RED:
+                                *foreground_color = PHYSICAL_RED;
+                                break;
+                        case GREEN:
+                                *foreground_color = PHYSICAL_GREEN;
+                                break;
+                        case YELLOW:
+                                *foreground_color = PHYSICAL_YELLOW;
+                                break;
+                        case BLUE:
+                                *foreground_color = PHYSICAL_BLUE;
+                                break;
+                        case MAGENTA:
+                                *foreground_color = PHYSICAL_MAGENTA;
+                                break;
+                        case CYAN:
+                                *foreground_color = PHYSICAL_CYAN;
+                                break;
+                        case WHITE:
+                                *foreground_color = PHYSICAL_WHITE;
+                                break;
+                        default:
+                                *foreground_color = PHYSICAL_WHITE;
+                                break;
+                }
+        }
+
+        if (background_color_light) {
+                switch (background_color_encoded) {
+                        case BLACK:
+                                *background_color = PHYSICAL_DARK_GRAY;
+                                break;
+                        case RED:
+                                *background_color = PHYSICAL_RED_LIGHT;
+                                break;
+                        case GREEN:
+                                *background_color = PHYSICAL_GREEN_LIGHT;
+                                break;
+                        case YELLOW:
+                                *background_color = PHYSICAL_YELLOW_LIGHT;
+                                break;
+                        case BLUE:
+                                *background_color = PHYSICAL_BLUE_LIGHT;
+                                break;
+                        case MAGENTA:
+                                *background_color = PHYSICAL_MAGENTA_LIGHT;
+                                break;
+                        case CYAN:
+                                *background_color = PHYSICAL_CYAN_LIGHT;
+                                break;
+                        case WHITE:
+                                *background_color = PHYSICAL_LIGHT_GRAY;
+                                break;
+                        default:
+                                *background_color = PHYSICAL_BLACK;
+                                break;
+                }
+        }
+        else {
+                switch (background_color_encoded) {
+                        case BLACK:
+                                *background_color = PHYSICAL_BLACK;
+                                break;
+                        case RED:
+                                *background_color = PHYSICAL_RED;
+                                break;
+                        case GREEN:
+                                *background_color = PHYSICAL_GREEN;
+                                break;
+                        case YELLOW:
+                                *background_color = PHYSICAL_YELLOW;
+                                break;
+                        case BLUE:
+                                *background_color = PHYSICAL_BLUE;
+                                break;
+                        case MAGENTA:
+                                *background_color = PHYSICAL_MAGENTA;
+                                break;
+                        case CYAN:
+                                *background_color = PHYSICAL_CYAN;
+                                break;
+                        case WHITE:
+                                *background_color = PHYSICAL_WHITE;
+                                break;
+                        default:
+                                *background_color = PHYSICAL_BLACK;
+                                break;
+                }
+        }
+}
+
+void vga_put_physical_color_letter(const char letter, unsigned int row_letter_position,
+                                   unsigned int column_letter_position,
+                                   const PhysicalColor foreground_color,
+                                   const PhysicalColor background_color
 ) {
         const uint8_t *letter_lookup = font8x8[letter];
 
@@ -110,176 +229,26 @@ void vga_put_letter(const char letter, unsigned int row_letter_position, unsigne
         }
 }
 
-
-static inline bool is_foreground_light_palette(const uint8_t *color_escape_sequence) {
-        if (color_escape_sequence[2] - 0x30 == 9) {
-                return true;
-        }
-
-        return false;
-}
-
-static inline bool is_background_light_palette(const uint8_t *color_escape_sequence) {
-        if (color_escape_sequence[5] - 0x30 == 1) {
-                return true;
-        }
-
-        return false;
-}
-
-
-static struct EscapeColorCode decode_escape_colors(const uint8_t *color_escape_sequence) {
-        struct EscapeColorCode color_code;
-
-        color_code.foreground_light = is_foreground_light_palette(color_escape_sequence);
-        color_code.background_light = is_background_light_palette(color_escape_sequence);
-
-        color_code.foreground_color = color_escape_sequence[3] - 0x30;
-
-        if (color_code.background_light) {
-                color_code.background_color = color_escape_sequence[7] - 0x30;
-        }
-        else {
-                color_code.background_color = color_escape_sequence[6] - 0x30;
-        }
-
-        return color_code;
-}
-
-static void set_colors_from_escape(Color *foreground_color, Color *background_color,
-                                   const struct EscapeColorCode *escape_color_code
+void vga_put_byte_encoded_color_letter(const char letter, unsigned int row_letter_position,
+                                       unsigned int column_letter_position,
+                                       const ByteColorCode color_code
 ) {
-        if (escape_color_code->foreground_light) {
-                switch (escape_color_code->foreground_color) {
-                        case ESCAPE_BLACK:
-                                *foreground_color = PHYSICAL_DARK_GRAY;
-                                break;
-                        case ESCAPE_RED:
-                                *foreground_color = PHYSICAL_RED_LIGHT;
-                                break;
-                        case ESCAPE_GREEN:
-                                *foreground_color = PHYSICAL_GREEN_LIGHT;
-                                break;
-                        case ESCAPE_YELLOW:
-                                *foreground_color = PHYSICAL_YELLOW_LIGHT;
-                                break;
-                        case ESCAPE_BLUE:
-                                *foreground_color = PHYSICAL_BLUE_LIGHT;
-                                break;
-                        case ESCAPE_MAGENTA:
-                                *foreground_color = PHYSICAL_MAGENTA_LIGHT;
-                                break;
-                        case ESCAPE_CYAN:
-                                *foreground_color = PHYSICAL_CYAN_LIGHT;
-                                break;
-                        case ESCAPE_WHITE:
-                                *foreground_color = PHYSICAL_LIGHT_GRAY;
-                                break;
-                        default:
-                                *foreground_color = PHYSICAL_WHITE;
-                                break;
-                }
-        }
-        else {
-                switch (escape_color_code->foreground_color) {
-                        case ESCAPE_BLACK:
-                                *foreground_color = PHYSICAL_BLACK;
-                                break;
-                        case ESCAPE_RED:
-                                *foreground_color = PHYSICAL_RED;
-                                break;
-                        case ESCAPE_GREEN:
-                                *foreground_color = PHYSICAL_GREEN;
-                                break;
-                        case ESCAPE_YELLOW:
-                                *foreground_color = PHYSICAL_YELLOW;
-                                break;
-                        case ESCAPE_BLUE:
-                                *foreground_color = PHYSICAL_BLUE;
-                                break;
-                        case ESCAPE_MAGENTA:
-                                *foreground_color = PHYSICAL_MAGENTA;
-                                break;
-                        case ESCAPE_CYAN:
-                                *foreground_color = PHYSICAL_CYAN;
-                                break;
-                        case ESCAPE_WHITE:
-                                *foreground_color = PHYSICAL_WHITE;
-                                break;
-                        default:
-                                *foreground_color = PHYSICAL_WHITE;
-                                break;
-                }
-        }
+        PhysicalColor foreground_color;
+        PhysicalColor background_color;
+        set_colors_from_escape(&foreground_color, &background_color, color_code);
 
-        if (escape_color_code->background_light) {
-                switch (escape_color_code->background_color) {
-                        case ESCAPE_BLACK:
-                                *background_color = PHYSICAL_DARK_GRAY;
-                                break;
-                        case ESCAPE_RED:
-                                *background_color = PHYSICAL_RED_LIGHT;
-                                break;
-                        case ESCAPE_GREEN:
-                                *background_color = PHYSICAL_GREEN_LIGHT;
-                                break;
-                        case ESCAPE_YELLOW:
-                                *background_color = PHYSICAL_YELLOW_LIGHT;
-                                break;
-                        case ESCAPE_BLUE:
-                                *background_color = PHYSICAL_BLUE_LIGHT;
-                                break;
-                        case ESCAPE_MAGENTA:
-                                *background_color = PHYSICAL_MAGENTA_LIGHT;
-                                break;
-                        case ESCAPE_CYAN:
-                                *background_color = PHYSICAL_CYAN_LIGHT;
-                                break;
-                        case ESCAPE_WHITE:
-                                *background_color = PHYSICAL_LIGHT_GRAY;
-                                break;
-                        default:
-                                *background_color = PHYSICAL_BLACK;
-                                break;
-                }
-        }
-        else {
-                switch (escape_color_code->background_color) {
-                        case ESCAPE_BLACK:
-                                *background_color = PHYSICAL_BLACK;
-                                break;
-                        case ESCAPE_RED:
-                                *background_color = PHYSICAL_RED;
-                                break;
-                        case ESCAPE_GREEN:
-                                *background_color = PHYSICAL_GREEN;
-                                break;
-                        case ESCAPE_YELLOW:
-                                *background_color = PHYSICAL_YELLOW;
-                                break;
-                        case ESCAPE_BLUE:
-                                *background_color = PHYSICAL_BLUE;
-                                break;
-                        case ESCAPE_MAGENTA:
-                                *background_color = PHYSICAL_MAGENTA;
-                                break;
-                        case ESCAPE_CYAN:
-                                *background_color = PHYSICAL_CYAN;
-                                break;
-                        case ESCAPE_WHITE:
-                                *background_color = PHYSICAL_WHITE;
-                                break;
-                        default:
-                                *background_color = PHYSICAL_BLACK;
-                                break;
-                }
-        }
+        vga_put_physical_color_letter(letter, row_letter_position, column_letter_position,
+                                      foreground_color,
+                                      background_color);
 }
+
 
 static size_t screen_row_position = 0;
 static size_t screen_column_position = 0;
-static Color foreground_color = PHYSICAL_WHITE;
-static Color background_color = PHYSICAL_BLACK;
+static size_t cursor_row_position = 0;
+static size_t cursor_column_position = 0;
+static PhysicalColor current_foreground_color = PHYSICAL_WHITE;
+static PhysicalColor current_background_color = PHYSICAL_BLACK;
 
 void vga_putc(const int c) {
         static uint8_t escape_sequence[10] = {};
@@ -302,14 +271,14 @@ void vga_putc(const int c) {
         if (escape_sequence_position || c == ESC) {
                 if (c == 'm') {
                         if (escape_sequence[2] == '0' && escape_sequence_position == 3) {
-                                foreground_color = PHYSICAL_WHITE;
-                                background_color = PHYSICAL_BLACK;
+                                current_foreground_color = PHYSICAL_WHITE;
+                                current_background_color = PHYSICAL_BLACK;
                                 escape_sequence_position = 0;
                                 return;
                         }
                         escape_sequence_position = 0;
-                        const struct EscapeColorCode color_code = decode_escape_colors(escape_sequence);
-                        set_colors_from_escape(&foreground_color, &background_color, &color_code);
+                        const ByteColorCode color_code = decode_escape_colors(escape_sequence);
+                        set_colors_from_escape(&current_foreground_color, &current_background_color, color_code);
                 }
                 else {
                         escape_sequence[escape_sequence_position] = c;
@@ -326,22 +295,24 @@ void vga_putc(const int c) {
 
         if (c == BACKSPACE && screen_column_position > 0) {
                 screen_column_position -= 1;
-                vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, background_color,
-                               foreground_color);
+                vga_put_physical_color_letter(EMPTY_SPACE, screen_row_position, screen_column_position,
+                                              current_foreground_color,
+                                              current_background_color);
         }
         else if (c == BACKSPACE && screen_column_position == 0 && screen_row_position > 0) {
                 screen_row_position -= 1;
                 screen_column_position = BUFFER_WIDTH - 1;
-                vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, background_color,
-                               foreground_color);
+                vga_put_physical_color_letter(EMPTY_SPACE, screen_row_position, screen_column_position,
+                                              current_foreground_color,
+                                              current_background_color);
         }
         else if (c == ENDL) {
                 screen_column_position = 0;
                 screen_row_position += 1;
         }
         else if (isprint(c)) {
-                vga_put_letter(c, screen_row_position, screen_column_position, background_color,
-                               foreground_color);
+                vga_put_physical_color_letter(c, screen_row_position, screen_column_position, current_foreground_color,
+                                              current_background_color);
                 screen_column_position += 1;
                 if (screen_column_position > BUFFER_WIDTH - 1) {
                         screen_row_position += 1;
@@ -350,23 +321,34 @@ void vga_putc(const int c) {
         }
 }
 
+void vga_update_cursor(unsigned int row, unsigned int column) {
+        vga_clr_cursor();
+
+        cursor_row_position = row;
+        cursor_column_position = column;
+}
+
 void vga_xor_cursor() {
         static bool cursor_on = false;
 
         if (cursor_on) {
-                vga_put_letter(CURSOR_FULL, screen_row_position, screen_column_position, background_color,
-                               foreground_color);
+                vga_put_physical_color_letter(CURSOR_FULL, cursor_row_position, cursor_column_position,
+                                              current_foreground_color,
+                                              current_background_color);
                 cursor_on = false;
         }
         else {
-                vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, background_color,
-                               foreground_color);
+                vga_put_physical_color_letter(EMPTY_SPACE, cursor_row_position, cursor_column_position,
+                                              current_foreground_color,
+                                              current_background_color);
                 cursor_on = true;
         }
 }
 
 void vga_clr_cursor() {
-        vga_put_letter(EMPTY_SPACE, screen_row_position, screen_column_position, background_color, foreground_color);
+        vga_put_physical_color_letter(EMPTY_SPACE, cursor_row_position, cursor_column_position,
+                                      current_foreground_color,
+                                      current_background_color);
 }
 
 void vga_clr_position() {

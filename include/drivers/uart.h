@@ -9,6 +9,8 @@ void uart_init(void);
 
 void uart_putc(int c);
 
+void uart_puts(const char *str);
+
 const int uart_getc(void);
 
 void uart_clr_screen(void);
