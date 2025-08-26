@@ -19,5 +19,4 @@
 #define YIELD_SVC       11
 #define KILL            12
 
-
 #endif //SYSCALLS_H

@@ -34,7 +34,7 @@ add_executable(os
 
 target_link_options(os PRIVATE
         -T${LINKER_SCRIPT}
-        -nostdlib
+#        -nostdlib
 )
 
 set_target_properties(os PROPERTIES

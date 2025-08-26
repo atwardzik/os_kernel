@@ -2,7 +2,8 @@ add_library(kernel OBJECT
         memory.c
         proc.c
         ctx.s
-        isr.s
+        isr.S
+        syscalls.c
 )
 
 set_source_files_properties(memory.c PROPERTIES COMPILE_FLAGS -Wno-pointer-arith)

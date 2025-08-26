@@ -14,8 +14,8 @@
 #include <string.h>
 
 
-extern const uint8_t __vidram_start[];
-const uint8_t *const vidram_start_ptr = __vidram_start;
+extern const uint8_t __vidram_start__[];
+const uint8_t *const vidram_start_ptr = __vidram_start__;
 
 extern void hsync_gen_init(uint32_t pin);
 
@@ -243,89 +243,35 @@ void vga_put_byte_encoded_color_letter(const char letter, unsigned int row_lette
 }
 
 
-static size_t screen_row_position = 0;
-static size_t screen_column_position = 0;
 static size_t cursor_row_position = 0;
 static size_t cursor_column_position = 0;
-static PhysicalColor current_foreground_color = PHYSICAL_WHITE;
-static PhysicalColor current_background_color = PHYSICAL_BLACK;
+static PhysicalColor current_cursor_foreground_color = PHYSICAL_WHITE;
+static PhysicalColor current_cursor_background_color = PHYSICAL_WHITE;
 
-void vga_putc(const int c) {
-        static uint8_t escape_sequence[10] = {};
-        static size_t escape_sequence_position = 0;
+static uint8_t current_letter_under_cursor[8][8] = {};
 
-        if (c > 0xff) {
-                const uint8_t direction = c & 0xff;
+char vga_determine_letter_under_cursor() {
 
-                // TODO: add proper cursor management
-                if (direction == ARROW_RIGHT) {
-                        screen_column_position += 1;
-                }
-                else if (direction == ARROW_LEFT) {
-                        screen_column_position -= 1;
-                }
 
-                return;
-        }
 
-        if (escape_sequence_position || c == ESC) {
-                if (c == 'm') {
-                        if (escape_sequence[2] == '0' && escape_sequence_position == 3) {
-                                current_foreground_color = PHYSICAL_WHITE;
-                                current_background_color = PHYSICAL_BLACK;
-                                escape_sequence_position = 0;
-                                return;
-                        }
-                        escape_sequence_position = 0;
-                        const ByteColorCode color_code = decode_escape_colors(escape_sequence);
-                        set_colors_from_escape(&current_foreground_color, &current_background_color, color_code);
-                }
-                else {
-                        escape_sequence[escape_sequence_position] = c;
-                        escape_sequence_position += 1;
-                }
 
-                return;
-        }
 
-        if (screen_row_position == BUFFER_HEIGHT) {
-                screen_row_position = 0;
-                screen_column_position = 0;
-        }
 
-        if (c == BACKSPACE && screen_column_position > 0) {
-                screen_column_position -= 1;
-                vga_put_physical_color_letter(EMPTY_SPACE, screen_row_position, screen_column_position,
-                                              current_foreground_color,
-                                              current_background_color);
-        }
-        else if (c == BACKSPACE && screen_column_position == 0 && screen_row_position > 0) {
-                screen_row_position -= 1;
-                screen_column_position = BUFFER_WIDTH - 1;
-                vga_put_physical_color_letter(EMPTY_SPACE, screen_row_position, screen_column_position,
-                                              current_foreground_color,
-                                              current_background_color);
-        }
-        else if (c == ENDL) {
-                screen_column_position = 0;
-                screen_row_position += 1;
-        }
-        else if (isprint(c)) {
-                vga_put_physical_color_letter(c, screen_row_position, screen_column_position, current_foreground_color,
-                                              current_background_color);
-                screen_column_position += 1;
-                if (screen_column_position > BUFFER_WIDTH - 1) {
-                        screen_row_position += 1;
-                        screen_column_position = 0;
-                }
-        }
+        return 0;
 }
 
-void vga_update_cursor(unsigned int row, unsigned int column) {
+void vga_update_cursor(const unsigned int row, const unsigned int column, const ByteColorCode color_code) {
+        PhysicalColor foreground_color;
+        PhysicalColor background_color;
+        set_colors_from_escape(&foreground_color, &background_color, color_code);
+
         vga_clr_cursor();
 
         cursor_row_position = row;
         cursor_column_position = column;
+
+        current_cursor_foreground_color = foreground_color;
+        current_cursor_background_color = background_color;
 }
 
 void vga_xor_cursor() {
@@ -333,32 +279,26 @@ void vga_xor_cursor() {
 
         if (cursor_on) {
                 vga_put_physical_color_letter(CURSOR_FULL, cursor_row_position, cursor_column_position,
-                                              current_foreground_color,
-                                              current_background_color);
+                                              current_cursor_foreground_color,
+                                              current_cursor_background_color);
                 cursor_on = false;
         }
         else {
                 vga_put_physical_color_letter(EMPTY_SPACE, cursor_row_position, cursor_column_position,
-                                              current_foreground_color,
-                                              current_background_color);
+                                              current_cursor_foreground_color,
+                                              current_cursor_background_color);
                 cursor_on = true;
         }
 }
 
 void vga_clr_cursor() {
         vga_put_physical_color_letter(EMPTY_SPACE, cursor_row_position, cursor_column_position,
-                                      current_foreground_color,
-                                      current_background_color);
-}
-
-void vga_clr_position() {
-        screen_row_position = 0;
-        screen_column_position = 0;
+                                      current_cursor_foreground_color,
+                                      current_cursor_background_color);
 }
 
 void vga_clr_all() {
         vga_clr_cursor();
         vga_set_cursor_off();
-        vga_clr_position();
         vga_clr_screen();
 }

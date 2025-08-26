@@ -31,29 +31,15 @@ void vga_put_byte_encoded_color_letter(char letter, unsigned int row_letter_posi
 
 void vga_put_pixel(PhysicalColor color, unsigned int row_pixel_position, unsigned int column_pixel_position);
 
-/**
- * Prints single character onto the screen. \n
- *
- * As for escape sequences only changing colors are supported, as the font is 8x8. \n
- * The color code format must be 0x1b 0x5b <fg> 0x3b <bg> 0x6d, where
- *  - <fg> is in range 30-37 or 90-97 (bright colors),
- *  - <bg> is in range 40-47 or 100-107 (bright colors).
- *
- * @param c char or char sequence to be printed
- */
-void vga_putc(int c);
-
 extern void vga_set_cursor_blink(uint32_t us);
 
 extern void vga_set_cursor_off(void);
 
-void vga_update_cursor(unsigned int row, unsigned int column);
+void vga_update_cursor(unsigned int row, unsigned int column, ByteColorCode color_code);
 
 void vga_xor_cursor(void);
 
 void vga_clr_cursor(void);
-
-void vga_clr_position(void);
 
 void vga_clr_screen(void);
 

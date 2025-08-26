@@ -7,15 +7,15 @@
 
 .syntax unified
 
-.extern __stack_end
-.extern __bss_start
+.extern __stack_end__
+.extern __bss_start__
 
 .section .vectors, "ax"
 .align 2
 .global vector_table
 .thumb_func
 vector_table:
-.word __stack_end
+.word __stack_end__
 .word reset             @
 .word isr_nmi           @
 .word isr_hardfault     @
@@ -65,11 +65,11 @@ reset:
         ldr     r0, =vector_table
         str     r0, [r1]
 
-        ldr     r1, =__stack_end
+        ldr     r1, =__stack_end__
         mov     sp, r1
 
 clear_bss:
-        ldr     r1, =__bss_start
+        ldr     r1, =__bss_start__
         ldr     r2, =0x1000            @ size of bss
         add     r2, r1, r2
         movs    r0, #0

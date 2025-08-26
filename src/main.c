@@ -8,16 +8,17 @@
 #include "kernel/memory.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
-#include "kernel/syscalls.h"
-#include "stdio.h"
+// #include "kernel/syscalls.h"
+// #include "stdio.h"
 
+#include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
 
 extern unsigned int calculate_pid_hash(pid_t pid, size_t i);
 
-extern uint8_t __data_start[];
-extern uint8_t __bss_start[];
+extern uint8_t __data_start__[];
+extern uint8_t __bss_start__[];
 
 
 int main(void) {
@@ -31,11 +32,14 @@ int main(void) {
 
         vga_init(13, 14, 16);
 
-        int *i = (int *) kmalloc(sizeof(int));
+        // int *i = (int *) kmalloc(sizeof(int));
 
-        puts("Welcome string\n");
-        uint8_t *data_start_ptr = __data_start;
-        uint8_t *bss_start_ptr = __bss_start;
+        printf("\x1b[36;40mWelcome ");
+        printf("\x1b[93;40mstring\n");
+        printf("\x1b[0m");
+
+        uint8_t *data_start_ptr = __data_start__;
+        uint8_t *bss_start_ptr = __bss_start__;
 
         // for (size_t i = 0; i < 40; i += 5) {
         //         int res = 0; //calculate_pid_hash(i, 0);
@@ -53,10 +57,11 @@ int main(void) {
 
         char buffer[255];
         while (1) {
-                puts(" > ");
-                gets(buffer, 255);
-                puts(buffer);
-                puts("\n");
+                printf(" > ");
+                // gets(buffer, 255);
+                gets(buffer);
+                printf(buffer);
+                printf("\n");
                 __asm__("svc #0");
         }
         return 0;

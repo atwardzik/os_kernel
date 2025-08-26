@@ -2,28 +2,28 @@
 // Created by Artur Twardzik on 21/08/2025.
 //
 
-#include "stdio.h"
+#include "printer.h"
 #include "stdlib.h"
 #include "escape_codes.h"
+#include "kernel/memory.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
 #include "drivers/keyboard.h"
 
 
 #include <stddef.h>
+#include <string.h>
 
-#include "ctype.h"
 
-extern uint8_t __screen_buffer_start[];
-extern uint8_t __screen_buffer_length[];
+extern uint8_t __screen_buffer_start__[];
+extern uint8_t __screen_buffer_length__[];
 
-uint8_t *const screen_buffer_ptr = __screen_buffer_start;
-const uint8_t *const screen_length_ptr = __screen_buffer_length;
+uint8_t *const screen_buffer_ptr = __screen_buffer_start__;
+const uint8_t *const screen_length_ptr = __screen_buffer_length__;
 
 
 void raw_putc(const int c) {
         uart_putc(c);
-        vga_putc(c);
 }
 
 void raw_put_letter(const char letter, const unsigned int row_letter_position,
@@ -87,12 +87,38 @@ void raw_put_letter(const char letter, const unsigned int row_letter_position,
         vga_put_byte_encoded_color_letter(letter, row_letter_position, column_letter_position, color_code);
 }
 
-int getc() {
-        vga_set_cursor_blink(500'000);
-        const int c = keyboard_receive_char();
-        vga_clr_cursor();
-        vga_set_cursor_off();
-        return c;
+
+static inline void send_color_code(const ByteColorCode color_code) {
+        const uint8_t foreground_color = color_code & FOREGROUND_COLOR_BITS;
+        const uint8_t background_color = (color_code & BACKGROUND_COLOR_BITS) >> 4;
+
+        const char *escape_str_format = "\x1b[%d;%dm";
+
+        size_t escape_str_length = sizeof(char) * strlen(escape_str_format) + sizeof(char) * 5 + 1;
+        char *escape_str = (char *) kmalloc(escape_str_length);
+
+        uart_putc(0x1b);
+        uart_putc('[');
+        if (foreground_color > WHITE) {
+                uart_putc('9');
+        }
+        else {
+                uart_putc('3');
+        }
+        uart_putc(foreground_color + 0x30);
+
+        uart_putc(';');
+
+        if (background_color > WHITE) {
+                uart_putc('1');
+                uart_putc('0');
+        }
+        else {
+                uart_putc('4');
+        }
+        uart_putc(background_color + 0x30);
+
+        uart_putc('m');
 }
 
 struct SingleChar {
@@ -135,7 +161,7 @@ static void scroll() {
                 }
         }
 
-        struct SingleChar empty_char = {EMPTY_SPACE, ScreenWriter.current_color_code};
+        const struct SingleChar empty_char = {EMPTY_SPACE, ScreenWriter.current_color_code};
 
         for (size_t i = 0; i < BUFFER_WIDTH; ++i) {
                 ScreenWriter.buffer->chars[BUFFER_HEIGHT - 1][i] = empty_char;
@@ -173,16 +199,18 @@ static void write_with_line_overflow_if_needed(const char c) {
         }
 }
 
-static void write_byte(const char c) {
+/*static*/ void write_byte(const int c) {
         if (c == ENDL) {
                 write_new_line();
         }
+        else if (c == BACKSPACE) {}
+        else if (c == ARROW_LEFT) {}
         else {
                 write_with_line_overflow_if_needed(c);
         }
 }
 
-static void write_string(const char *str) {
+/*static*/ void write_string(const char *str) {
         static uint8_t escape_sequence[10] = {};
         static size_t escape_sequence_position = 0;
 
@@ -219,36 +247,7 @@ static void write_string(const char *str) {
 }
 
 
-static inline void send_color_code(const ByteColorCode color_code) {
-        const uint8_t foreground_color = color_code & FOREGROUND_COLOR_BITS;
-        const uint8_t background_color = color_code & BACKGROUND_COLOR_BITS;
-
-        vga_putc(0x1b);
-        vga_putc('[');
-        if (foreground_color > WHITE) {
-                vga_putc('9');
-        }
-        else {
-                vga_putc('3');
-        }
-        vga_putc(foreground_color + 0x30);
-
-        vga_putc(';');
-
-        if (background_color > WHITE) {
-                vga_putc('1');
-                vga_putc('0');
-        }
-        else {
-                vga_putc('4');
-        }
-        vga_putc(background_color + 0x30);
-
-        vga_putc('m');
-}
-
 static void refresh_screens() {
-        // uart_clr_screen();
         vga_clr_all();
 
         ByteColorCode current_global_color_code = ScreenWriter.current_color_code;
@@ -268,10 +267,25 @@ static void refresh_screens() {
         }
 }
 
+#if 0
 void putc(const int c) {
         write_byte(c);
+}
+
+int getc() {
+        vga_set_cursor_blink(500'000);
+        vga_update_cursor(ScreenWriter.current_row_position, ScreenWriter.current_column_position,
+                          ScreenWriter.current_color_code);
+
+        const int c = keyboard_receive_char();
+
+        vga_clr_cursor();
+        vga_set_cursor_off();
+
+        return c;
 }
 
 void printf(const char *str) {
         write_string(str);
 }
+#endif

@@ -1,7 +1,7 @@
 MEMORY
 {
         code (rx)               : ORIGIN = 0x20000000, LENGTH = 65536
-        user_space (rwx)        : ORIGIN = 0x20010000, LENGTH = 28416
+        heap (rwx)              : ORIGIN = 0x20010000, LENGTH = 28416
         stack (rw)              : ORIGIN = 0x20016f00, LENGTH = 8K
         screen_buffer (rw)      : ORIGIN = 0x20018f00, LENGTH = 6400
         vidram (w)              : ORIGIN = 0x2001A800, LENGTH = 153600
@@ -39,12 +39,16 @@ SECTIONS
                 __bss_end = .;
         } > bss
 
-        __stack_start           = ORIGIN(stack);
-        __stack_end             = ORIGIN(stack) + LENGTH(stack) - 1;
+        __heap_start__                  = ORIGIN(heap);
+        __heap_length__                 = LENGTH(heap);
+        __heap_end__                    = ORIGIN(heap) + LENGTH(heap) - 1;
 
-        __screen_buffer_start   = ORIGIN(screen_buffer);
-        __screen_buffer_length  = LENGTH(screen_buffer);
+        __stack_start__                 = ORIGIN(stack);
+        __stack_end__                   = ORIGIN(stack) + LENGTH(stack) - 1;
 
-        __vidram_start          = ORIGIN(vidram);
-        __vidram_length         = LENGTH(vidram);
+        __screen_buffer_start__         = ORIGIN(screen_buffer);
+        __screen_buffer_length__        = LENGTH(screen_buffer);
+
+        __vidram_start__                = ORIGIN(vidram);
+        __vidram_length__               = LENGTH(vidram);
 }

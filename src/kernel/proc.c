@@ -41,7 +41,7 @@ static size_t get_pid_position(pid_t pid) {
 void scheduler_init(void) {
         scheduler.processes = kmalloc(sizeof(struct Process) * MAX_PROCESS_NUMBER);
         scheduler.total_allocated_memory = 0;
-        scheduler.maximum_processes_size = HEAP_SIZE - get_current_heap_size();
+        scheduler.maximum_processes_size = *heap_length_ptr - get_current_heap_size();
         scheduler.current_task = 0;
         scheduler.last_pid = 0;
 }

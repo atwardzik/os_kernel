@@ -2,8 +2,8 @@
 // Created by Artur Twardzik on 30/12/2024.
 //
 
-#ifndef STDIO_H
-#define STDIO_H
+#ifndef OS_STDIO_H
+#define OS_STDIO_H
 
 #include <stdint.h>
 
@@ -14,6 +14,9 @@ constexpr uint8_t CARRIAGE_RETURN = 0x0D;
 constexpr uint8_t ESC = 0x1b;
 constexpr uint8_t EMPTY_SPACE = 0x20;
 
+constexpr uint32_t ARROW_LEFT = 0x1b5b44;
+constexpr uint32_t ARROW_RIGHT = 0x1b5b43;
+
 /**
  * Writes character at the current screen position.
  *
@@ -21,18 +24,18 @@ constexpr uint8_t EMPTY_SPACE = 0x20;
  */
 void raw_putc(int c);
 
-void puts(const char *str);
+// void puts(const char *str);
 
-void printf(const char *str);
+// void printf(const char *str);
 
-void putc(int c);
+// void putc(int c);
 
-int getc(void);
+// int getc(void);
 
-void gets(char *buffer, uint32_t size);
+// void gets(char *buffer, uint32_t size);
 
-void vga_xor_cursor(void);
+void write_string(const char *str);
 
-void vga_clr_cursor(void);
+void write_byte(int c);
 
-#endif //STDIO_H
+#endif //OS_STDIO_H

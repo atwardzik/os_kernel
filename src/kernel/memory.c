@@ -25,7 +25,7 @@ static struct {
         size_t size;
         size_t count;
         void *heap_start;
-} Allocator __attribute__ ((section (".data"))) = {nullptr, 0, 0, FIXED_HEAP_START_ADDRESS};
+} Allocator __attribute__ ((section (".data"))) = {nullptr, 0, 0, heap_start_ptr};
 
 static size_t align_size(size_t size) {
         size_t proposed_size = 1;
@@ -85,7 +85,7 @@ void *kmalloc(size_t size) {
         }
 
         size_t heap_size_after_alloc = get_current_heap_size() + chunk.size + sizeof(struct Chunk);
-        if (heap_size_after_alloc >= HEAP_SIZE) {
+        if (heap_size_after_alloc >= *heap_length_ptr) {
                 return nullptr;
         }
 
@@ -134,11 +134,25 @@ size_t get_current_heap_size(void) {
         return Allocator.size + Allocator.count * sizeof(struct Chunk);
 }
 
-void memset(void *dst, int value, size_t count) {
-        for (size_t i = 0; i < count; ++i) {
-                *((size_t *) dst + i) = value;
-        }
-}
+// void memset(void *dst, int value, size_t count) {
+//         for (size_t i = 0; i < count; ++i) {
+//                 *((size_t *) dst + i) = value;
+//         }
+// }
+
+// void *sbrk(int incr) {
+//         static char *heap_end = (char *) heap_start_ptr;
+//         char *prev_heap_end;
+//
+//         prev_heap_end = heap_end;
+//         if (heap_end + incr > stack_ptr) {
+//                 write (1, "Heap and stack collision\n", 25);
+//                 abort ();
+//         }
+//
+//         heap_end += incr;
+//         return (void *) prev_heap_end;
+// }
 
 #ifdef TESTS
 
@@ -186,10 +200,10 @@ void test_align_ptr(void) {
         void *test_r2 = align_ptr((void *) 0x2000'0002);
         void *test_r3 = align_ptr((void *) 0x2000'0003);
 
-        TEST_ASSERT_EQUAL_PTR((void *)0x2000'0000, test_r0);
-        TEST_ASSERT_EQUAL_PTR((void *)0x2000'0004, test_r1);
-        TEST_ASSERT_EQUAL_PTR((void *)0x2000'0004, test_r2);
-        TEST_ASSERT_EQUAL_PTR((void *)0x2000'0004, test_r3);
+        TEST_ASSERT_EQUAL_PTR((void *) 0x2000'0000, test_r0);
+        TEST_ASSERT_EQUAL_PTR((void *) 0x2000'0004, test_r1);
+        TEST_ASSERT_EQUAL_PTR((void *) 0x2000'0004, test_r2);
+        TEST_ASSERT_EQUAL_PTR((void *) 0x2000'0004, test_r3);
 }
 
 void test_find_free_chunk_predecessor_between(void) {

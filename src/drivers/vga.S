@@ -6,8 +6,8 @@
 .thumb
 .syntax unified
 
-.extern __vidram_start
-.extern __vidram_length
+.extern __vidram_start__
+.extern __vidram_length__
 
 .equ TIMER_ALARM0_OFFSET, 0x10
 .equ TIMER_TIMERAWL_OFFSET, 0x28
@@ -364,7 +364,7 @@ setup_vga_dma:
         str     r1, [r0]
 
         adds    r0, r0, #4              @ CH0_TRANSFER_COUNT
-        ldr     r1, =__vidram_length
+        ldr     r1, =__vidram_length__
         str     r1, [r0]
 
         adds    r0, r0, #8              @ CH0_AL1_CTRL
@@ -391,7 +391,7 @@ setup_vga_dma:
         bx      lr
 
 .align 4
-VIDRAM_START:   .word __vidram_start
+VIDRAM_START:   .word __vidram_start__
 CH0_READ_ADDR:  .word 0x50000000
 CH1_READ_ADDR:  .word 0x50000040
 
