@@ -3,7 +3,7 @@
 //
 
 #include "printer.h"
-#include "stdlib.h"
+#include "mystdlib.h"
 #include "escape_codes.h"
 #include "kernel/memory.h"
 #include "drivers/uart.h"
@@ -130,16 +130,14 @@ struct CharBuffer {
         struct SingleChar chars[BUFFER_HEIGHT][BUFFER_WIDTH];
 };
 
-static void refresh_screens(void);
-
 static struct {
         size_t current_row_position;
         size_t current_column_position;
         ByteColorCode current_color_code;
         struct CharBuffer *buffer;
 
-        void (*refresh)(void);
-} ScreenWriter = {0, 0, (BLACK << 4 | WHITE), (struct CharBuffer *) screen_buffer_ptr, refresh_screens};
+        void (*put_encoded_color_letter)(char, unsigned int, unsigned int, ByteColorCode);
+} ScreenWriter = {0, 0, (BLACK << 4 | WHITE), (struct CharBuffer *) screen_buffer_ptr, nullptr};
 
 static void save_char_to_buffer(const char c) {
         const struct SingleChar ch = {c, ScreenWriter.current_color_code};
@@ -150,7 +148,7 @@ static void save_char_to_buffer(const char c) {
         ScreenWriter.buffer->chars[row][col] = ch;
 }
 
-static void scroll() {
+static void scroll_vertical() {
         vga_clr_all();
 
         for (size_t i = 1; i < BUFFER_HEIGHT; ++i) {
@@ -166,15 +164,15 @@ static void scroll() {
         for (size_t i = 0; i < BUFFER_WIDTH; ++i) {
                 ScreenWriter.buffer->chars[BUFFER_HEIGHT - 1][i] = empty_char;
         }
-
-        // ScreenWriter.refresh();
 }
+
+static void scroll_horizontal() {}
 
 static void write_new_line() {
         save_char_to_buffer(ENDL);
 
         if (ScreenWriter.current_row_position == BUFFER_HEIGHT - 1) {
-                scroll();
+                scroll_vertical();
         }
         else {
                 ScreenWriter.current_row_position += 1;
@@ -199,83 +197,69 @@ static void write_with_line_overflow_if_needed(const char c) {
         }
 }
 
-/*static*/ void write_byte(const int c) {
+static void move_position_left() {
+        if (ScreenWriter.current_column_position == 0) {
+                ScreenWriter.current_row_position -= 1;
+                ScreenWriter.current_column_position = BUFFER_WIDTH - 1;
+        }
+        else {
+                ScreenWriter.current_column_position -= 1;
+        }
+}
+
+void write_byte(const int c) {
+        static uint8_t escape_sequence[10] = {};
+        static size_t escape_sequence_position = 0;
+
+        if (escape_sequence_position || c == ESC) {
+                if (c == 'm') {
+                        if (escape_sequence[2] == '0' && escape_sequence_position == 3) {
+                                set_background_color(&ScreenWriter.current_color_code, BLACK);
+                                set_foreground_color(&ScreenWriter.current_color_code, WHITE);
+                                escape_sequence_position = 0;
+
+                                return;
+                        }
+
+                        ScreenWriter.current_color_code = decode_escape_colors(escape_sequence);
+                        escape_sequence_position = 0;
+
+                        return;
+                }
+
+                escape_sequence[escape_sequence_position] = (char) c;
+                escape_sequence_position += 1;
+
+                return;
+        }
+
+
         if (c == ENDL) {
                 write_new_line();
         }
-        else if (c == BACKSPACE) {}
+        else if (c == BACKSPACE) {
+                move_position_left();
+                ScreenWriter.buffer->chars[ScreenWriter.current_row_position][ScreenWriter.current_column_position].
+                                ascii_code = 0;
+        }
         else if (c == ARROW_LEFT) {}
         else {
                 write_with_line_overflow_if_needed(c);
         }
 }
 
-/*static*/ void write_string(const char *str) {
-        static uint8_t escape_sequence[10] = {};
-        static size_t escape_sequence_position = 0;
-
+void write_string(const char *str) {
         const char *c = str;
 
         while (*c != EOL) {
-                if (escape_sequence_position || *c == ESC) {
-                        if (*c == 'm') {
-                                if (escape_sequence[2] == '0' && escape_sequence_position == 3) {
-                                        set_background_color(&ScreenWriter.current_color_code, BLACK);
-                                        set_foreground_color(&ScreenWriter.current_color_code, WHITE);
-                                        escape_sequence_position = 0;
-
-                                        c += 1;
-                                        continue;
-                                }
-
-                                ScreenWriter.current_color_code = decode_escape_colors(escape_sequence);
-                                escape_sequence_position = 0;
-
-                                c += 1;
-                                continue;
-                        }
-
-                        escape_sequence[escape_sequence_position] = *c;
-                        escape_sequence_position += 1;
-                }
-                else {
-                        write_byte(*c);
-                }
-
+                write_byte(*c);
                 c += 1;
         }
 }
 
-
-static void refresh_screens() {
-        vga_clr_all();
-
-        ByteColorCode current_global_color_code = ScreenWriter.current_color_code;
-        for (size_t i = 0; i < BUFFER_HEIGHT; ++i) {
-                for (size_t j = 0; j < BUFFER_WIDTH; ++j) {
-                        const ByteColorCode current_byte_color_code = ScreenWriter.buffer->chars[i][j].color_code;
-                        const uint8_t current_ascii_code = ScreenWriter.buffer->chars[i][j].ascii_code;
-
-                        if (current_byte_color_code != current_global_color_code) {
-                                send_color_code(current_byte_color_code);
-                                current_global_color_code = current_byte_color_code;
-                        }
-
-                        // raw_put_letter(current_ascii_code, i, j, current_byte_color_code);
-                        vga_put_byte_encoded_color_letter(current_ascii_code, i, j, current_byte_color_code);
-                }
-        }
-}
-
-#if 0
-void putc(const int c) {
-        write_byte(c);
-}
-
-int getc() {
-        vga_set_cursor_blink(500'000);
-        vga_update_cursor(ScreenWriter.current_row_position, ScreenWriter.current_column_position,
-                          ScreenWriter.current_color_code);
+int my_getc() {
+        vga_setup_cursor(ScreenWriter.current_row_position, ScreenWriter.current_column_position,
+                         ScreenWriter.current_color_code, 500'000);
 
         const int c = keyboard_receive_char();
 
@@ -284,8 +268,3 @@ int getc() {
 
         return c;
 }
-
-void printf(const char *str) {
-        write_string(str);
-}
-#endif

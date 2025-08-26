@@ -38,4 +38,6 @@ void write_string(const char *str);
 
 void write_byte(int c);
 
+int my_getc();
+
 #endif //OS_STDIO_H

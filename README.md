@@ -5,17 +5,20 @@ Baremetal code, written for Raspberry Pi Pico. Intentionally written with as muc
 ## Features
  - Multiple drivers for peripherals written in assembly 🚧
  - Dynamic memory allocation ✅
+ - Porting newlibc to kernel space ✅
  - Cooperative and Pre-emptive Multitasking 🚧
- - Multiple syscalls 🚧
+ - Multiple syscalls in the POSIX compatibility 🚧
  - Filesystem 🚧
 
 ## Drivers
  - PS2 keyboard driver ✅
  - UART communication ✅
- - VGA monitor driver 640x480 and 800x600 🚧
+ - VGA monitor driver 640x480 ✅
+ - SD card driver 🚧 
+ - Ethernet ENC28J60 🚧
 
 ## Future plans
-- Porting LIBC
+- Porting LIBC to user space programs
 - Writing user-space programs like CLI, assembler and vim-like editor
 - Introducing Rust into kernel
 - ELF executable support

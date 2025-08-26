@@ -6,12 +6,15 @@
 .thumb
 .syntax unified
 
+
+
 .equ eol, 0x00
 .equ endl, 0x0A
 .equ carriage_return, 0x0D
 .equ backspace, 0x08
 .equ empty_space, 0x20
 
+#if 0
 /**
  * Writes str to output stream
  * r0 - string pointer
@@ -35,7 +38,7 @@ puts:
 
         pop     {r4-r7, pc}
 
-
+#endif
 /**
  * Reads str from input stream until newline or MAX_SIZE
  * Always writes the terminating null character.
@@ -44,9 +47,9 @@ puts:
  * r1 - MAX_SIZE
  */
 .thumb_func
-.global gets
+.global my_gets
 .align 4
-gets:
+my_gets:
         push    {r4-r7, lr}
         subs    sp, sp, #8
         mov     r4, r0                          @ save pointer
@@ -56,7 +59,9 @@ gets:
         movs    r6, #0                          @ loop counter
         movs    r7, #0                          @ loop counter MAX
         .get_loop:
-                bl      getc
+                @ bl      getc
+                @ bl      my_getc
+                bl      keyboard_receive_char
 
                 ldr     r1, =0x1b5b43
                 cmp     r0, r1
@@ -66,7 +71,7 @@ gets:
                 beq     .arrow_left
 
                 str     r0, [sp]
-                bl      putc
+                bl      write_byte
                 ldr     r0, [sp]
 
                 cmp     r0, endl                @ carriage_return OR endline
@@ -98,7 +103,7 @@ gets:
                 cmp     r6, #0
                 beq     .get_loop
 
-                bl      putc
+                bl      write_byte
                 subs    r6, r6, #1
                 b       .get_loop
 
@@ -106,7 +111,7 @@ gets:
                 cmp     r6, r7
                 bge     .get_loop
 
-                bl      putc
+                bl      write_byte
                 adds    r6, r6, #1
                 b       .get_loop
 
@@ -115,4 +120,5 @@ gets:
                 strb    r0, [r4, r7]
 
         adds    sp, sp, #8
+        movs    r7, r4
         pop     {r4-r7, pc}

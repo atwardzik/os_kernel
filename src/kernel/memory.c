@@ -25,7 +25,7 @@ static struct {
         size_t size;
         size_t count;
         void *heap_start;
-} Allocator __attribute__ ((section (".data"))) = {nullptr, 0, 0, heap_start_ptr};
+} Allocator __attribute__ ((section (".data"))) = {nullptr, 0, 0, user_space_heap_start_ptr};
 
 static size_t align_size(size_t size) {
         size_t proposed_size = 1;
@@ -85,7 +85,7 @@ void *kmalloc(size_t size) {
         }
 
         size_t heap_size_after_alloc = get_current_heap_size() + chunk.size + sizeof(struct Chunk);
-        if (heap_size_after_alloc >= *heap_length_ptr) {
+        if (heap_size_after_alloc >= *user_space_heap_length_ptr) {
                 return nullptr;
         }
 
@@ -95,6 +95,29 @@ void *kmalloc(size_t size) {
         *(struct Chunk *) (chunk.ptr - sizeof(struct Chunk)) = chunk;
 
         return chunk.ptr;
+}
+
+static struct Chunk *find_chunk_by_ptr(void *ptr) {
+        if (ptr == nullptr) {
+                return nullptr;
+        }
+
+        struct Chunk *temp = Allocator.head;
+
+        while (temp->ptr != ptr || temp->next_node != nullptr) {
+                temp = temp->next_node;
+        }
+
+        if (temp->ptr != ptr) {
+                return nullptr;
+        }
+
+        return temp;
+}
+
+
+void *krealloc(void *ptr, size_t new_size) {
+        return nullptr;
 }
 
 void kfree(void *ptr) {

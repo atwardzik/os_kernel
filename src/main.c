@@ -27,6 +27,8 @@ int main(void) {
         uart_init();
         init_keyboard(15);
 
+        setbuf(stdout, NULL);
+
         init_pin_output(25);
         init_pin_output(11);
 
@@ -35,8 +37,8 @@ int main(void) {
         // int *i = (int *) kmalloc(sizeof(int));
 
         printf("\x1b[36;40mWelcome ");
-        printf("\x1b[93;40mstring\n");
-        printf("\x1b[0m");
+        printf("\x1b[93;40mstring");
+        printf("\x1b[0m\n");
 
         uint8_t *data_start_ptr = __data_start__;
         uint8_t *bss_start_ptr = __bss_start__;
@@ -60,9 +62,7 @@ int main(void) {
                 printf(" > ");
                 // gets(buffer, 255);
                 gets(buffer);
-                printf(buffer);
-                printf("\n");
-                __asm__("svc #0");
+                printf("\nResponse: %s\n", buffer);
         }
         return 0;
 }
