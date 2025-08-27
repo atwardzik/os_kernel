@@ -36,18 +36,42 @@ int sys_close(int file) {
         return -1;
 }
 
+static void insert_and_shift(const char c, char *ptr, const int pos_insert, const int len) {
+        int temp = pos_insert;
+        char next_char = *(ptr + temp);
+        char current_char;
+        *(ptr + temp) = c;
+
+        temp += 1;
+        while (temp < len) {
+                current_char = next_char;
+                next_char = *(ptr + temp);
+                *(ptr + temp) = current_char;
+
+                temp += 1;
+        }
+}
+
+static void delete_and_shift(char *ptr, const int pos_delete, int len) {
+        int temp = pos_delete;
+
+        while (temp < len - 1) {
+                *(ptr + temp) = *(ptr + temp + 1);
+
+                temp += 1;
+        }
+}
+
 static int read_stdin(char *ptr, int len) {
         int final_length = 0;
         int current_position = 0;
         while (final_length < len) {
                 const int c = read_byte_with_cursor();
 
-                if (c == BACKSPACE && current_position && current_position == final_length) {
+                if (c == BACKSPACE && current_position) {
                         final_length -= 1;
                         current_position -= 1;
-                }
-                else if (c == BACKSPACE && current_position && current_position < final_length) {
-                        current_position -= 1;
+                        delete_and_shift(ptr, current_position, final_length);
                 }
                 else if (c == ARROW_LEFT && current_position) {
                         current_position -= 1;
@@ -63,20 +87,8 @@ static int read_stdin(char *ptr, int len) {
                                 break;
                         }
 
-                        if (current_position < final_length - 1) {
-                                int temp = current_position - 1;
-                                char next_char = *(ptr + temp);
-                                char current_char;
-                                *(ptr + temp) = (char) c;
-
-                                temp += 1;
-                                while (temp < final_length) {
-                                        current_char = next_char;
-                                        next_char = *(ptr + temp);
-                                        *(ptr + temp) = current_char;
-
-                                        temp += 1;
-                                }
+                        if (current_position < final_length) {
+                                insert_and_shift(c, ptr, current_position - 1, final_length);
 
                                 insert_byte(c);
                                 continue;
@@ -84,7 +96,6 @@ static int read_stdin(char *ptr, int len) {
                         else {
                                 *(ptr + current_position - 1) = (char) c;
                         }
-
                 }
 
                 write_byte(c);

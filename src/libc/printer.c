@@ -188,10 +188,7 @@ static void scroll_vertical() {
         }
 }
 
-static void scroll_horizontal(unsigned int row_position, unsigned int column_position) {
-        const auto saved_row_position = row_position;
-        const auto saved_column_position = column_position;
-
+static void scroll_horizontal_right(unsigned int row_position, unsigned int column_position) {
         struct SingleChar current_char = {EMPTY_SPACE, ScreenWriter.current_color_code};
         struct SingleChar next_char = ScreenWriter.buffer->chars[row_position][column_position];
         ScreenWriter.buffer->chars[row_position][column_position] = current_char;
@@ -221,6 +218,23 @@ static void scroll_horizontal(unsigned int row_position, unsigned int column_pos
                 }
                 else {
                         column_position += 1;
+                }
+        }
+}
+
+static void scroll_horizontal_left(const unsigned int row_position, const unsigned int column_position) {
+        for (size_t i = row_position; i < BUFFER_HEIGHT; ++i) {
+                const size_t column_starting_point = (i == row_position) ? column_position : 0;
+
+                for (size_t j = column_starting_point + 1; j < BUFFER_WIDTH; ++j) {
+                        struct SingleChar current_char = ScreenWriter.buffer->chars[i][j];
+                        ScreenWriter.buffer->chars[i][j - 1] = current_char;
+
+                        raw_put_letter(current_char.ascii_code, i, j - 1, current_char.color_code);
+
+                        if (current_char.ascii_code == 0) {
+                                return;
+                        }
                 }
         }
 }
@@ -286,10 +300,10 @@ void write_byte(const int c) {
                 write_new_line();
         }
         else if (c == BACKSPACE) {
+                move_position_left();
                 const auto row = ScreenWriter.current_row_position;
                 const auto column = ScreenWriter.current_column_position;
-                move_position_left();
-                ScreenWriter.buffer->chars[row][column].ascii_code = 0;
+                scroll_horizontal_left(row, column);
         }
         else if (c == ARROW_LEFT) {
                 move_position_left();
@@ -306,7 +320,7 @@ void insert_byte(const int c) {
         const auto row = ScreenWriter.current_row_position;
         const auto column = ScreenWriter.current_column_position;
 
-        scroll_horizontal(row, column);
+        scroll_horizontal_right(row, column);
 
         write_byte(c);
 }
