@@ -4,6 +4,7 @@
 
 #include "printer.h"
 #include "memory.h"
+#include "file.h"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -28,7 +29,7 @@ caddr_t _sbrk(int incr) {
 
         prev_bump_addr = current_bump_address;
         if (current_bump_address + incr > user_space_heap_start_ptr) {
-                write(1, "User and kernel space heap collision\n", 36);
+                sys_write(1, "[!] User and kernel space heap collision\n", 40);
                 __asm__("bkpt   #0");
                 // abort();
         }
@@ -54,36 +55,7 @@ int _close(int file) {
 extern char *my_gets(char *ptr, int len);
 
 int _read(int file, char *ptr, int len) {
-        if (file == 0) {
-                int final_length = 0;
-                int current_position = 0;
-                while (final_length < len) {
-                        const int c = my_getc();
-
-                        if (c == BACKSPACE && current_position == final_length) {
-                                final_length -= 1;
-                                current_position -= 1;
-                        }
-                        else if (c == ARROW_LEFT) {
-                                current_position -= 1;
-                        }
-                        else {
-                                *(ptr + final_length) = (char) c;
-
-                                final_length += 1;
-                                current_position += 1;
-                                if (c == ENDL) {
-                                        break;
-                                }
-                        }
-
-                        write_byte(c);
-                }
-                *(ptr + final_length) = 0;
-
-                return final_length;
-        }
-        return 0;
+        return sys_read(file, ptr, len);
 }
 
 
@@ -135,13 +107,5 @@ int _wait(int *status) {
 
 
 int _write(int file, char *ptr, int len) {
-        if (file != 1) {
-                __asm__("bkpt   #0");
-        }
-
-        for (int i = 0; i < len; i++) {
-                write_byte(*ptr++);
-        }
-
-        return len;
+        return sys_write(file, ptr, len);
 }

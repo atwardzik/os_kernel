@@ -22,31 +22,33 @@ uint8_t *const screen_buffer_ptr = __screen_buffer_start__;
 const uint8_t *const screen_length_ptr = __screen_buffer_length__;
 
 
-void raw_putc(const int c) {
-        uart_putc(c);
-}
-
 void raw_put_letter(const char letter, const unsigned int row_letter_position,
                     const unsigned int column_letter_position,
                     const ByteColorCode color_code
 ) {
         static ByteColorCode current_uart_color = (BLACK << 4) | WHITE;
+        static size_t current_uart_x_position = 0;
 
-        char row_position[5] = {};
-        char col_position[5] = {};
+        if (current_uart_x_position != column_letter_position) {
+                char row_position[5] = {};
+                char col_position[5] = {};
 
-        uart_putc(0x1b);
-        uart_putc('[');
+                uart_putc(0x1b);
+                uart_putc('[');
 
-        itoa(row_letter_position + 1, row_position, 10);
-        uart_puts(row_position);
+                itoa(row_letter_position + 1, row_position, 10);
+                uart_puts(row_position);
 
-        uart_putc(';');
+                uart_putc(';');
 
-        itoa(column_letter_position + 1, col_position, 10);
-        uart_puts(col_position);
+                itoa(column_letter_position + 1, col_position, 10);
+                uart_puts(col_position);
 
-        uart_putc('H');
+                uart_putc('H');
+
+                current_uart_x_position = column_letter_position + 1;
+        }
+
 
         if (current_uart_color != color_code) {
                 current_uart_color = color_code;
@@ -139,6 +141,26 @@ static struct {
         void (*put_encoded_color_letter)(char, unsigned int, unsigned int, ByteColorCode);
 } ScreenWriter = {0, 0, (BLACK << 4 | WHITE), (struct CharBuffer *) screen_buffer_ptr, nullptr};
 
+static void move_position_left() {
+        if (ScreenWriter.current_column_position == 0) {
+                ScreenWriter.current_row_position -= 1;
+                ScreenWriter.current_column_position = BUFFER_WIDTH - 1;
+        }
+        else {
+                ScreenWriter.current_column_position -= 1;
+        }
+}
+
+static void move_position_right() {
+        if (ScreenWriter.current_column_position == BUFFER_WIDTH - 1) {
+                ScreenWriter.current_row_position += 1;
+                ScreenWriter.current_column_position = 0;
+        }
+        else {
+                ScreenWriter.current_column_position += 1;
+        }
+}
+
 static void save_char_to_buffer(const char c) {
         const struct SingleChar ch = {c, ScreenWriter.current_color_code};
 
@@ -166,7 +188,42 @@ static void scroll_vertical() {
         }
 }
 
-static void scroll_horizontal() {}
+static void scroll_horizontal(unsigned int row_position, unsigned int column_position) {
+        const auto saved_row_position = row_position;
+        const auto saved_column_position = column_position;
+
+        struct SingleChar current_char = {EMPTY_SPACE, ScreenWriter.current_color_code};
+        struct SingleChar next_char = ScreenWriter.buffer->chars[row_position][column_position];
+        ScreenWriter.buffer->chars[row_position][column_position] = current_char;
+
+        if (column_position == BUFFER_WIDTH - 1) {
+                row_position += 1;
+                column_position = 0;
+        }
+        else {
+                column_position += 1;
+        }
+
+        while (row_position <= BUFFER_HEIGHT - 1 &&
+               column_position <= BUFFER_WIDTH - 1) {
+                current_char = next_char;
+                next_char = ScreenWriter.buffer->chars[row_position][column_position];
+                ScreenWriter.buffer->chars[row_position][column_position] = current_char;
+                raw_put_letter(current_char.ascii_code, row_position, column_position, current_char.color_code);
+
+                if (next_char.ascii_code == 0) {
+                        break;
+                }
+
+                if (column_position == BUFFER_WIDTH - 1) {
+                        row_position += 1;
+                        column_position = 0;
+                }
+                else {
+                        column_position += 1;
+                }
+        }
+}
 
 static void write_new_line() {
         save_char_to_buffer(ENDL);
@@ -197,15 +254,6 @@ static void write_with_line_overflow_if_needed(const char c) {
         }
 }
 
-static void move_position_left() {
-        if (ScreenWriter.current_column_position == 0) {
-                ScreenWriter.current_row_position -= 1;
-                ScreenWriter.current_column_position = BUFFER_WIDTH - 1;
-        }
-        else {
-                ScreenWriter.current_column_position -= 1;
-        }
-}
 
 void write_byte(const int c) {
         static uint8_t escape_sequence[10] = {};
@@ -238,14 +286,29 @@ void write_byte(const int c) {
                 write_new_line();
         }
         else if (c == BACKSPACE) {
+                const auto row = ScreenWriter.current_row_position;
+                const auto column = ScreenWriter.current_column_position;
                 move_position_left();
-                ScreenWriter.buffer->chars[ScreenWriter.current_row_position][ScreenWriter.current_column_position].
-                                ascii_code = 0;
+                ScreenWriter.buffer->chars[row][column].ascii_code = 0;
         }
-        else if (c == ARROW_LEFT) {}
+        else if (c == ARROW_LEFT) {
+                move_position_left();
+        }
+        else if (c == ARROW_RIGHT) {
+                move_position_right();
+        }
         else {
                 write_with_line_overflow_if_needed(c);
         }
+}
+
+void insert_byte(const int c) {
+        const auto row = ScreenWriter.current_row_position;
+        const auto column = ScreenWriter.current_column_position;
+
+        scroll_horizontal(row, column);
+
+        write_byte(c);
 }
 
 void write_string(const char *str) {
@@ -257,7 +320,7 @@ void write_string(const char *str) {
         }
 }
 
-int my_getc() {
+int read_byte_with_cursor() {
         vga_setup_cursor(ScreenWriter.current_row_position, ScreenWriter.current_column_position,
                          ScreenWriter.current_color_code, 500'000);
 

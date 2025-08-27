@@ -3,6 +3,8 @@ add_library(kernel OBJECT
         proc.c
         ctx.s
         isr.S
+        file.c
+        
         syscalls.c
 )
 
