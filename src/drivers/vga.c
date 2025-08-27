@@ -329,17 +329,19 @@ void vga_xor_cursor() {
                 cursor_on = false;
         }
         else {
-                vga_put_physical_color_letter(EMPTY_SPACE, cursor_row_position, cursor_column_position,
-                                              current_cursor_foreground_color,
-                                              current_cursor_background_color);
+                const auto row_position = cursor_row_position * FONT_HEIGHT + cursor_row_position;
+                const auto col_position = cursor_column_position * FONT_WIDTH;
+
+                vga_put_pixel_map(&current_pixels_under_cursor_map, row_position, col_position);
                 cursor_on = true;
         }
 }
 
 void vga_clr_cursor() {
-        vga_put_physical_color_letter(EMPTY_SPACE, cursor_row_position, cursor_column_position,
-                                      current_cursor_foreground_color,
-                                      current_cursor_background_color);
+        const auto row_position = cursor_row_position * FONT_HEIGHT + cursor_row_position;
+        const auto col_position = cursor_column_position * FONT_WIDTH;
+
+        vga_put_pixel_map(&current_pixels_under_cursor_map, row_position, col_position);
 }
 
 void vga_clr_all() {
