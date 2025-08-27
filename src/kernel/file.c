@@ -55,7 +55,7 @@ static void insert_and_shift(const char c, char *ptr, const int pos_insert, cons
 static void delete_and_shift(char *ptr, const int pos_delete, int len) {
         int temp = pos_delete;
 
-        while (temp < len - 1) {
+        while (temp < len) {
                 *(ptr + temp) = *(ptr + temp + 1);
 
                 temp += 1;
@@ -68,16 +68,24 @@ static int read_stdin(char *ptr, int len) {
         while (final_length < len) {
                 const int c = read_byte_with_cursor();
 
-                if (c == BACKSPACE && current_position) {
-                        final_length -= 1;
-                        current_position -= 1;
-                        delete_and_shift(ptr, current_position, final_length);
+                if (c == BACKSPACE) {
+                        if (current_position) {
+                                final_length -= 1;
+                                current_position -= 1;
+                                delete_and_shift(ptr, current_position, final_length);
+                                write_byte(c);
+                                continue;
+                        }
                 }
-                else if (c == ARROW_LEFT && current_position) {
-                        current_position -= 1;
+                else if (c == ARROW_LEFT) {
+                        if (current_position) {
+                                current_position -= 1;
+                        }
                 }
-                else if (c == ARROW_RIGHT && current_position < final_length) {
-                        current_position += 1;
+                else if (c == ARROW_RIGHT) {
+                        if (current_position < final_length) {
+                                current_position += 1;
+                        }
                 }
                 else {
                         final_length += 1;
@@ -98,7 +106,9 @@ static int read_stdin(char *ptr, int len) {
                         }
                 }
 
-                write_byte(c);
+                if (current_position) {
+                        write_byte(c);
+                }
         }
 
         return final_length;
