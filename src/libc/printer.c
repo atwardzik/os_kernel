@@ -53,33 +53,35 @@ void raw_put_letter(const char letter, const unsigned int row_letter_position,
         if (current_uart_color != color_code) {
                 current_uart_color = color_code;
 
-                const uint8_t foreground_color = color_code & FOREGROUND_COLOR_BITS;
-                uint8_t background_color = (color_code & BACKGROUND_COLOR_BITS) >> 4;
+                const uint8_t foreground_color_encoded = color_code & FOREGROUND_COLOR_BITS;
+                const bool foreground_color_light = color_code & FOREGROUND_LIGHT_COLOR_BIT;
+                uint8_t background_color_encoded = (color_code & BACKGROUND_COLOR_BITS) >> 4;
+                const bool background_color_light = color_code & BACKGROUND_LIGHT_COLOR_BIT;
 
-                if (background_color == BLACK) {
-                        background_color = 9;
+                if (background_color_encoded == BLACK) {
+                        background_color_encoded = 9;
                 }
 
                 uart_putc(0x1b);
                 uart_putc('[');
-                if (foreground_color > WHITE) {
+                if (foreground_color_light) {
                         uart_putc('9');
                 }
                 else {
                         uart_putc('3');
                 }
-                uart_putc(foreground_color + 0x30);
+                uart_putc(foreground_color_encoded + 0x30);
 
                 uart_putc(';');
 
-                if (background_color > WHITE) {
+                if (background_color_light) {
                         uart_putc('1');
                         uart_putc('0');
                 }
                 else {
                         uart_putc('4');
                 }
-                uart_putc(background_color + 0x30);
+                uart_putc(background_color_encoded + 0x30);
 
                 uart_putc('m');
         }

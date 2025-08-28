@@ -72,9 +72,9 @@ static void set_colors_from_escape(PhysicalColor *foreground_color, PhysicalColo
                                    const ByteColorCode escape_color_code
 ) {
         const uint8_t foreground_color_encoded = escape_color_code & FOREGROUND_COLOR_BITS;
-        const bool foreground_color_light = foreground_color_encoded & FOREGROUND_LIGHT_COLOR_BIT;
-        const uint8_t background_color_encoded = escape_color_code & BACKGROUND_COLOR_BITS;
-        const bool background_color_light = background_color_encoded & BACKGROUND_LIGHT_COLOR_BIT;
+        const bool foreground_color_light = escape_color_code & FOREGROUND_LIGHT_COLOR_BIT;
+        const uint8_t background_color_encoded = (escape_color_code & BACKGROUND_COLOR_BITS) >> 4;
+        const bool background_color_light = escape_color_code & BACKGROUND_LIGHT_COLOR_BIT;
 
         if (foreground_color_light) {
                 switch (foreground_color_encoded) {
