@@ -26,103 +26,18 @@ void raw_put_letter(const char letter, const unsigned int row_letter_position,
                     const unsigned int column_letter_position,
                     const ByteColorCode color_code
 ) {
-        static ByteColorCode current_uart_color = (BLACK << 4) | WHITE;
-        static size_t current_uart_x_position = 0;
+        uart_set_cursor(row_letter_position, column_letter_position);
 
-        if (current_uart_x_position != column_letter_position) {
-                char row_position[5] = {};
-                char col_position[5] = {};
+        uart_change_color(color_code);
 
-                uart_putc(0x1b);
-                uart_putc('[');
-
-                itoa(row_letter_position + 1, row_position, 10);
-                uart_puts(row_position);
-
-                uart_putc(';');
-
-                itoa(column_letter_position + 1, col_position, 10);
-                uart_puts(col_position);
-
-                uart_putc('H');
-
-                current_uart_x_position = column_letter_position + 1;
+        if (letter) {
+                uart_putc(letter);
         }
-
-
-        if (current_uart_color != color_code) {
-                current_uart_color = color_code;
-
-                const uint8_t foreground_color_encoded = color_code & FOREGROUND_COLOR_BITS;
-                const bool foreground_color_light = color_code & FOREGROUND_LIGHT_COLOR_BIT;
-                uint8_t background_color_encoded = (color_code & BACKGROUND_COLOR_BITS) >> 4;
-                const bool background_color_light = color_code & BACKGROUND_LIGHT_COLOR_BIT;
-
-                if (background_color_encoded == BLACK) {
-                        background_color_encoded = 9;
-                }
-
-                uart_putc(0x1b);
-                uart_putc('[');
-                if (foreground_color_light) {
-                        uart_putc('9');
-                }
-                else {
-                        uart_putc('3');
-                }
-                uart_putc(foreground_color_encoded + 0x30);
-
-                uart_putc(';');
-
-                if (background_color_light) {
-                        uart_putc('1');
-                        uart_putc('0');
-                }
-                else {
-                        uart_putc('4');
-                }
-                uart_putc(background_color_encoded + 0x30);
-
-                uart_putc('m');
+        else {
+                uart_putc(EMPTY_SPACE);
         }
-
-        uart_putc(letter);
 
         vga_put_byte_encoded_color_letter(letter, row_letter_position, column_letter_position, color_code);
-}
-
-
-static inline void send_color_code(const ByteColorCode color_code) {
-        const uint8_t foreground_color = color_code & FOREGROUND_COLOR_BITS;
-        const uint8_t background_color = (color_code & BACKGROUND_COLOR_BITS) >> 4;
-
-        const char *escape_str_format = "\x1b[%d;%dm";
-
-        size_t escape_str_length = sizeof(char) * strlen(escape_str_format) + sizeof(char) * 5 + 1;
-        char *escape_str = (char *) kmalloc(escape_str_length);
-
-        uart_putc(0x1b);
-        uart_putc('[');
-        if (foreground_color > WHITE) {
-                uart_putc('9');
-        }
-        else {
-                uart_putc('3');
-        }
-        uart_putc(foreground_color + 0x30);
-
-        uart_putc(';');
-
-        if (background_color > WHITE) {
-                uart_putc('1');
-                uart_putc('0');
-        }
-        else {
-                uart_putc('4');
-        }
-        uart_putc(background_color + 0x30);
-
-        uart_putc('m');
 }
 
 struct SingleChar {
@@ -139,9 +54,7 @@ static struct {
         size_t current_column_position;
         ByteColorCode current_color_code;
         struct CharBuffer *buffer;
-
-        void (*put_encoded_color_letter)(char, unsigned int, unsigned int, ByteColorCode);
-} ScreenWriter = {0, 0, (BLACK << 4 | WHITE), (struct CharBuffer *) screen_buffer_ptr, nullptr};
+} ScreenWriter = {0, 0, (BLACK << 4 | WHITE), (struct CharBuffer *) screen_buffer_ptr};
 
 static void move_position_left() {
         if (ScreenWriter.current_column_position == 0) {
@@ -178,8 +91,8 @@ static void scroll_vertical() {
         for (size_t i = 1; i < BUFFER_HEIGHT; ++i) {
                 for (size_t j = 0; j < BUFFER_WIDTH; ++j) {
                         ScreenWriter.buffer->chars[i - 1][j] = ScreenWriter.buffer->chars[i][j];
-                        vga_put_byte_encoded_color_letter(ScreenWriter.buffer->chars[i - 1][j].ascii_code, i - 1, j,
-                                                          ScreenWriter.buffer->chars[i - 1][j].color_code);
+                        raw_put_letter(ScreenWriter.buffer->chars[i - 1][j].ascii_code, i - 1, j,
+                                       ScreenWriter.buffer->chars[i - 1][j].color_code);
                 }
         }
 
@@ -235,6 +148,7 @@ static void scroll_horizontal_left(const unsigned int row_position, const unsign
                         raw_put_letter(current_char.ascii_code, i, j - 1, current_char.color_code);
 
                         if (current_char.ascii_code == 0) {
+                                uart_set_cursor(row_position, column_position);
                                 return;
                         }
                 }
@@ -303,15 +217,20 @@ void write_byte(const int c) {
         }
         else if (c == BACKSPACE) {
                 move_position_left();
+
+                uart_putc(c);
+
                 const auto row = ScreenWriter.current_row_position;
                 const auto column = ScreenWriter.current_column_position;
                 scroll_horizontal_left(row, column);
         }
         else if (c == ARROW_LEFT) {
                 move_position_left();
+                uart_putc(c);
         }
         else if (c == ARROW_RIGHT) {
                 move_position_right();
+                uart_putc(c);
         }
         else {
                 write_with_line_overflow_if_needed(c);

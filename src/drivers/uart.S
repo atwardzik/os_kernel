@@ -205,6 +205,16 @@ uart_clr_screen:
         movs    r0, 0x4a
         bl      uart_Tx
 
+
+        movs    r0, escape
+        bl      uart_Tx
+
+        movs    r0, 0x5b
+        bl      uart_Tx
+
+        movs    r0, 0x48
+        bl      uart_Tx
+
         pop     {pc}
 
 

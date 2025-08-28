@@ -3,10 +3,7 @@
 //
 
 #include "drivers/vga.h"
-#include "drivers/gpio.h"
-#include "drivers/time.h"
 #include "font.h"
-#include "myctype.h"
 #include "escape_codes.h"
 
 #include <stdint.h>
@@ -29,13 +26,6 @@ extern void vga_start(void);
 
 extern void vga_set_cursor_blink(uint32_t us);
 
-constexpr uint8_t BACKSPACE = 0x08;
-constexpr uint8_t ENDL = 0x0A;
-constexpr uint8_t EMPTY_SPACE = 0x20;
-constexpr uint8_t CURSOR_FULL = 0x81;
-constexpr uint8_t ESC = 0x1b;
-constexpr uint8_t ARROW_LEFT = 0x44;
-constexpr uint8_t ARROW_RIGHT = 0x43;
 
 enum PhysicalColorCode {
         PHYSICAL_BLACK         = 0b000000, // #000000
@@ -266,6 +256,9 @@ static PhysicalColor current_cursor_background_color = PHYSICAL_BLACK;
 static uint8_t current_letter_under_cursor[8][8] = {};
 static struct PixelMap current_pixels_under_cursor_map = {(uint8_t *) current_letter_under_cursor, 8, 8};
 
+static uint8_t current_cursor[8][8] = {};
+static struct PixelMap current_cursor_map = {(uint8_t *) current_cursor, 8, 8};
+
 static void vga_determine_letter_under_cursor() {
         unsigned int row_letter_position = cursor_row_position;
         unsigned int column_letter_position = cursor_column_position;
@@ -278,8 +271,17 @@ static void vga_determine_letter_under_cursor() {
 
         for (size_t i = 0; i < 8; ++i) {
                 for (size_t j = 0; j < 8; ++j) {
-                        current_letter_under_cursor[i][j] = *(uint8_t *) (
-                                vidram_start_ptr + i * SCREEN_WIDTH + j + position);
+                        const uint8_t current_pixel_code = *(uint8_t *) (vidram_start_ptr
+                                                                         + i * SCREEN_WIDTH + j + position);
+
+                        current_letter_under_cursor[i][j] = current_pixel_code;
+
+                        if (current_pixel_code) {
+                                current_cursor[i][j] = PHYSICAL_BLACK;
+                        }
+                        else {
+                                current_cursor[i][j] = PHYSICAL_WHITE;
+                        }
                 }
         }
 }
@@ -308,6 +310,7 @@ void vga_setup_cursor(const unsigned int row, const unsigned int column, const B
         vga_determine_letter_under_cursor();
 
         vga_set_cursor_blink(us);
+        vga_xor_cursor(); // start with cursor on
 }
 
 void vga_update_cursor_color(const ByteColorCode color_code) {
@@ -322,16 +325,13 @@ void vga_update_cursor_color(const ByteColorCode color_code) {
 void vga_xor_cursor() {
         static bool cursor_on = false;
 
+        const auto row_position = cursor_row_position * FONT_HEIGHT + cursor_row_position;
+        const auto col_position = cursor_column_position * FONT_WIDTH;
         if (cursor_on) {
-                vga_put_physical_color_letter(CURSOR_FULL, cursor_row_position, cursor_column_position,
-                                              current_cursor_foreground_color,
-                                              current_cursor_background_color);
+                vga_put_pixel_map(&current_cursor_map, row_position, col_position);
                 cursor_on = false;
         }
         else {
-                const auto row_position = cursor_row_position * FONT_HEIGHT + cursor_row_position;
-                const auto col_position = cursor_column_position * FONT_WIDTH;
-
                 vga_put_pixel_map(&current_pixels_under_cursor_map, row_position, col_position);
                 cursor_on = true;
         }
