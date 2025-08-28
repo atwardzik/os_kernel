@@ -401,8 +401,9 @@ read_byte:
 .align 4
 keyboard_receive_char:
         push    {r4}
-        ldr     r0, =buffer_offset
-        ldrb    r0, [r0]
+        ldr     r1, =buffer_offset
+        movs    r0, #0
+        strb    r0, [r1]
 
         .wait_for_char:
                 ldr     r1, =buffer_offset

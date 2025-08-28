@@ -74,17 +74,18 @@ static int read_stdin(char *ptr, int len) {
                                 current_position -= 1;
                                 delete_and_shift(ptr, current_position, final_length);
                                 write_byte(c);
-                                continue;
                         }
                 }
                 else if (c == ARROW_LEFT) {
                         if (current_position) {
                                 current_position -= 1;
+                                write_byte(c);
                         }
                 }
                 else if (c == ARROW_RIGHT) {
                         if (current_position < final_length) {
                                 current_position += 1;
+                                write_byte(c);
                         }
                 }
                 else {
@@ -104,9 +105,6 @@ static int read_stdin(char *ptr, int len) {
                         else {
                                 *(ptr + current_position - 1) = (char) c;
                         }
-                }
-
-                if (current_position) {
                         write_byte(c);
                 }
         }
