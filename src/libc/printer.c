@@ -3,7 +3,7 @@
 //
 
 #include "printer.h"
-#include "mystdlib.h"
+#include "myctype.h"
 #include "escape_codes.h"
 #include "kernel/memory.h"
 #include "drivers/uart.h"
@@ -30,12 +30,13 @@ void raw_put_letter(const char letter, const unsigned int row_letter_position,
 
         uart_change_color(color_code);
 
-        if (letter) {
+        if (isprint(letter)) {
                 uart_putc(letter);
         }
         else {
                 uart_putc(EMPTY_SPACE);
         }
+
 
         vga_put_byte_encoded_color_letter(letter, row_letter_position, column_letter_position, color_code);
 }
@@ -87,16 +88,17 @@ static void save_char_to_buffer(const char c) {
 
 static void scroll_vertical() {
         vga_clr_all();
+        uart_puts("\x1b[S");
 
         for (size_t i = 1; i < BUFFER_HEIGHT; ++i) {
                 for (size_t j = 0; j < BUFFER_WIDTH; ++j) {
                         ScreenWriter.buffer->chars[i - 1][j] = ScreenWriter.buffer->chars[i][j];
-                        raw_put_letter(ScreenWriter.buffer->chars[i - 1][j].ascii_code, i - 1, j,
-                                       ScreenWriter.buffer->chars[i - 1][j].color_code);
+                        vga_put_byte_encoded_color_letter(ScreenWriter.buffer->chars[i - 1][j].ascii_code, i - 1, j,
+                                                          ScreenWriter.buffer->chars[i - 1][j].color_code);
                 }
         }
 
-        const struct SingleChar empty_char = {EMPTY_SPACE, ScreenWriter.current_color_code};
+        const struct SingleChar empty_char = {0x00, ScreenWriter.current_color_code};
 
         for (size_t i = 0; i < BUFFER_WIDTH; ++i) {
                 ScreenWriter.buffer->chars[BUFFER_HEIGHT - 1][i] = empty_char;
@@ -141,8 +143,20 @@ static void scroll_horizontal_left(const unsigned int row_position, const unsign
         for (size_t i = row_position; i < BUFFER_HEIGHT; ++i) {
                 const size_t column_starting_point = (i == row_position) ? column_position : 0;
 
-                for (size_t j = column_starting_point + 1; j < BUFFER_WIDTH; ++j) {
-                        struct SingleChar current_char = ScreenWriter.buffer->chars[i][j];
+                for (size_t j = column_starting_point + 1; j <= BUFFER_WIDTH; ++j) {
+                        struct SingleChar current_char;
+
+                        if (i == BUFFER_HEIGHT - 1 && j == BUFFER_WIDTH) {
+                                const struct SingleChar c = {0x00, (BLACK << 4) | WHITE};
+                                current_char = c;
+                        }
+                        else if (j == BUFFER_WIDTH) {
+                                current_char = ScreenWriter.buffer->chars[i + 1][0];
+                        }
+                        else {
+                                current_char = ScreenWriter.buffer->chars[i][j];
+                        }
+
                         ScreenWriter.buffer->chars[i][j - 1] = current_char;
 
                         raw_put_letter(current_char.ascii_code, i, j - 1, current_char.color_code);
@@ -256,8 +270,10 @@ void write_string(const char *str) {
 }
 
 int read_byte_with_cursor() {
-        vga_setup_cursor(ScreenWriter.current_row_position, ScreenWriter.current_column_position,
-                         ScreenWriter.current_color_code, 500'000);
+        const auto row = ScreenWriter.current_row_position;
+        const auto column = ScreenWriter.current_column_position;
+        vga_setup_cursor(row, column, ScreenWriter.current_color_code, 500'000);
+        uart_set_cursor(row, column);
 
         const int c = keyboard_receive_char();
 
