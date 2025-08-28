@@ -5,7 +5,6 @@
 #include "printer.h"
 #include "myctype.h"
 #include "escape_codes.h"
-#include "kernel/memory.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
 #include "drivers/keyboard.h"

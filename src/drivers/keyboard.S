@@ -173,8 +173,12 @@ pin_handler:
                 beq    .shift_released
                 cmp     r1, #0x59
                 beq     .shift_released
+
                 cmp     r1, #0x14
                 beq     .ctrl_released
+
+                cmp     r1, #0x11
+                beq     .alt_released
 
                 b       .exit
 
@@ -191,9 +195,14 @@ pin_handler:
                 beq     .shift_pressed
                 cmp     r0, #0x59
                 beq     .shift_pressed
+                cmp     r0, #0x58
+                beq     .caps_lock_pressed
 
                 cmp     r0, #0x14
                 beq     .ctrl_pressed
+
+                cmp     r0, #0x11
+                beq     .alt_pressed
 
                 cmp     r0, #0xe0
                 beq     .escape_code_sequence_pressed
@@ -202,9 +211,11 @@ pin_handler:
                 ldr     r1, =scancode_read
                 ldrb    r0, [r1]
 
+                ldr     r2, caps_lock_flag
+                ldr     r3, shift_flag
+                orrs    r3, r2, r3
                 ldr     r2, =keyboard_flags
                 ldr     r2, [r2]
-                ldr     r3, shift_flag
                 tst     r2, r3
                 beq     .select_keymap_normal
 
@@ -215,6 +226,48 @@ pin_handler:
                         ldr     r1, =keymap
                 .convert_to_keymap:
                         ldrb    r0, [r1, r0]
+
+                ldr     r3, alt_flag
+                tst     r2, r3
+                beq     .write_to_buffer
+
+//TODO: make version for ARCH_RP2040
+#ifdef ARCH_RP2350
+                @ umlauts
+                cmp     r0, #65         @ 65->196, 97->228
+                it      eq
+                movseq  r0, #196
+
+                cmp     r0, #97
+                it      eq
+                movseq  r0, #228
+
+                cmp     r0, #79         @ 79->214, 111->246
+                it      eq
+                movseq  r0, #214
+
+                cmp     r0, #111
+                it      eq
+                movseq  r0, #246
+
+                cmp     r0, #85         @ 85->220, 117->252
+                it      eq
+                movseq  r0, #220
+
+                cmp     r0, #117
+                it      eq
+                movseq  r0, #252
+
+                cmp     r0, #115        @ 115 -> 223
+                it      eq
+                movseq  r0, #223
+
+                @ e->EUR
+                cmp     r0, #101        @ 101->128
+                it      eq
+                movseq  r0, #128
+
+#endif
 
         .write_to_buffer:
                 ldr     r1, =keyboard_buffer
@@ -238,6 +291,8 @@ pin_handler:
 
                 cmp     r0, #0x14               @ ctrl right
                 beq     .ctrl_pressed
+                cmp     r0, #0x11               @ alt right
+                beq     .alt_pressed
                 cmp     r0, #0x5a               @ enter
                 beq     .scancode_to_ascii
 
@@ -303,7 +358,17 @@ pin_handler:
                 bl      clr_flag
                 b       .exit
 
+        .caps_lock_pressed:
+                ldr     r0, caps_lock_flag
+                ldr     r1, =keyboard_flags
+                ldr     r2, [r1]
+                eors    r2, r2, r0
+                str     r2, [r1]
+
+                b       .exit
+
         .ctrl_pressed:
+
                 ldr     r0, ctrl_flag
                 bl      set_flag
                 b       .exit
@@ -312,6 +377,17 @@ pin_handler:
                 ldr     r0, ctrl_flag
                 bl      clr_flag
                 b       .exit
+
+        .alt_pressed:
+                ldr     r0, alt_flag
+                bl      set_flag
+                b       .exit
+
+        .alt_released:
+                ldr     r0, alt_flag
+                bl      clr_flag
+                b       .exit
+
 
         .key_released:
                 ldr     r0, key_release_flag
@@ -458,10 +534,12 @@ VTOR_OFFSET:            .word 0xed08
 NVIC_ICPR_OFFSET:       .word 0xe280            @ interrupt clear-pending register
 NVIC_ISER_OFFSET:       .word 0xe100            @ interrupt set-enable register
 
-key_release_flag:       .word 0b0001
-shift_flag:             .word 0b0010
-ctrl_flag:              .word 0b0100
-escape_flag:            .word 0b1000
+key_release_flag:       .word 0b000001
+shift_flag:             .word 0b000010
+ctrl_flag:              .word 0b000100
+escape_flag:            .word 0b001000
+alt_flag:               .word 0b010000
+caps_lock_flag:         .word 0b100000
 
 .align 4
 nibble_reverse_lookup:  .byte 0x0, 0x8, 0x4, 0xC, 0x2, 0xA, 0x6, 0xE, 0x1, 0x9, 0x5, 0xD, 0x3, 0xB, 0x7, 0xF
