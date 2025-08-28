@@ -4,6 +4,7 @@ add_library(kernel OBJECT
         ctx.s
         isr.S
         file.c
+        printer.c
         
         syscalls.c
 )

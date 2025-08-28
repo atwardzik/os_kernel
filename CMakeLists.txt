@@ -22,14 +22,12 @@ link_directories(${CMAKE_SOURCE_DIR} include tests)
 
 add_subdirectory(src/drivers)
 add_subdirectory(src/kernel)
-add_subdirectory(src/libc)
 
 add_executable(os
         src/start.S
         src/main.c
         $<TARGET_OBJECTS:drivers>
         $<TARGET_OBJECTS:kernel>
-        $<TARGET_OBJECTS:libc>
 )
 
 target_link_options(os PRIVATE
