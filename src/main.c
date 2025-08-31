@@ -8,61 +8,66 @@
 #include "kernel/memory.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
-// #include "kernel/syscalls.h"
-// #include "stdio.h"
+#include "kernel/file.h"
 
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
 
-extern unsigned int calculate_pid_hash(pid_t pid, size_t i);
+void proc0(void) {
+        printf("\x1b[33;40m[!]Welcome from proc0\x1b[0m\n");
 
-extern uint8_t __data_start__[];
-extern uint8_t __bss_start__[];
+        int i = 0;
+        while (1) {
+                printf("proc0: i = %i\n", i++);
+                delay_ms(1000);
+        }
+}
+
+void proc1(void) {
+        init_pin_output(25);
+
+        while (1) {
+                xor_pin(25);
+                delay_ms(500);
+        }
+}
+
+#if 0
+void proc2(void) {
+        printf("\x1b[33;40m[!]Welcome from proc2\x1b[0m\n");
+
+        char buffer[255];
+        while (1) {
+                printf(" > ");
+                gets(buffer);
+                printf("\nResponse: %s\n", buffer);
+        }
+}
+#endif
 
 
 int main(void) {
         reset_subsys();
         setup_internal_clk();
+        init_file_descriptors();
         uart_init();
+        uart_clr_screen();
         init_keyboard(15);
-
-        setbuf(stdout, NULL);
-
-        init_pin_output(25);
-        init_pin_output(11);
 
         vga_init(13, 14, 16);
 
-        // int *i = (int *) kmalloc(sizeof(int));
+        setbuf(stdout, NULL);
 
-        printf("\x1b[36;40mWelcome ");
-        printf("\x1b[93;40mstring");
+        // FILE const *fp = fopen("test.txt", "r");
+
+        printf("\x1b[33;45mWelcome ");
+        printf("\x1b[93;105mstring");
         printf("\x1b[0m\n");
 
-        uint8_t *data_start_ptr = __data_start__;
-        uint8_t *bss_start_ptr = __bss_start__;
+        create_process(proc0, 0);
+        create_process(proc1, 0);
+        run_all_processes();
 
-        // for (size_t i = 0; i < 40; i += 5) {
-        //         int res = 0; //calculate_pid_hash(i, 0);
-        //         char str_hash[3];
-        //         if (res > 10) {
-        //                 str_hash[0] = hw_div(res, 10) + 0x30;
-        //                 str_hash[1] = hw_mod(res, 10) + 0x30;
-        //         }
-        //         else {
-        //                 str_hash[0] = res + 0x30;
-        //         }
-        //         str_hash[2] = 0;
-        //         puts(str_hash);
-        // }
-
-        char buffer[255];
-        while (1) {
-                printf(" > ");
-                // gets(buffer, 255);
-                gets(buffer);
-                printf("\nResponse: %s\n", buffer);
-        }
         return 0;
 }

@@ -3,6 +3,7 @@
 //
 
 #include "file.h"
+#include "proc.h"
 #include "printer.h"
 
 #include <stdio.h>
@@ -66,7 +67,8 @@ static int read_stdin(char *ptr, int len) {
         int final_length = 0;
         int current_position = 0;
         while (final_length < len) {
-                const int c = read_byte_with_cursor();
+                const int c = read_byte_with_cursor(); //TODO: setup waiting for this particular interrupt
+                // it must get back EXACTLY here...
 
                 if (c == BACKSPACE) {
                         if (current_position) {

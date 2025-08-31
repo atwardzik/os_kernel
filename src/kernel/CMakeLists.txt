@@ -1,12 +1,13 @@
 add_library(kernel OBJECT
         memory.c
         proc.c
-        ctx.s
+        ctx.S
         isr.S
         file.c
         printer.c
         
         syscalls.c
+        resources.c
 )
 
 set_source_files_properties(memory.c PROPERTIES COMPILE_FLAGS -Wno-pointer-arith)

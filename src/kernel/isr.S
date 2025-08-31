@@ -8,6 +8,7 @@
 .syntax unified
 
 #include "syscalls.h"
+#include "resources.h"
 
 .equ USER_DEFINED_IVT_OFFSET, 0x40
 

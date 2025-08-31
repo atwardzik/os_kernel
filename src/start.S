@@ -10,6 +10,14 @@
 .extern __stack_end__
 .extern __bss_start__
 
+/**
+ * Because the stack operations in the Cortex-M23 and Cortex-M33 processors are based on
+ * full descending stack (the SP’s value decrements before storing the data during a stack PUSH
+ * operation), the initial SP value should be set to the first address location after the last allocated
+ * address of the stack memory. For example, if you have a stack memory range from
+ * 0x20007C00 to 0x20007FFF (1 K bytes), the initial stack value should be set to 0x20008000.
+ */
+
 .section .vectors, "ax"
 .align 2
 .global vector_table

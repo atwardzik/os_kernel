@@ -48,7 +48,7 @@ SECTIONS
         __heap_end__                    = ORIGIN(heap) + LENGTH(heap) - 1;
 
         __stack_start__                 = ORIGIN(stack);
-        __stack_end__                   = ORIGIN(stack) + LENGTH(stack) - 1;
+        __stack_end__                   = ORIGIN(stack) + LENGTH(stack); /*Stack is FULL DESCENDING*/
 
         __screen_buffer_start__         = ORIGIN(screen_buffer);
         __screen_buffer_length__        = LENGTH(screen_buffer);

@@ -1,3 +1,6 @@
+![Arch RP2040](https://img.shields.io/badge/Arch-RP2040_(coming_soon)-red?style=flat-square)
+![Arch RP2350](https://img.shields.io/badge/Arch-RP2350-green?style=flat-square)
+
 # Simple kernel for RP2040 and RP2350
 
 Baremetal code, written for Raspberry Pi Pico. Intentionally written with as much ARM assembly as possible.

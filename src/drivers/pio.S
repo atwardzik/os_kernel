@@ -175,7 +175,7 @@ setup_pio_clkdiv:
                 pop     {r4, pc}
         .exit_clk_failure:
                 movs    r0, #1
-                pop     {r4, lr}
+                pop     {r4, pc}
 
 
 /**
@@ -455,7 +455,7 @@ clear_internal_and_jump:
         @ TBH pure address of instruction is also encoded version of jump to this address
         mov     r0, r4
         mov     r1, r5
-        mov     r2, SM0_INSTR
+        movs    r2, SM0_INSTR
         bl      determine_pio_sm_register
         cmp     r0, #0
         beq     .exit_clear_jump_failure
