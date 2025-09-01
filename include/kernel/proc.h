@@ -43,7 +43,7 @@ struct Process {
 
 void scheduler_init(void);
 
-pid_t create_process(void (*process_entry_ptr)(void), uint32_t privilege);
+pid_t create_process(void (*process_entry_ptr)(void));
 
 pid_t fork(void);
 

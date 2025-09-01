@@ -9,12 +9,11 @@
 #include <stdint.h>
 
 extern uint8_t __heap_start__[];
-extern uint8_t __heap_length__[];
+extern uint8_t __heap_end__[];
 
 constexpr int kernel_heap_end_offset = 4096;
 static uint8_t *const user_space_heap_start_ptr = __heap_start__ + kernel_heap_end_offset;
-static const uint8_t *const user_space_heap_length_ptr = __heap_length__ - kernel_heap_end_offset;
-
+static uint8_t *const heap_end_ptr = __heap_end__;
 
 void *kmalloc(size_t size);
 

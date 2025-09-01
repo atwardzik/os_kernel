@@ -16,13 +16,49 @@
  *
  * Additionally we could pass parameters to function in that manner TODO: check
  *
- * Takes initial process stack pointer as a parameter in r0.
+ *
+ * void init_process_stack_frame(void **initial_sp, uint32_t xpsr, uint32_t return_address, uint32_t exc_return);
  */
 .thumb_func
 .global init_process_stack_frame
 .align 4
 init_process_stack_frame:
-        mov     r0, r0
+        @ mov     r12, r0
+        @ ldr     r0, [r0]
+        @ subs    r0, r0, 51 * 4          @ total number of registers to be stored
+
+        @ str     r3, [r0]                @ save exc_return
+
+        @ movs    r3, #3                  @ unprivileged task in CONTROL_NS
+        @ str     r3, [r0, #4]
+
+        @ ldr     r3, =exit
+        @ str     r3, [r0, #0x78]         @ where does the process return - default to EXIT
+
+        @ str     r2, [r0, #0x7c]         @ return to the process execution
+
+        @ str     r1, [r0, #0x80]         @ xPSR
+
+        @ str     r0, [r12]
+
+        mov     r12, r0
+        ldr     r0, [r0]
+        subs    r0, r0, #(18 * 4)       @ total number of registers to be stored
+
+        str     r3, [r0]                @ save exc_return
+
+        movs    r3, #2                  @ privileged task, psp, in CONTROL_NS
+        str     r3, [r0, #4]
+
+        ldr     r3, =exit
+        str     r3, [r0, #60]           @ where does the process return - default to EXIT
+
+        str     r2, [r0, #64]           @ return to the process execution
+
+        str     r1, [r0, #68]           @ xPSR
+
+        str     r0, [r12]
+
         bx      lr
 
 
@@ -35,7 +71,7 @@ init_process_stack_frame:
  *
  * (Fig. 1) Exception Stack Frame Format after entering ISR:
  *  ++--------+-------++------+----------------+----+----------+-------+
- *  || s15-s0 | FPSCR || xPSR | Return Address | lr | r12 (ip) | r3-r0 |
+ *  || s15-s0 | FPSCR || xPSR | Return Address | lr | r12 (ip) | r3-r0 |        => 25 registers / 8
  *  ++--------+-------++------+----------------+----+----------+-------+
  *  ||                ||                                               ^
  *  || if FPU present ||      |                |    |          |       |
@@ -49,23 +85,22 @@ init_process_stack_frame:
  *
  * (Fig. 2) Process stack after saving all registers by this method.
  *  +----------++---------++--------+------------+------------+
- *  | (Fig. 1) || s16-s31 || r11-r4 | CONTROL_NS | EXC_RETURN |
+ *  | (Fig. 1) || s16-s31 || r11-r4 | CONTROL_NS | EXC_RETURN |                 => 25 + 26 = 51 registers / 10
  *  +----------++---------++--------+------------+------------+
  *             ||         ||                                  ^
  *             ||         ||        |            |            |
- *             ||         ||       0x08         0x04          |-PSP
+ *            0x64        ||       0x08         0x04          |-PSP
  */
 .thumb_func
 .global save_state
 .align 4
 save_state:
-        mov     r12, r0
         mrs     r0, psp
 
 #ifdef ARCH_RP2350
-        tst     lr, #0x10               @ Tests bit 4 of EXC_RETURN if FPU exists
-        it      eq
-        vstmdbeq r0!, {s16-s31}
+        @ tst     lr, #0x10               @ Tests bit 4 of EXC_RETURN if FPU exists
+        @ it      eq
+        @ vstmdbeq r0!, {s16-s31}
 #endif
         mov     r2, lr                  @ EXC_RETURN
         mrs     r3, CONTROL
