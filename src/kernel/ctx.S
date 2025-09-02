@@ -23,31 +23,13 @@
 .global init_process_stack_frame
 .align 4
 init_process_stack_frame:
-        @ mov     r12, r0
-        @ ldr     r0, [r0]
-        @ subs    r0, r0, 51 * 4          @ total number of registers to be stored
-
-        @ str     r3, [r0]                @ save exc_return
-
-        @ movs    r3, #3                  @ unprivileged task in CONTROL_NS
-        @ str     r3, [r0, #4]
-
-        @ ldr     r3, =exit
-        @ str     r3, [r0, #0x78]         @ where does the process return - default to EXIT
-
-        @ str     r2, [r0, #0x7c]         @ return to the process execution
-
-        @ str     r1, [r0, #0x80]         @ xPSR
-
-        @ str     r0, [r12]
-
         mov     r12, r0
         ldr     r0, [r0]
         subs    r0, r0, #(18 * 4)       @ total number of registers to be stored
 
         str     r3, [r0]                @ save exc_return
 
-        movs    r3, #3                  @ unprivileged task, psp, in CONTROL_NS
+        movs    r3, #3                  @ unprivileged task, psp, in CONTROL
         str     r3, [r0, #4]
 
         ldr     r3, =exit

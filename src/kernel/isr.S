@@ -113,6 +113,7 @@ isr_svcall:
 
                 @ enable systick
                 mov     r4, lr
+                ldr     r0, =625000
                 bl      systick_enable
                 mov     lr, r4
 
@@ -187,16 +188,20 @@ systick_enable:
 .global isr_systick
 .align 4
 isr_systick:
+        push    {lr}
+        movs    r0, #11
+        bl      xor_pin
+
         ldr     r0, PPB_BASE
         ldr     r1, ICSR
         ldr     r2, [r0, r1]
         movs    r3, #1
         lsls    r3, r3, #28
-        @ ldr     r3, =0xffffff
         orrs    r2, r2, r3
         str     r2, [r0, r1]
 
-        bx      lr
+        pop     {pc}
+        @ bx      lr
 
 /**
  * Writes N-th interrupt handler to the IVT. FIXME: currently only for irq 0-31

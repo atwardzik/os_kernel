@@ -95,7 +95,7 @@ pid_t create_process(void (*process_entry_ptr)(void)) {
         }
 
         void *process_page = kmalloc(DEFAULT_PROCESS_SIZE);
-        void *pstack = process_page + DEFAULT_PROCESS_SIZE;
+        void *pstack = process_page + DEFAULT_PROCESS_SIZE - sizeof(size_t);
         init_process_stack_frame(&pstack, 0x0100'0000, (uint32_t) process_entry_ptr, 0xfffffffd);
 
         const struct Process process = {process_page, pstack, pid, NEW, DEFAULT_PROCESS_SIZE};
@@ -112,7 +112,7 @@ int __attribute__((naked)) exit() {
 extern void systick_enable(uint32_t cycles);
 
 void run_all_processes(void) {
-        __asm__("movs   r0, #0\n\r"
+        __asm__("movs   r0, #0\n\r" // run process 0
                 "movs   r7, #255\n\r"
                 "svc    #0\n\r");
         // systick_enable(625'000);

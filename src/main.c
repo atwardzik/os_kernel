@@ -16,28 +16,21 @@
 #include <string.h>
 
 void proc0(void) {
-        //printf("\n\x1b[92;40m[!]Welcome from proc0\x1b[0m\n");
-        init_pin_output(11);
+        printf("\n\x1b[92;40m[!]Welcome from proc0\x1b[0m\n");
 
         int i = 0;
         while (1) {
-                // printf("proc0: i = %i\n", i++);
-                // xor_pin(11);
-                i += 1;
-                // delay_ms(1000);
+                printf("proc0: i = %i\n", i++);
+                delay_ms(1000);
         }
 }
 
 void proc1(void) {
         printf("\n\x1b[96;40m[!]Welcome from proc1\x1b[0m\n");
-        init_pin_output(25);
 
-        int i = 0;
         while (1) {
-                // printf("proc1: i = %i\n", i++);
-                // xor_pin(25);
-                i += 1;
-                // delay_ms(250);
+                xor_pin(25);
+                delay_ms(250);
         }
 }
 
@@ -64,6 +57,7 @@ int main(void) {
         vga_init(13, 14, 16);
 
         init_pin_output(25);
+        init_pin_output(11);
 
         init_file_descriptors();
         scheduler_init();
