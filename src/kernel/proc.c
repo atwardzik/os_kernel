@@ -3,6 +3,9 @@
 //
 
 #include "proc.h"
+
+#include <stdio.h>
+
 #include "drivers/divider.h"
 
 static constexpr size_t MAX_PROCESS_NUMBER = 20; //TODO: change to dynamic processes count
@@ -14,7 +17,7 @@ static constexpr int DEFAULT_PROCESS_SIZE = 4 * 1024; //4 [KB]
 #define THREAD_PSP_CODE ((void *) 0xfffffffd);
 
 static struct {
-        struct Process *processes;
+        struct Process processes[MAX_PROCESS_NUMBER];
         size_t total_allocated_memory;
         pid_t current_task;
 } scheduler __attribute__ ((section (".data")));
@@ -43,29 +46,34 @@ static size_t get_pid_position(pid_t pid) {
 }
 
 void scheduler_init(void) {
-        scheduler.processes = kmalloc(sizeof(struct Process) * MAX_PROCESS_NUMBER);
+        // scheduler.processes = kmalloc(sizeof(struct Process) * MAX_PROCESS_NUMBER);
+        for (size_t i = 0; i < MAX_PROCESS_NUMBER; ++i) {
+                scheduler.processes[i].ptr = nullptr;
+        }
+
         scheduler.total_allocated_memory = 0;
 }
 
-void context_switch(void *current_sp) {
-        static size_t index = 0;
+void **get_process(const pid_t pid) {
+        size_t index = 0;
+        //TODO: determine task importance, also by implementing priority queue
+        while (scheduler.processes[index].pid != pid) {
+                index += 1;
 
-
-        if (scheduler.processes[index].pstate == RUNNING) {
-                //only if the process is said to be RUNNING change it to be suspended.
-                //some syscalls may change current process state to be e.g. WAITING_FOR_RESOURCE
-                scheduler.processes[index].pstate = SUSPENDED;
-                scheduler.processes[index].pstack = current_sp;
+                if (index == MAX_PROCESS_NUMBER) {
+                        return nullptr;
+                }
         }
 
-        if (scheduler.processes[index].pstate == NEW) {
-                scheduler.processes[index].pstate = RUNNING;
-                recall_state(scheduler.processes[index].pstack);
+        return &scheduler.processes[index].pstack;
+}
 
-                return;
-        }
+static size_t index = 0;
 
-        save_state(&scheduler.processes[index].pstack);
+void *update_process_and_get_next(void *psp) {
+        scheduler.processes[index].pstate = SUSPENDED;
+        scheduler.processes[index].pstack = psp;
+
         do {
                 //TODO: determine task importance, also by implementing priority queue
                 index += 1;
@@ -74,24 +82,27 @@ void context_switch(void *current_sp) {
                 }
         } while (!scheduler.processes[index].ptr);
 
+
         scheduler.processes[index].pstate = RUNNING;
-        recall_state(scheduler.processes[index].pstack); //will not exit!
+        return scheduler.processes[index].pstack;
 }
 
 pid_t create_process(void (*process_entry_ptr)(void)) {
         static pid_t pid = 0;
 
-        const size_t index = get_pid_position(pid);
+        if (pid == MAX_PROCESS_NUMBER) {
+                __asm__("bkpt   #0");
+        }
 
         void *process_page = kmalloc(DEFAULT_PROCESS_SIZE);
         void *pstack = process_page + DEFAULT_PROCESS_SIZE;
         init_process_stack_frame(&pstack, 0x0100'0000, (uint32_t) process_entry_ptr, 0xfffffffd);
 
-        struct Process process = {process_page, pstack, pid, NEW, DEFAULT_PROCESS_SIZE};
-        scheduler.processes[index] = process;
+        const struct Process process = {process_page, pstack, pid, NEW, DEFAULT_PROCESS_SIZE};
+        scheduler.processes[pid] = process;
 
         pid += 1;
-        return pid;
+        return process.pid;
 }
 
 int __attribute__((naked)) exit() {
@@ -101,5 +112,8 @@ int __attribute__((naked)) exit() {
 extern void systick_enable(uint32_t cycles);
 
 void run_all_processes(void) {
-        systick_enable(625'000);
+        __asm__("movs   r0, #0\n\r"
+                "movs   r7, #255\n\r"
+                "svc    #0\n\r");
+        // systick_enable(625'000);
 }

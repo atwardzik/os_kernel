@@ -47,7 +47,7 @@ init_process_stack_frame:
 
         str     r3, [r0]                @ save exc_return
 
-        movs    r3, #2                  @ privileged task, psp, in CONTROL_NS
+        movs    r3, #3                  @ unprivileged task, psp, in CONTROL_NS
         str     r3, [r0, #4]
 
         ldr     r3, =exit
@@ -122,9 +122,9 @@ recall_state:
         isb                             @ executes an Instruction Synchronization
                                         @  Barrier after CONTROL updates
 #ifdef ARCH_RP2350
-        tst     lr, #0x10
-        it      eq
-        vldmiaeq r0!, {s16-s31}
+        @ tst     lr, #0x10
+        @ it      eq
+        @ vldmiaeq r0!, {s16-s31}
 #endif
         msr     psp, r0
 

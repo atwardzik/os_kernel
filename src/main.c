@@ -16,21 +16,28 @@
 #include <string.h>
 
 void proc0(void) {
-        printf("\x1b[33;40m[!]Welcome from proc0\x1b[0m\n");
+        //printf("\n\x1b[92;40m[!]Welcome from proc0\x1b[0m\n");
+        init_pin_output(11);
 
         int i = 0;
         while (1) {
-                printf("proc0: i = %i\n", i++);
-                delay_ms(1000);
+                // printf("proc0: i = %i\n", i++);
+                // xor_pin(11);
+                i += 1;
+                // delay_ms(1000);
         }
 }
 
 void proc1(void) {
+        printf("\n\x1b[96;40m[!]Welcome from proc1\x1b[0m\n");
         init_pin_output(25);
 
+        int i = 0;
         while (1) {
-                xor_pin(25);
-                delay_ms(500);
+                // printf("proc1: i = %i\n", i++);
+                // xor_pin(25);
+                i += 1;
+                // delay_ms(250);
         }
 }
 
@@ -66,23 +73,33 @@ int main(void) {
 
         // FILE const *fp = fopen("test.txt", "r");
 
-        printf("\x1b[33;45mWelcome ");
-        printf("\x1b[93;105mstring");
+        printf("\x1b[93;45mWelcome ");
+        printf("\x1b[40;105mstring");
         printf("\x1b[0m\n");
 
         char buffer[255];
-        printf(" > ");
-        gets(buffer);
-        if (strcmp(buffer, "r p") == 0) {
-                create_process(proc0);
-                create_process(proc1);
-                run_all_processes();
-        }
 
-        while (1) {
-                // printf(" $ ");
-                // gets(buffer);
-                // printf("\n\x1b[91;40mKernel Response:\x1b[0m %s\n", buffer);
-        }
+        create_process(proc0);
+        create_process(proc1);
+        run_all_processes();
+
+
+        // while (1) {
+        //         printf(" > ");
+        //         gets(buffer);
+        //         if (strcmp(buffer, "r") == 0) {
+        //                 printf("\n");
+        //
+        //                 create_process(proc0);
+        //                 create_process(proc1);
+        //                 run_all_processes();
+        //         }
+        //         else if (strcmp(buffer, "morcik") == 0) {
+        //                 printf("\n\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
+        //         }
+        //         else {
+        //                 printf("\n\x1b[91;40mKernel Response:\x1b[0m %s\n", buffer);
+        //         }
+        // }
         return 0;
 }

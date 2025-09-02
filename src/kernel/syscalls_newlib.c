@@ -54,11 +54,6 @@ int _close(int file) {
 
 extern char *my_gets(char *ptr, int len);
 
-int _read(int file, char *ptr, int len) {
-        return sys_read(file, ptr, len);
-}
-
-
 int _fstat(char *file, struct stat *st) {
         st->st_mode = S_IFCHR;
         return 0;
@@ -103,9 +98,4 @@ int _lseek(int file, int ptr, int dir) {
 int _wait(int *status) {
         errno = ECHILD;
         return -1;
-}
-
-
-int _write(int file, char *ptr, int len) {
-        return sys_write(file, ptr, len);
 }

@@ -19,4 +19,6 @@
 #define YIELD_SVC       11
 #define KILL            12
 
+#define OS_INIT_SVC     255
+
 #endif //SYSCALLS_H

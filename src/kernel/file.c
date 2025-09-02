@@ -69,6 +69,7 @@ static int read_stdin(char *ptr, int len) {
         while (final_length < len) {
                 const int c = read_byte_with_cursor(); //TODO: setup waiting for this particular interrupt
                 // it must get back EXACTLY here...
+                // somehow set up the blocking mechanism
 
                 if (c == BACKSPACE) {
                         if (current_position) {
