@@ -61,6 +61,35 @@ _read:
                 bl      ksys_read       @ spinlocks
                 pop    {pc}
 
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@                                      @
+@@          Context Switch              @
+@@                                      @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+.macro  save_state
+        mrs     r0, psp
+
+        mov     r2, lr                  @ EXC_RETURN
+        mrs     r3, CONTROL
+        stmdb   r0!, {r2-r11}
+
+        msr     psp, r0                 @ save as a new stack pointer
+                                        @ returns r0 - psp after all updates
+.endm
+
+.macro  recall_state
+        ldmia   r0!, {r2-r11}
+
+        mov     lr, r2
+        msr     CONTROL, r3
+        isb                             @ executes an Instruction Synchronization
+                                        @  Barrier after CONTROL updates
+        msr     psp, r0
+.endm
+
+
 /**
  * Syscall
  *  r7          - syscall number
@@ -95,15 +124,12 @@ isr_svcall:
 
         .os_init_svc:
                 bl      scheduler_get_process_stack     @ gets a pointer to stack pointer
-                ldr     r1, [r0]
-                ldmia   r1!, {r2-r11}
+                mov     r12, r0
+                ldr     r0, [r12]
 
-                mov     lr, r2
-                msr     CONTROL, r3
-                isb
+                recall_state
 
-                msr     psp, r1
-                str     r1, [r0]
+                str     r0, [r12]
 
 
                 @ set PENDSV to the lowest priority level
@@ -144,23 +170,11 @@ isr_svcall:
 .global isr_pendsv
 .align 4
 isr_pendsv:
-        mrs     r0, psp
-
-        mov     r2, lr                  @ EXC_RETURN
-        mrs     r3, CONTROL
-        stmdb   r0!, {r2-r11}
-
-        msr     psp, r0                 @ save as a new stack pointer
+        save_state
 
         bl      update_process_and_get_next
 
-        ldmia   r0!, {r2-r11}
-
-        mov     lr, r2
-        msr     CONTROL, r3
-        isb                             @ executes an Instruction Synchronization
-                                        @  Barrier after CONTROL updates
-        msr     psp, r0
+        recall_state
 
         bx      lr
 
