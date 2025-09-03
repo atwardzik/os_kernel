@@ -77,10 +77,10 @@ void *get_next_process() {
         do {
                 //TODO: determine task importance, also by implementing priority queue
                 current_index += 1;
-                if (current_index % MAX_PROCESS_NUMBER == 0) {
+                if (current_index == MAX_PROCESS_NUMBER) {
                         current_index = 0;
                 }
-        } while (scheduler.processes[current_index].pstate != READY); //suspended or ready?
+        } while (scheduler.processes[current_index].pstate != READY);
 
         scheduler.current_process = scheduler.processes[current_index].pid;
 
@@ -106,7 +106,7 @@ pid_t create_process(void (*process_entry_ptr)(void)) {
         void *pstack = process_page + DEFAULT_PROCESS_SIZE - sizeof(size_t);
         init_process_stack_frame(&pstack, 0x0100'0000, (uint32_t) process_entry_ptr, 0xfffffffd);
 
-        const struct Process process = {process_page, pstack, pid, NEW, DEFAULT_PROCESS_SIZE};
+        const struct Process process = {process_page, pstack, pid, READY, DEFAULT_PROCESS_SIZE};
         scheduler.processes[pid] = process;
 
         pid += 1;
