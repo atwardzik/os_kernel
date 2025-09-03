@@ -9,6 +9,7 @@
 #include "syscalls.h"
 
 #include <stddef.h>
+#include <sys/types.h>
 
 /*
  * The context switch routine has to:
@@ -29,7 +30,7 @@ enum State {
         TERMINATED,
 };
 
-typedef unsigned int pid_t;
+// typedef unsigned int pid_t;
 
 //TODO: by using MPU forbid process to access system resources
 struct Process {
@@ -43,7 +44,11 @@ struct Process {
 
 void scheduler_init(void);
 
+pid_t scheduler_get_current_process(void);
+
 pid_t create_process(void (*process_entry_ptr)(void));
+
+void change_process_state(pid_t process, enum State state);
 
 pid_t fork(void);
 

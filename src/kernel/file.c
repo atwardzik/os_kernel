@@ -37,6 +37,8 @@ int sys_close(int file) {
         return -1;
 }
 
+static int (*keyboard_reader)(void) = read_byte_with_cursor;
+
 static void insert_and_shift(const char c, char *ptr, const int pos_insert, const int len) {
         int temp = pos_insert;
         char next_char = *(ptr + temp);
@@ -67,9 +69,7 @@ static int read_stdin(char *ptr, int len) {
         int final_length = 0;
         int current_position = 0;
         while (final_length < len) {
-                const int c = read_byte_with_cursor(); //TODO: setup waiting for this particular interrupt
-                // it must get back EXACTLY here...
-                // somehow set up the blocking mechanism
+                const int c = keyboard_reader();
 
                 if (c == BACKSPACE) {
                         if (current_position) {
@@ -144,6 +144,19 @@ int sys_read(int file, char *ptr, int len) {
         }
 
         return offset;
+}
+
+/**
+ * Instead of blocking processes it spinlocks on keyboard
+ */
+int ksys_read(int file, char *ptr, int len) {
+        keyboard_reader = kread_byte_with_cursor;
+
+        const int res = sys_read(file, ptr, len);
+
+        keyboard_reader = read_byte_with_cursor;
+
+        return res;
 }
 
 int sys_write(const int file, char *ptr, const int len) {

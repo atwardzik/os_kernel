@@ -8,6 +8,7 @@
 #include "drivers/uart.h"
 #include "drivers/vga.h"
 #include "drivers/keyboard.h"
+#include "resources.h"
 
 
 #include <stddef.h>
@@ -274,7 +275,22 @@ int read_byte_with_cursor() {
         vga_setup_cursor(row, column, ScreenWriter.current_color_code, 500'000);
         uart_set_cursor(row, column);
 
-        const int c = keyboard_receive_char();
+        const pid_t parent_process = scheduler_get_current_process();
+        const int c = *(int *) (block_on_resource(parent_process, IO_KEYBOARD));
+
+        vga_clr_cursor();
+        vga_set_cursor_off();
+
+        return c;
+}
+
+int kread_byte_with_cursor(void) {
+        const auto row = ScreenWriter.current_row_position;
+        const auto column = ScreenWriter.current_column_position;
+        vga_setup_cursor(row, column, ScreenWriter.current_color_code, 500'000);
+        uart_set_cursor(row, column);
+
+        const int c = keyboard_receive_char(); //spinlock
 
         vga_clr_cursor();
         vga_set_cursor_off();

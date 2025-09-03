@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#if 0
 void proc0(void) {
         printf("\n\x1b[92;40m[!]Welcome from proc0\x1b[0m\n");
 
@@ -24,17 +25,17 @@ void proc0(void) {
                 delay_ms(1000);
         }
 }
+#endif
 
 void proc1(void) {
         printf("\n\x1b[96;40m[!]Welcome from proc1\x1b[0m\n");
 
         while (1) {
-                xor_pin(25);
+                xor_pin(11);
                 delay_ms(250);
         }
 }
 
-#if 0
 void proc2(void) {
         printf("\x1b[33;40m[!]Welcome from proc2\x1b[0m\n");
 
@@ -45,7 +46,6 @@ void proc2(void) {
                 printf("\nResponse: %s\n", buffer);
         }
 }
-#endif
 
 
 int main(void) {
@@ -73,27 +73,22 @@ int main(void) {
 
         char buffer[255];
 
-        create_process(proc0);
-        create_process(proc1);
-        run_all_processes();
+        while (1) {
+                printf(" > ");
+                gets(buffer);
+                if (strcmp(buffer, "r") == 0) {
+                        printf("\n");
 
-
-        // while (1) {
-        //         printf(" > ");
-        //         gets(buffer);
-        //         if (strcmp(buffer, "r") == 0) {
-        //                 printf("\n");
-        //
-        //                 create_process(proc0);
-        //                 create_process(proc1);
-        //                 run_all_processes();
-        //         }
-        //         else if (strcmp(buffer, "morcik") == 0) {
-        //                 printf("\n\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
-        //         }
-        //         else {
-        //                 printf("\n\x1b[91;40mKernel Response:\x1b[0m %s\n", buffer);
-        //         }
-        // }
+                        create_process(proc1);
+                        create_process(proc2);
+                        run_all_processes();
+                }
+                else if (strcmp(buffer, "morcik") == 0) {
+                        printf("\n\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
+                }
+                else {
+                        printf("\n\x1b[91;40mKernel Response:\x1b[0m %s\n", buffer);
+                }
+        }
         return 0;
 }

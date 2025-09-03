@@ -5,6 +5,8 @@
 #ifndef OS_STDIO_H
 #define OS_STDIO_H
 
+#include "proc.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -28,6 +30,8 @@ void write_byte(int c);
  */
 void insert_byte(int c);
 
-int read_byte_with_cursor();
+int read_byte_with_cursor(void);
+
+int kread_byte_with_cursor(void);
 
 #endif //OS_STDIO_H

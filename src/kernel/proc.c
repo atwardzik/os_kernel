@@ -19,7 +19,7 @@ static constexpr int DEFAULT_PROCESS_SIZE = 4 * 1024; //4 [KB]
 static struct {
         struct Process processes[MAX_PROCESS_NUMBER];
         size_t total_allocated_memory;
-        pid_t current_task;
+        pid_t current_process;
 } scheduler __attribute__ ((section (".data")));
 
 extern void init_process_stack_frame(void **initial_sp, uint32_t xpsr, uint32_t pc, uint32_t lr);
@@ -46,7 +46,6 @@ static size_t get_pid_position(pid_t pid) {
 }
 
 void scheduler_init(void) {
-        // scheduler.processes = kmalloc(sizeof(struct Process) * MAX_PROCESS_NUMBER);
         for (size_t i = 0; i < MAX_PROCESS_NUMBER; ++i) {
                 scheduler.processes[i].ptr = nullptr;
         }
@@ -54,10 +53,14 @@ void scheduler_init(void) {
         scheduler.total_allocated_memory = 0;
 }
 
-void **get_process(const pid_t pid) {
+pid_t scheduler_get_current_process() {
+        return scheduler.current_process;
+}
+
+void **scheduler_get_process_stack(const pid_t current_process) {
         size_t index = 0;
         //TODO: determine task importance, also by implementing priority queue
-        while (scheduler.processes[index].pid != pid) {
+        while (scheduler.processes[index].pid != current_process) {
                 index += 1;
 
                 if (index == MAX_PROCESS_NUMBER) {
@@ -68,23 +71,24 @@ void **get_process(const pid_t pid) {
         return &scheduler.processes[index].pstack;
 }
 
-static size_t index = 0;
+static size_t current_index = 0;
 
 void *update_process_and_get_next(void *psp) {
-        scheduler.processes[index].pstate = SUSPENDED;
-        scheduler.processes[index].pstack = psp;
+        scheduler.processes[current_index].pstate = SUSPENDED;
+        scheduler.processes[current_index].pstack = psp;
 
         do {
                 //TODO: determine task importance, also by implementing priority queue
-                index += 1;
-                if (index % MAX_PROCESS_NUMBER == 0) {
-                        index = 0;
+                current_index += 1;
+                if (current_index % MAX_PROCESS_NUMBER == 0) {
+                        current_index = 0;
                 }
-        } while (!scheduler.processes[index].ptr);
+        } while (!scheduler.processes[current_index].ptr);
 
+        scheduler.current_process = scheduler.processes[current_index].pid;
 
-        scheduler.processes[index].pstate = RUNNING;
-        return scheduler.processes[index].pstack;
+        scheduler.processes[current_index].pstate = RUNNING;
+        return scheduler.processes[current_index].pstack;
 }
 
 pid_t create_process(void (*process_entry_ptr)(void)) {
@@ -103,6 +107,14 @@ pid_t create_process(void (*process_entry_ptr)(void)) {
 
         pid += 1;
         return process.pid;
+}
+
+void change_process_state(const pid_t process, const enum State state) {
+        for (size_t i = 0; i < MAX_PROCESS_NUMBER; ++i) {
+                if (scheduler.processes[i].pid == process) {
+                        scheduler.processes[i].pstate = state;
+                }
+        }
 }
 
 int __attribute__((naked)) exit() {

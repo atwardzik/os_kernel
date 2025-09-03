@@ -9,7 +9,6 @@
 .syntax unified
 
 #include "syscalls.h"
-#include "resources.h"
 
 .equ USER_DEFINED_IVT_OFFSET, 0x40
 
@@ -30,14 +29,14 @@ _exit:
 _write:
         push    {lr}
         mrs     r3, IPSR
-        tst     r3, #0xff       @ 0 = thread
+        tst     r3, #0xff               @ 0 = thread
         bne     .system_write
 
         mrs     r3, CONTROL
-        tst     r3, #1          @ 1 = unprivileged
+        tst     r3, #1                  @ 1 = unprivileged
         beq     .system_write
 
-        movs    r7, #4          @ syscall write
+        movs    r7, #4                  @ syscall write
         svc     #0
         pop     {pc}
 
@@ -51,15 +50,15 @@ _write:
 _read:
         push    {lr}
         mrs     r3, CONTROL
-        tst     r3, #1          @ 1 - unprivileged
+        tst     r3, #1                  @ 1 - unprivileged
         beq     .system_read
 
-        movs    r7, #3          @ syscall read
+        movs    r7, #3                  @ syscall read
         svc     #0
         pop     {pc}
 
         .system_read:
-                bl      sys_read
+                bl      ksys_read       @ spinlocks
                 pop    {pc}
 
 /**
@@ -71,9 +70,11 @@ _read:
 .global isr_svcall
 .align 4
 isr_svcall:
+        push    {fp}
+        mov     fp, sp
+
         push    {r4}
-        mov     r4, lr                  @ EXC_RETURN
-        @ mov     r1, sp                  @ MSP
+        mov     r4, lr                          @ EXC_RETURN
 
         cmp     r7, READ_SVC
         beq     .read_svc
@@ -93,7 +94,7 @@ isr_svcall:
                 b       .svcall_exit
 
         .os_init_svc:
-                bl      get_process             @ gets a pointer to stack pointer
+                bl      scheduler_get_process_stack     @ gets a pointer to stack pointer
                 ldr     r1, [r0]
                 ldmia   r1!, {r2-r11}
 
@@ -121,11 +122,16 @@ isr_svcall:
                 bx      lr                              @ start proc0
 
         .svcall_exit:
-                mov     r1, r4
-                pop     {r4}
+                mov     r1, r4                          @ restore EXC_RETURN
+                pop     {r4}                            @ restore original r4
+                mov     sp, fp                          @ restore MSP
+                pop     {fp}                            @ restore original fp
 
                 mrs     r2, psp
-                str     r0, [r2]
+                str     r0, [r2]                        @ save return value on the stack
+                                                        @ upon returning from this exception
+                                                        @ the stack frame is restored, at which
+                                                        @ r0 is at offset 0
 
                 bx      r1
 
@@ -188,10 +194,6 @@ systick_enable:
 .global isr_systick
 .align 4
 isr_systick:
-        push    {lr}
-        movs    r0, #11
-        bl      xor_pin
-
         ldr     r0, PPB_BASE
         ldr     r1, ICSR
         ldr     r2, [r0, r1]
@@ -200,8 +202,7 @@ isr_systick:
         orrs    r2, r2, r3
         str     r2, [r0, r1]
 
-        pop     {pc}
-        @ bx      lr
+        bx      lr
 
 /**
  * Writes N-th interrupt handler to the IVT. FIXME: currently only for irq 0-31
