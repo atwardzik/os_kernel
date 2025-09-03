@@ -99,29 +99,8 @@ _read:
 .global isr_svcall
 .align 4
 isr_svcall:
-        push    {fp}
-        mov     fp, sp
-
-        push    {r4}
-        mov     r4, lr                          @ EXC_RETURN
-
-        cmp     r7, READ_SVC
-        beq     .read_svc
-
-        cmp     r7, WRITE_SVC
-        beq     .write_svc
-
         cmp     r7, OS_INIT_SVC
-        beq     .os_init_svc
-
-        .read_svc:
-                bl      sys_read
-                b       .svcall_exit
-
-        .write_svc:
-                bl      sys_write
-                b       .svcall_exit
-
+        bne     .standard_syscalls
         .os_init_svc:
                 bl      scheduler_get_process_stack     @ gets a pointer to stack pointer
                 mov     r12, r0
@@ -144,22 +123,42 @@ isr_svcall:
                 bl      systick_enable
                 mov     lr, r4
 
-                pop     {r4}
                 bx      lr                              @ start proc0
 
-        .svcall_exit:
-                mov     r1, r4                          @ restore EXC_RETURN
-                pop     {r4}                            @ restore original r4
-                mov     sp, fp                          @ restore MSP
-                pop     {fp}                            @ restore original fp
+        .standard_syscalls:
+                push    {fp, lr}
+                mov     fp, sp
+                add     fp, fp, #8
 
-                mrs     r2, psp
-                str     r0, [r2]                        @ save return value on the stack
+                cmp     r7, READ_SVC
+                beq     .read_svc
+
+                cmp     r7, WRITE_SVC
+                beq     .write_svc
+
+
+        .read_svc:
+                bl      sys_read
+                b       .svcall_exit
+
+        .write_svc:
+                bl      sys_write
+                b       .svcall_exit
+
+
+        .svcall_exit:
+                sub     fp, fp, #8
+                mov     sp, fp
+                pop     {fp, lr}
+
+                mrs     r1, psp
+
+                str     r0, [r1]                        @ save return value on the stack
                                                         @ upon returning from this exception
                                                         @ the stack frame is restored, at which
                                                         @ r0 is at offset 0
 
-                bx      r1
+                bx      lr
 
 
 

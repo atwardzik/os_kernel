@@ -73,22 +73,26 @@ void **scheduler_get_process_stack(const pid_t current_process) {
 
 static size_t current_index = 0;
 
-void *update_process_and_get_next(void *psp) {
-        scheduler.processes[current_index].pstate = SUSPENDED;
-        scheduler.processes[current_index].pstack = psp;
-
+void *get_next_process() {
         do {
                 //TODO: determine task importance, also by implementing priority queue
                 current_index += 1;
                 if (current_index % MAX_PROCESS_NUMBER == 0) {
                         current_index = 0;
                 }
-        } while (!scheduler.processes[current_index].ptr);
+        } while (scheduler.processes[current_index].pstate != READY); //suspended or ready?
 
         scheduler.current_process = scheduler.processes[current_index].pid;
 
         scheduler.processes[current_index].pstate = RUNNING;
         return scheduler.processes[current_index].pstack;
+}
+
+void *update_process_and_get_next(void *psp) {
+        scheduler.processes[current_index].pstate = READY;
+        scheduler.processes[current_index].pstack = psp;
+
+        return get_next_process();
 }
 
 pid_t create_process(void (*process_entry_ptr)(void)) {

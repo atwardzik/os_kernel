@@ -8,6 +8,59 @@
 
 .syntax unified
 
+/**
+ * All remaining registers must be saved to current process stack.
+ *
+ * After interrupt of the current process lower registers are stored on the stack.
+ * In order to switch the context properly, other registers must be saved as well.
+ *
+ * (Fig. 1) Exception Stack Frame Format after entering ISR:
+ *  ++--------+-------++------+----------------+----+----------+-------+
+ *  || s15-s0 | FPSCR || xPSR | Return Address | lr | r12 (ip) | r3-r0 |        => 25 registers / 8
+ *  ++--------+-------++------+----------------+----+----------+-------+
+ *  ||                ||                                               ^
+ *  || if FPU present ||      |                |    |          |       |
+ *  ||                ||     0x1c             0x18 0x14       0x10     |-PSP
+ *
+ * Please note the return address and link register.
+ * During normal function call the return address is saved into the link register,
+ * however, during exception a special EXC_RETURN (different in various exception scenarios)
+ * value is loaded by hardware into lr to indicate return from EXCEPTION when it is loaded
+ * into the PC. *That is why the return address is loaded into stack frame.*
+ *
+ * (Fig. 2) Process stack after saving all registers by this method.
+ *  +----------++---------++--------+------------+------------+
+ *  | (Fig. 1) || s16-s31 || r11-r4 | CONTROL_NS | EXC_RETURN |                 => 25 + 26 = 51 registers / 10
+ *  +----------++---------++--------+------------+------------+
+ *             ||         ||                                  ^
+ *             ||         ||        |            |            |
+ *            0x64        ||       0x08         0x04          |-PSP
+ */
+
+.macro  save_state
+        mrs     r0, psp
+
+        mov     r2, lr                  @ EXC_RETURN
+        mrs     r3, CONTROL
+        stmdb   r0!, {r2-r11}
+
+        msr     psp, r0                 @ save as a new stack pointer
+                                        @ returns r0 - psp after all updates
+.endm
+
+.macro  recall_state
+        ldmia   r0!, {r2-r11}
+
+        mov     lr, r2
+        msr     CONTROL, r3
+        isb                             @ executes an Instruction Synchronization
+                                        @  Barrier after CONTROL updates
+        msr     psp, r0
+
+        bx      lr
+
+.endm
+
 
 /**
  * Initializes stack structure, cf. save_state and recall state.
@@ -44,70 +97,52 @@ init_process_stack_frame:
         bx      lr
 
 
-
 /**
- * This method saves all remaining registers to current process stack.
- *
- * After interrupt of the current process lower registers are stored on the stack.
- * In order to switch the context properly, other registers must be saved as well.
- *
- * (Fig. 1) Exception Stack Frame Format after entering ISR:
- *  ++--------+-------++------+----------------+----+----------+-------+
- *  || s15-s0 | FPSCR || xPSR | Return Address | lr | r12 (ip) | r3-r0 |        => 25 registers / 8
- *  ++--------+-------++------+----------------+----+----------+-------+
- *  ||                ||                                               ^
- *  || if FPU present ||      |                |    |          |       |
- *  ||                ||     0x1c             0x18 0x14       0x10     |-PSP
- *
- * Please note the return address and link register.
- * During normal function call the return address is saved into the link register,
- * however, during exception a special EXC_RETURN (different in various exception scenarios)
- * value is loaded by hardware into lr to indicate return from EXCEPTION when it is loaded
- * into the PC. *That is why the return address is loaded into stack frame.*
- *
- * (Fig. 2) Process stack after saving all registers by this method.
- *  +----------++---------++--------+------------+------------+
- *  | (Fig. 1) || s16-s31 || r11-r4 | CONTROL_NS | EXC_RETURN |                 => 25 + 26 = 51 registers / 10
- *  +----------++---------++--------+------------+------------+
- *             ||         ||                                  ^
- *             ||         ||        |            |            |
- *            0x64        ||       0x08         0x04          |-PSP
+ * void *block_on_resource(const pid_t parent_process, const Resource resource)
  */
 .thumb_func
-.global save_state
+.global block_on_resource
 .align 4
-save_state:
+block_on_resource:
+        push    {lr}
+        push    {r0}
+        bl      set_process_wait_for_resource
+        pop     {r3}                                    @ temporarily PID
+        @ Save kernel frame on psp
         mrs     r0, psp
-
-#ifdef ARCH_RP2350
-        @ tst     lr, #0x10               @ Tests bit 4 of EXC_RETURN if FPU exists
-        @ it      eq
-        @ vstmdbeq r0!, {s16-s31}
-#endif
-        mov     r2, lr                  @ EXC_RETURN
-        mrs     r3, CONTROL
-        stmdb   r0!, {r2-r11}
-
-        msr     psp, r0                 @ save as a new stack pointer
-                                        @ returns r0 - psp after all updates
-        bx      lr
-
-
-.thumb_func
-.global recall_state
-.align 4
-recall_state:
-        ldmia   r0!, {r2-r11}
-
-        mov     lr, r2
-        msr     CONTROL, r3
-        isb                             @ executes an Instruction Synchronization
-                                        @  Barrier after CONTROL updates
-#ifdef ARCH_RP2350
-        @ tst     lr, #0x10
-        @ it      eq
-        @ vldmiaeq r0!, {s16-s31}
-#endif
+        mov     r1, fp
+        .copy_stack_frame:
+                ldr     r2, [r1, #-4]!                  @ copy from MSP to PSP
+                str     r2, [r0, #-4]!                  @ stack is full descending
+                cmp     r1, sp                          @
+                bne     .copy_stack_frame               @
+        @ Save full current kernel state, EXC_RETURN is not needed, as it is stored on the stack already
+        @ and control register is not needed as well, as we are already in handler mode
+        @ r0-r3  are not needed either, as we expect return value there
+        @
+        @  +------+----------------+----+----------+--------+
+        @  | xPSR | Return Address | lr | r12 (ip) | r11-r4 |        => 12
+        @  +------+----------------+----+----------+--------+
+        @        0x2c            0x28  0x24       0x20      0x00
+        @
+        subs    r0, r0, #(12 * 4)                       @  total number of registers to be stored
+        stmdb   r0, {r4-r11}                            @  save higher registers
+        mov     r1, lr                                  @  where does the process return - CURRENT LR
+        str     r1, [r0, #0x24]                         @
+        ldr     r1, =.syscall_block_return_point        @  return to THIS FUNCTION
+        str     r1, [r0, #0x28]                         @
+        mrs     r1, PSR
+        str     r1, [r0, #0x2c]
+        @ Update PSP in the struct
         msr     psp, r0
+        mov     r0, r3                                  @ get back PID
+        bl      scheduler_get_process_stack
+        mrs     r1, psp
+        str     r1, [r0]
+        @ Force context switch
+        bl      get_next_process
+        recall_state
 
-        bx      lr
+        .syscall_block_return_point:
+                @ as we return here the pointer to the resource is already in r0
+                pop    {pc}

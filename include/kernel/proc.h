@@ -26,7 +26,6 @@ enum State {
         RUNNING,
         READY,
         WAITING_FOR_RESOURCE,
-        SUSPENDED,
         TERMINATED,
 };
 

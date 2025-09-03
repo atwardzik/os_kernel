@@ -12,17 +12,13 @@ static struct {
         pid_t process;
 } process_blocked_on_io_keyboard = {true};
 
-static void set_process_wait_for_resource(const pid_t parent_process) {
+void set_process_wait_for_resource(const pid_t parent_process, const Resource resource) {
         change_process_state(parent_process, WAITING_FOR_RESOURCE);
-}
 
-void __attribute__((naked )) *block_on_resource(const pid_t parent_process, const Resource resource) {
-        __asm__("push   {r4, lr}\n\r"
-                "mov    r4, r1\n\r"
-                "bl     set_process_wait_for_resource\n\r"
-                ""                   //TODO: force context switch, but save kernel frame on psp
-                "pop    {r4, pc}\n\r"//as we return here the pointer to the resource is already in r0
-        );
+        if (resource == IO_KEYBOARD) {
+                process_blocked_on_io_keyboard.process = parent_process;
+                process_blocked_on_io_keyboard.none = false;
+        }
 }
 
 void notify_resource(const Resource resource, const void *data) {
