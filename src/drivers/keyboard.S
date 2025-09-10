@@ -8,6 +8,7 @@
 
 
 #include "kernel/syscalls.h"
+#include "kernel/resources_codes.h"
 
 /**
  * +--------------+------------------+---------------------+
@@ -108,7 +109,7 @@ init_keyboard:
 
                 @ 4) set interrupt subroutine
                 movs    r0, IO_IRQ_BANK0
-                ldr     r1, =pin_handler
+                ldr     r1, =keyboard_interrupt_handler
                 bl      set_isr
 
         .init_keyboard_input_pins:
@@ -129,7 +130,7 @@ init_keyboard:
 
 .thumb_func
 .align 4
-pin_handler:
+keyboard_interrupt_handler:
         cpsid   i
         push    {lr}
 
@@ -276,7 +277,12 @@ pin_handler:
                 strb    r0, [r1, r3]
                 adds    r3, r3, #1
                 strb    r3, [r2]
-                b       .exit
+
+                @ TODO: signal letter
+
+                adds    r3, r3, r1
+                subs    r0, r3, #1
+                b       .exit_with_signal
 
         .manage_escape_sequence:
                 ldr     r0, escape_flag
@@ -346,7 +352,12 @@ pin_handler:
                 ldr     r0, =buffer_offset
                 strb    r2, [r0]
 
-                b       .exit
+
+                @ TODO: signal escape code sequence
+
+                adds    r2, r2, r1
+                subs    r0, r2, #3
+                b       .exit_with_signal
 
         .shift_pressed:
                 ldr     r0, shift_flag
@@ -404,6 +415,12 @@ pin_handler:
 
         .exit:
                 cpsie   i
+                pop     {pc}
+
+        .exit_with_signal:
+                cpsie   i
+                movs    r1, IO_KEYBOARD
+                bl      signal_resource
                 pop     {pc}
 
 
@@ -470,6 +487,17 @@ read_byte:
 
         mov     r0, r3
         pop     {r4, pc}
+
+
+.thumb_func
+.global clr_keyboard_buffer
+.align 4
+clr_keyboard_buffer:
+        ldr     r0, =buffer_offset
+        movs    r1, #0
+        strb    r1, [r0]
+
+        bx      lr
 
 
 .thumb_func

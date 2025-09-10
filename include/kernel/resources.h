@@ -18,4 +18,6 @@ typedef uint8_t Resource;
  */
 void *block_on_resource(pid_t parent_process, Resource resource);
 
+void signal_resource(void *resource, Resource resource_type);
+
 #endif //OS_RESOURCES_H

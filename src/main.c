@@ -15,7 +15,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#if 0
 void proc0(void) {
         printf("\n\x1b[92;40m[!]Welcome from proc0\x1b[0m\n");
 
@@ -25,7 +24,6 @@ void proc0(void) {
                 delay_ms(1000);
         }
 }
-#endif
 
 void proc1(void) {
         printf("\n\x1b[96;40m[!]Welcome from proc1\x1b[0m\n");
@@ -75,10 +73,13 @@ int main(void) {
 
         while (1) {
                 printf(" > ");
-                gets(buffer);
+                // gets(buffer);
+                fgets(buffer, 255, stdin);
+                buffer[strcspn(buffer, "\n")] = '\0';
                 if (strcmp(buffer, "r") == 0) {
                         printf("\n");
 
+                        create_process(proc0);
                         create_process(proc1);
                         create_process(proc2);
                         run_all_processes();

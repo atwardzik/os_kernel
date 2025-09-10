@@ -112,10 +112,10 @@ isr_svcall:
 
 
                 @ set PENDSV to the lowest priority level
-                ldr     r2, NVIC_IPR_PEND_SV
-                ldr     r1, PPB_BASE
-                movs    r0, #0xff
-                str     r0, [r1, r2]
+                @ ldr     r2, NVIC_IPR_PEND_SV          @ FIXME: change to proper IPR address bits
+                @ ldr     r1, PPB_BASE
+                @ movs    r0, #0xff
+                @ str     r0, [r1, r2]
 
                 @ enable systick
                 mov     r4, lr

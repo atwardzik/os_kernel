@@ -146,3 +146,18 @@ block_on_resource:
         .syscall_block_return_point:
                 @ as we return here the pointer to the resource is already in r0
                 pop    {pc}
+
+
+.thumb_func
+.global signal_resource
+.align 4
+signal_resource:
+        mrs     r3, CONTROL
+        tst     r3, #1                  @ 1 = unprivileged
+        beq     .kernel_mode_return
+
+        @ restore context of a waiting process
+        bkpt    #0
+
+        .kernel_mode_return:
+                bx      lr

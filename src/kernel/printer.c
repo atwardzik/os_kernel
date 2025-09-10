@@ -275,6 +275,7 @@ int read_byte_with_cursor() {
         vga_setup_cursor(row, column, ScreenWriter.current_color_code, 500'000);
         uart_set_cursor(row, column);
 
+        clr_keyboard_buffer();
         const pid_t parent_process = scheduler_get_current_process();
         const int c = *(int *) (block_on_resource(parent_process, IO_KEYBOARD));
 
