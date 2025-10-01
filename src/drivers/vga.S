@@ -43,7 +43,7 @@ vga_clr_screen:
         @ str     r1, [r0]
         @ ldr     r1, =0xa001             @ mov pins, x
         @ str     r1, [r0]
-
+#if 0
         ldr     r0, =0x20035000
         movs    r1, #0
         ldr     r2, =307200
@@ -54,7 +54,7 @@ vga_clr_screen:
                 subs    r2, r2, #4
                 cmp     r2, #0
                 bne     .loop_clear
-
+#endif
         pop     {pc}
 
 .thumb_func
@@ -126,14 +126,14 @@ hsync_gen_init:
         bl      setup_pio_clkdiv
 
         @ 5) Init GPIO
-        movs    r0, #13                 @ GPIO 13
+        mov     r0, r4                  @ GPIO
         movs    r1, #6                  @ Funcsel: PIO0
         bl      GPIO_function_select
 
         @ 6) Set consecutive pindirs to output
         movs    r0, #0
         movs    r1, #0
-        movs    r2, #13
+        mov     r2, r4
         movs    r3, #1
         bl      set_consecutive_pindirs_out
 
@@ -211,7 +211,7 @@ vsync_gen_init:
         orrs    r2, r2, r0
 
         @ add info about SIDESET_BASE
-        movs    r0, #14                 @ VSYNC will be on pin 14
+        mov     r0, r4                  @ GPIO pin on which the VSYNC will appear
         lsls    r0, #10                 @ SIDESET_BASE_BITS
         orrs    r2, r2, r0              @ control bits
 
@@ -227,14 +227,14 @@ vsync_gen_init:
         bl      setup_pio_clkdiv
 
         @ 5) Init GPIO
-        movs    r0, #14                 @ GPIO 14
+        mov     r0, r4
         movs    r1, #6                  @ Funcsel: PIO0
         bl      GPIO_function_select
 
         @ 6) Set consecutive pindirs to output
         movs    r0, #0
         movs    r1, #1
-        movs    r2, #14
+        mov     r2, r4
         movs    r3, #1
         bl      set_consecutive_pindirs_out
 
@@ -292,7 +292,8 @@ rgb_gen_init:
         mov     r1, r4
         lsls    r1, #5                  @ SET_BASE_BITS
         orrs    r2, r0, r1              @ control bits
-        ldr     r0, =0x600010           @ OUT_COUNT_BITS and OUT_BASE_BITS
+        ldr     r0, =0x600000           @ OUT_COUNT_BITS
+        orrs    r0, r0, r4              @ OUT_BASE_BITS
         orrs    r2, r2, r0
 
         movs    r0, #0                  @ PIO BLOCK 0
@@ -300,27 +301,32 @@ rgb_gen_init:
         bl      setup_pio_pinctrl
 
         @ 5) Init GPIO
-        movs    r0, #16                 @ GPIO 16
+        mov     r0, r4                  @ GPIO n
         movs    r1, #6                  @ Funcsel: PIO0
         bl      GPIO_function_select
 
-        movs    r0, #17                 @ GPIO 17
+        mov     r0, r4                  @ GPIO n + 1
+        adds    r0, r0, #1
         movs    r1, #6                  @ Funcsel: PIO0
         bl      GPIO_function_select
 
-        movs    r0, #18                 @ GPIO 18
+        mov     r0, r4                  @ GPIO n + 2
+        adds    r0, r0, #2
         movs    r1, #6                  @ Funcsel: PIO0
         bl      GPIO_function_select
 
-        movs    r0, #19                 @ GPIO 19
+        mov     r0, r4                  @ GPIO n + 3
+        adds    r0, r0, #3
         movs    r1, #6                  @ Funcsel: PIO0
         bl      GPIO_function_select
 
-        movs    r0, #20                 @ GPIO 20
+        mov     r0, r4                  @ GPIO n + 4
+        adds    r0, r0, #4
         movs    r1, #6                  @ Funcsel: PIO0
         bl      GPIO_function_select
 
-        movs    r0, #21                 @ GPIO 21
+        mov     r0, r4                  @ GPIO n + 5
+        adds    r0, r0, #5
         movs    r1, #6                  @ Funcsel: PIO0
         bl      GPIO_function_select
 
@@ -328,7 +334,7 @@ rgb_gen_init:
         @ 6) Set consecutive pindirs to output
         movs    r0, #0
         movs    r1, #2
-        movs    r2, #16
+        mov     r2, r4
         movs    r3, #6
         bl      set_consecutive_pindirs_out
 
@@ -580,10 +586,10 @@ vsync_gen:
 
 #endif
 
-#ifdef DEBUG_VIDEO
+@ #ifdef DEBUG_VIDEO
 .section .vidram, "wa"
 .incbin "transformed_pico.raw"
-#endif
+@ #endif
 
 .section .data
 cursor_blink_time:      .word 0
