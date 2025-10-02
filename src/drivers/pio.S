@@ -355,7 +355,6 @@ setup_pio_execctrl:
         mov     r0, r5
         mov     r1, r4
         bl      atomic_set
-        @ str     r4, [r0]
         movs    r0, #0
 
         .exit_execctrl:
@@ -365,6 +364,38 @@ setup_pio_execctrl:
                 movs    r0, #1
                 pop     {r4, r5, pc}
 
+/**
+ * Setup PIO shiftctrl for specified state machine pp. PIO0_SHIFTCTRL
+ *  r0 - PIO BLOCK
+ *  r1 - state machine
+ *  r2 - control bits
+ *
+ * Returns:
+ *  0 - success
+ *  1 - failure, no such PIO or SM exists
+ */
+.thumb_func
+.global setup_pio_shiftctrl
+.align 4
+setup_pio_shiftctrl:
+        push    {r4, lr}
+        mov     r4, r2
+
+        movs    r2, SM0_SHIFTCTRL
+        bl      determine_pio_sm_register
+        cmp     r0, #0
+        beq     .exit_shiftctrl_failure
+        mov     r5, r0
+
+        str     r4, [r0]
+        movs    r0, #0
+
+        .exit_shiftctrl:
+                pop     {r4, pc}
+
+        .exit_shiftctrl_failure:
+                movs    r0, #1
+                pop     {r4, pc}
 
 /**
  * Clear current fifo for specified state machine and clear PIO FDEBUG register

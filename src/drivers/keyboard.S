@@ -132,7 +132,7 @@ init_keyboard:
 
 /**
  * Initialize interrupts and data input for keyboard with PS-2 connector.
- *  r0 - keyboard CLK pin, the consecutive pin MUST be DATA pin
+ *  r0 - keyboard DATA pin, the consecutive pin MUST be CLK pin
  */
 .thumb_func
 .global init_keyboard
@@ -154,9 +154,9 @@ init_keyboard:
         bl      load_pio_prog
 
         @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
-        movs    r0, #1
-        movs    r1, #0
-        ldr     r2, =0x9000             @ bottom wrap at 0, top wrap at 9
+        movs    r0, #1                  @ PIO BLOCK 1
+        movs    r1, #0                  @ State Machine 0
+        ldr     r2, =0xa000             @ bottom wrap at 0, top wrap at 10
         bl      setup_pio_execctrl
 
         @ 3) Set state machine pin ctrl
@@ -168,9 +168,15 @@ init_keyboard:
         bl      setup_pio_pinctrl
 
         @ 4) setup autopush
-        nop
+        movs    r0, #1
+        movs    r1, #0
+        ldr     r2, =0x850000           @ IN_SHIFTDIR (18 bit), AUTOPUSH (16 bit), PUSH_THRESH (24:20 bits)
+        bl      setup_pio_shiftctrl
 
         @ 5) setup interrupt
+        movs    r0, #15                 @ IRQ15 = PIO0_IRQ_0
+        ldr     r1, test_handler
+        bl      set_isr
 
         @ 6) Setup pins
         @ According to the SDK:
@@ -197,20 +203,29 @@ init_keyboard:
 
         pop     {r4, pc}
 
+.thumb_func
+.global test_handler
+.align 4
+test_handler:
+        bkpt    #0
+        bx      lr
+
 
 .align 4
 ps2_serial_rcv:
                         @       .wrap_target
-        .word 0x2021    @ 0:            wait   0 pin, 1
-        .word 0x20a1    @ 1:            wait   1 pin, 1
-        .word 0xe028    @ 2:            set    x, 8
-        .word 0x2021    @ 3:sample_data:wait   0 pin, 1
-        .word 0x4001    @ 4:            in     pins, 1
-        .word 0x20a1    @ 5:            wait   1 pin, 1
-        .word 0x0043    @ 6:            jmp    x--, sample_data
-        .word 0x20a1    @ 7:            wait   1 pin, 1
-        .word 0x20a1    @ 8:            wait   1 pin, 1
-        .word 0xc000    @ 9:            irq    0
+        .word 0x2021    @ 0:            wait    0 pin, 1
+        .word 0x20a1    @ 1:            wait    1 pin, 1
+        .word 0xe027    @ 2:            set     x, 7 @ FIXME: PROPER OPCODE!!!
+        .word 0x2021    @ 3:sample_data:wait    0 pin, 1
+        .word 0x4001    @ 4:            in      pins, 1
+        .word 0x20a1    @ 5:            wait    1 pin, 1
+        .word 0x0043    @ 6:            jmp     x--, sample_data
+        .word 0x2021    @ 7:            wait    0 pin, 1
+        .word 0x20a1    @ 8:            wait    1 pin, 1
+        .word 0x2021    @ 9:            wait    0 pin, 1
+        @ .word 0x20a1    @ 10:           wait    1 pin, 1
+        .word 0x22c1    @                       wait   1 irq, 1 [2]
                         @       .wrap
 
 #endif
