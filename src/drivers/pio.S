@@ -9,6 +9,7 @@
 .equ PIO_CTRL, 0x00
 .equ PIO_FDEBUG, 0x08
 .equ PIO_TXF0, 0x10
+.equ PIO_RXF0, 0x20
 .equ INSTR_MEM0_OFFSET, 0x48
 .equ INSTR_MAX_OFFSET, 0xc4
 
@@ -355,7 +356,6 @@ setup_pio_execctrl:
         mov     r0, r5
         mov     r1, r4
         bl      atomic_set
-        @ str     r4, [r0]
         movs    r0, #0
 
         .exit_execctrl:
@@ -365,6 +365,38 @@ setup_pio_execctrl:
                 movs    r0, #1
                 pop     {r4, r5, pc}
 
+/**
+ * Setup PIO shiftctrl for specified state machine pp. PIO0_SHIFTCTRL
+ *  r0 - PIO BLOCK
+ *  r1 - state machine
+ *  r2 - control bits
+ *
+ * Returns:
+ *  0 - success
+ *  1 - failure, no such PIO or SM exists
+ */
+.thumb_func
+.global setup_pio_shiftctrl
+.align 4
+setup_pio_shiftctrl:
+        push    {r4, lr}
+        mov     r4, r2
+
+        movs    r2, SM0_SHIFTCTRL
+        bl      determine_pio_sm_register
+        cmp     r0, #0
+        beq     .exit_shiftctrl_failure
+        mov     r5, r0
+
+        str     r4, [r0]
+        movs    r0, #0
+
+        .exit_shiftctrl:
+                pop     {r4, pc}
+
+        .exit_shiftctrl_failure:
+                movs    r0, #1
+                pop     {r4, pc}
 
 /**
  * Clear current fifo for specified state machine and clear PIO FDEBUG register
@@ -503,6 +535,33 @@ sm_put:
                 pop     {pc}
 
 /**
+ * Read a word from the fifo for specified sm
+ *  r0 - PIO BLOCK
+ *  r1 - state machine
+ */
+.thumb_func
+.global sm_get
+.align 4
+sm_get:
+        push    {lr}
+
+        bl      determine_pio_block_address
+        cmp     r0, #0
+        beq     .sm_get_failure
+        movs    r3, #4
+        muls    r3, r3, r1
+        adds    r0, r0, PIO_RXF0
+        adds    r0, r0, r3
+
+        ldr     r0, [r0]
+        pop     {pc}
+
+        .sm_get_failure:
+                movs    r0, #-1         @ FIXME: proper error handling would be beneficial...
+                pop     {pc}
+
+
+/**
  * Set State Machine Enabled
  *  r0 - PIO BLOCK
  *  r1 - state machine
@@ -582,6 +641,37 @@ set_multiple_sm_enabled:
         .exit_multiple_sm_enabled_failure:
                 movs    r0, #1
                 pop     {pc}
+
+/**
+ * Interrupt Enable for irq0
+ *  r0 - PIO block number
+ *  r1 - interrupt bit number
+ */
+.thumb_func
+.global setup_pio_inte
+.align 4
+setup_pio_inte:
+        push    {r4, lr}
+        mov     r4, r1
+
+        bl      determine_pio_block_address
+        cmp     r0, #0
+        beq     .exit_inte_failure
+
+        ldr     r1, IRQ0_INTE_OFFSET
+        adds    r0, r0, r1
+        movs    r1, #1
+        lsls    r1, r4
+        bl      atomic_set
+
+        .exit_inte_success:
+                movs    r0, #0
+                pop     {r4, pc}
+
+        .exit_inte_failure:
+                movs    r0, #1
+                pop     {r4, pc}
+
 
 /**
  * Determine specified PIO register
@@ -670,6 +760,8 @@ PIO2_BASE:      .word 0x50400000
 #endif
 
 instr_set_pindirs_out:          .word 0xe09f    @ set PINDIRS, 0x1f
+
+IRQ0_INTE_OFFSET:               .word 0x170
 
 .section .data
 .align 4

@@ -40,6 +40,7 @@
 .equ ARROW_RIGHT, 0x43
 .equ ARROW_LEFT, 0x44
 
+#ifdef KEYBOARD_PARALLEL_INTERFACE
 /**
  * Initialize interrupts and data input for keyboard with PS-2 connector.
  * r0 - keyboard interrupt pin
@@ -127,6 +128,104 @@ init_keyboard:
 
         pop     {r4, r5, pc}
 
+#else @KEYBOARD_SERIAL_INTERFACE
+
+/**
+ * Initialize interrupts and data input for keyboard with PS-2 connector.
+ *  r0 - keyboard DATA pin, the consecutive pin MUST be CLK pin
+ */
+.thumb_func
+.global init_keyboard
+.align 4
+init_keyboard:
+        push    {r4, lr}
+        mov     r4, r0
+
+        @ 0) Disable State Machine!!!
+        movs    r0, #1                  @ PIO BLOCK 1
+        movs    r1, #0                  @ State Machine 0
+        movs    r2, #0                  @ disable
+        bl      set_sm_enabled
+
+        @ 1) Load program
+        ldr     r0, =ps2_serial_rcv
+        movs    r1, #11                 @ Total of 11 words
+        movs    r2, #1                  @ PIO1
+        bl      load_pio_prog
+
+        @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
+        movs    r0, #1                  @ PIO BLOCK 1
+        movs    r1, #0                  @ State Machine 0
+        ldr     r2, =0xa000             @ bottom wrap at 0, top wrap at 10
+        bl      setup_pio_execctrl
+
+        @ 3) Set state machine pin ctrl
+        mov     r2, r4
+        lsls    r2, #15                 @ IN_BASE_BITS
+
+        movs    r0, #1                  @ PIO BLOCK 1
+        movs    r1, #0                  @ State Machine 0
+        bl      setup_pio_pinctrl
+
+        @ 4) setup autopush
+        movs    r0, #1
+        movs    r1, #0
+        ldr     r2, =0x850000           @ IN_SHIFTDIR (18 bit), AUTOPUSH (16 bit), PUSH_THRESH (24:20 bits)
+        bl      setup_pio_shiftctrl
+
+        @ 5) setup interrupt
+        movs    r0, #17                 @ IRQ17 = PIO1_IRQ_0
+        ldr     r1, =keyboard_interrupt_handler
+        bl      set_isr
+
+        movs    r0, #1                  @ PIO BLOCK 1
+        movs    r1, #0                  @ SM0_RXNEMPTY
+        bl      setup_pio_inte
+
+        @ 6) Setup pins
+        @ According to the SDK:
+        @       Note that, if your PIO program only needs the *input* from a given GPIO,
+        @       it's not necessary to select the PIO GPIO function, because PIO input
+        @       paths ignore the GPIO muxing. However, you must still configure the GPIO
+        @       pad itself for input.
+        mov     r0, r4
+        movs    r1, #2                  @ two pins affected
+        movs    r3, #1                  @ pull up
+        bl      init_multiple_pin_inputs
+
+        @ 7) PIO State Machine init - load and jump to first instruction
+        movs    r0, #1
+        movs    r1, #0
+        movs    r2, #0                  @ address begin
+        bl      clear_internal_and_jump
+
+        @ 8) Set state machine running
+        movs    r0, #1
+        movs    r1, #0
+        movs    r2, #1
+        bl      set_sm_enabled
+
+        pop     {r4, pc}
+
+.align 4
+ps2_serial_rcv:
+                        @       .wrap_target
+        .word 0x2021    @ 0:            wait    0 pin, 1
+        .word 0x20a1    @ 1:            wait    1 pin, 1
+        .word 0xe027    @ 2:            set     x, 7
+        .word 0x2021    @ 3:sample_data:wait    0 pin, 1
+        .word 0x4001    @ 4:            in      pins, 1
+        .word 0x20a1    @ 5:            wait    1 pin, 1
+        .word 0x0043    @ 6:            jmp     x--, sample_data
+        .word 0x2021    @ 7:            wait    0 pin, 1
+        .word 0x20a1    @ 8:            wait    1 pin, 1
+        .word 0x2021    @ 9:            wait    0 pin, 1
+        .word 0x20a1    @ 10:           wait    1 pin, 1
+                        @       .wrap
+
+#endif
+
+
 
 .thumb_func
 .align 4
@@ -134,6 +233,7 @@ keyboard_interrupt_handler:
         cpsid   i
         push    {lr}
 
+#ifdef KEYBOARD_PARALLEL_INTERFACE
         @ 1) determine INTR_n
         ldr     r1, IO_BANK0_BASE
         ldr     r0, =interrupt_pin
@@ -149,6 +249,7 @@ keyboard_interrupt_handler:
         ldr     r1, =edge_high_bit
         ldr     r1, [r1]
         str     r1, [r0]                                @ clear by setting INTR
+#endif
 
         @ 3) Proper handle
         ldr     r0, =keyboard_flags
@@ -232,7 +333,7 @@ keyboard_interrupt_handler:
                 tst     r2, r3
                 beq     .write_to_buffer
 
-//TODO: make version for ARCH_RP2040
+@TODO: make version for ARCH_RP2040
 #ifdef ARCH_RP2350
                 @ umlauts
                 cmp     r0, #65         @ 65->196, 97->228
@@ -453,7 +554,7 @@ clr_flag:
         bx      lr
 
 
-
+#ifdef KEYBOARD_PARALLEL_INTERFACE
 .thumb_func
 .align 4
 read_byte:
@@ -487,6 +588,25 @@ read_byte:
 
         mov     r0, r3
         pop     {r4, pc}
+
+#else @ KEYBOARD_SERIAL_INTERFACE
+
+.thumb_func
+.align 4
+read_byte:
+        push    {lr}
+
+        movs    r0, #1                  @ PIO BLOCK 1
+        movs    r1, #0                  @ SM 0
+        bl      sm_get
+
+        lsrs    r0, #24
+
+        ldr     r1, =scancode_read
+        strb    r0, [r1]
+        pop     {pc}
+
+#endif
 
 
 .thumb_func
