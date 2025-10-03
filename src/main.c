@@ -51,8 +51,8 @@ int main(void) {
         setup_internal_clk();
         uart_init();
         uart_clr_screen();
-        init_keyboard(15);
-        vga_init(13, 14, 16);
+        vga_init(8, 9, 2);
+        init_keyboard(14);
 
         init_pin_output(25);
         init_pin_output(11);

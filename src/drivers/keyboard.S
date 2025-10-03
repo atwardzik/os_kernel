@@ -170,7 +170,7 @@ init_keyboard:
         @ 4) setup autopush
         movs    r0, #1
         movs    r1, #0
-        ldr     r2, =0x850000           @ IN_SHIFTDIR (18 bit), AUTOPUSH (16 bit), PUSH_THRESH (24:20 bits)
+        ldr     r2, =0x80850000           @ IN_SHIFTDIR (18 bit), AUTOPUSH (16 bit), PUSH_THRESH (24:20 bits)
         bl      setup_pio_shiftctrl
 
         @ 5) setup interrupt
@@ -193,13 +193,22 @@ init_keyboard:
         movs    r3, #1                  @ pull up
         bl      init_multiple_pin_inputs
 
-        @ 7) PIO State Machine init - load and jump to first instruction
+        @ 7) set clock divisor
+        movs    r0, #1
+        movs    r1, #0
+        movs    r2, #125                @ 125 MHz / 125 = 1 MHz. Tbh this is an arbitrary value
+                                        @ when the clock was running too fast, the PIO program
+                                        @ sometimes went out of sync...
+        lsls    r2, #16
+        bl      setup_pio_clkdiv
+
+        @ 8) PIO State Machine init - load and jump to first instruction
         movs    r0, #1
         movs    r1, #0
         movs    r2, #0                  @ address begin
         bl      clear_internal_and_jump
 
-        @ 8) Set state machine running
+        @ 9) Set state machine running
         movs    r0, #1
         movs    r1, #0
         movs    r2, #1

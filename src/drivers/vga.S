@@ -586,10 +586,10 @@ vsync_gen:
 
 #endif
 
-@ #ifdef DEBUG_VIDEO
+#ifdef DEBUG_VIDEO
 .section .vidram, "wa"
 .incbin "transformed_pico.raw"
-@ #endif
+#endif
 
 .section .data
 cursor_blink_time:      .word 0
