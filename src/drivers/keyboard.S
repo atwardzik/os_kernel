@@ -149,7 +149,7 @@ init_keyboard:
 
         @ 1) Load program
         ldr     r0, =ps2_serial_rcv
-        movs    r1, #10                 @ Total of 10 words
+        movs    r1, #11                 @ Total of 11 words
         movs    r2, #1                  @ PIO1
         bl      load_pio_prog
 
@@ -174,9 +174,13 @@ init_keyboard:
         bl      setup_pio_shiftctrl
 
         @ 5) setup interrupt
-        movs    r0, #15                 @ IRQ15 = PIO0_IRQ_0
-        ldr     r1, test_handler
+        movs    r0, #17                 @ IRQ17 = PIO1_IRQ_0
+        ldr     r1, =test_handler
         bl      set_isr
+
+        movs    r0, #1                  @ PIO BLOCK 1
+        movs    r1, #0                  @ SM0_RXNEMPTY
+        bl      setup_pio_inte
 
         @ 6) Setup pins
         @ According to the SDK:
@@ -216,7 +220,7 @@ ps2_serial_rcv:
                         @       .wrap_target
         .word 0x2021    @ 0:            wait    0 pin, 1
         .word 0x20a1    @ 1:            wait    1 pin, 1
-        .word 0xe027    @ 2:            set     x, 7 @ FIXME: PROPER OPCODE!!!
+        .word 0xe027    @ 2:            set     x, 7
         .word 0x2021    @ 3:sample_data:wait    0 pin, 1
         .word 0x4001    @ 4:            in      pins, 1
         .word 0x20a1    @ 5:            wait    1 pin, 1
@@ -224,8 +228,7 @@ ps2_serial_rcv:
         .word 0x2021    @ 7:            wait    0 pin, 1
         .word 0x20a1    @ 8:            wait    1 pin, 1
         .word 0x2021    @ 9:            wait    0 pin, 1
-        @ .word 0x20a1    @ 10:           wait    1 pin, 1
-        .word 0x22c1    @                       wait   1 irq, 1 [2]
+        .word 0x20a1    @ 10:           wait    1 pin, 1
                         @       .wrap
 
 #endif

@@ -615,6 +615,37 @@ set_multiple_sm_enabled:
                 pop     {pc}
 
 /**
+ * Interrupt Enable for irq0
+ *  r0 - PIO block number
+ *  r1 - interrupt bit number
+ */
+.thumb_func
+.global setup_pio_inte
+.align 4
+setup_pio_inte:
+        push    {r4, lr}
+        mov     r4, r1
+
+        bl      determine_pio_block_address
+        cmp     r0, #0
+        beq     .exit_inte_failure
+
+        ldr     r1, IRQ0_INTE_OFFSET
+        adds    r0, r0, r1
+        movs    r1, #1
+        lsls    r1, r4
+        bl      atomic_set
+
+        .exit_inte_success:
+                movs    r0, #0
+                pop     {r4, pc}
+
+        .exit_inte_failure:
+                movs    r0, #1
+                pop     {r4, pc}
+
+
+/**
  * Determine specified PIO register
  *  r0 - PIO BLOCK
  *  r1 - state machine
@@ -701,6 +732,8 @@ PIO2_BASE:      .word 0x50400000
 #endif
 
 instr_set_pindirs_out:          .word 0xe09f    @ set PINDIRS, 0x1f
+
+IRQ0_INTE_OFFSET:               .word 0x170
 
 .section .data
 .align 4
