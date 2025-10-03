@@ -175,7 +175,7 @@ init_keyboard:
 
         @ 5) setup interrupt
         movs    r0, #17                 @ IRQ17 = PIO1_IRQ_0
-        ldr     r1, =test_handler
+        ldr     r1, =keyboard_interrupt_handler
         bl      set_isr
 
         movs    r0, #1                  @ PIO BLOCK 1
@@ -207,14 +207,6 @@ init_keyboard:
 
         pop     {r4, pc}
 
-.thumb_func
-.global test_handler
-.align 4
-test_handler:
-        bkpt    #0
-        bx      lr
-
-
 .align 4
 ps2_serial_rcv:
                         @       .wrap_target
@@ -241,6 +233,7 @@ keyboard_interrupt_handler:
         cpsid   i
         push    {lr}
 
+#ifdef KEYBOARD_PARALLEL_INTERFACE
         @ 1) determine INTR_n
         ldr     r1, IO_BANK0_BASE
         ldr     r0, =interrupt_pin
@@ -256,6 +249,7 @@ keyboard_interrupt_handler:
         ldr     r1, =edge_high_bit
         ldr     r1, [r1]
         str     r1, [r0]                                @ clear by setting INTR
+#endif
 
         @ 3) Proper handle
         ldr     r0, =keyboard_flags
@@ -560,7 +554,7 @@ clr_flag:
         bx      lr
 
 
-
+#ifdef KEYBOARD_PARALLEL_INTERFACE
 .thumb_func
 .align 4
 read_byte:
@@ -594,6 +588,25 @@ read_byte:
 
         mov     r0, r3
         pop     {r4, pc}
+
+#else @ KEYBOARD_SERIAL_INTERFACE
+
+.thumb_func
+.align 4
+read_byte:
+        push    {lr}
+
+        movs    r0, #1                  @ PIO BLOCK 1
+        movs    r1, #0                  @ SM 0
+        bl      sm_get
+
+        lsrs    r0, #24
+
+        ldr     r1, =scancode_read
+        strb    r0, [r1]
+        pop     {pc}
+
+#endif
 
 
 .thumb_func

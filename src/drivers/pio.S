@@ -9,6 +9,7 @@
 .equ PIO_CTRL, 0x00
 .equ PIO_FDEBUG, 0x08
 .equ PIO_TXF0, 0x10
+.equ PIO_RXF0, 0x20
 .equ INSTR_MEM0_OFFSET, 0x48
 .equ INSTR_MAX_OFFSET, 0xc4
 
@@ -532,6 +533,33 @@ sm_put:
         .sm_put_failure:
                 movs    r0, #1
                 pop     {pc}
+
+/**
+ * Read a word from the fifo for specified sm
+ *  r0 - PIO BLOCK
+ *  r1 - state machine
+ */
+.thumb_func
+.global sm_get
+.align 4
+sm_get:
+        push    {lr}
+
+        bl      determine_pio_block_address
+        cmp     r0, #0
+        beq     .sm_get_failure
+        movs    r3, #4
+        muls    r3, r3, r1
+        adds    r0, r0, PIO_RXF0
+        adds    r0, r0, r3
+
+        ldr     r0, [r0]
+        pop     {pc}
+
+        .sm_get_failure:
+                movs    r0, #-1         @ FIXME: proper error handling would be beneficial...
+                pop     {pc}
+
 
 /**
  * Set State Machine Enabled
