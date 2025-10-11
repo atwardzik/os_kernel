@@ -128,7 +128,7 @@ isr_svcall:
         .standard_syscalls:
                 push    {fp, lr}
                 mov     fp, sp
-                add     fp, fp, #8
+                add     fp, fp, #8                      @ move fp to be just before push
 
                 cmp     r7, READ_SVC
                 beq     .read_svc

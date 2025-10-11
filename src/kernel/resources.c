@@ -15,10 +15,28 @@ static struct {
 void set_process_wait_for_resource(const pid_t parent_process, const Resource resource) {
         change_process_state(parent_process, WAITING_FOR_RESOURCE);
 
-        if (resource == IO_KEYBOARD) {
+        if (resource == IO_KEYBOARD && process_blocked_on_io_keyboard.none == true) {
                 process_blocked_on_io_keyboard.process = parent_process;
                 process_blocked_on_io_keyboard.none = false;
         }
+}
+
+/**
+ * Find the process waiting for the resource with the highest priority
+ *
+ * @param resource code of the resource
+ * @return PID of the resource or PID_NO_SUCH_PROCESS=0xffff
+ */
+pid_t get_process_waiting_for_resource(const Resource resource) {
+        if (resource == IO_KEYBOARD && process_blocked_on_io_keyboard.none == false) {
+                const pid_t waiting_process = process_blocked_on_io_keyboard.process;
+                process_blocked_on_io_keyboard.none = true;
+
+                change_process_state(waiting_process, READY);
+                return waiting_process;
+        }
+
+        return PID_NO_SUCH_PROCESS;
 }
 
 void notify_resource(const Resource resource, const void *data) {

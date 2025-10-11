@@ -116,6 +116,9 @@ block_on_resource:
                 str     r2, [r0, #-4]!                  @ stack is full descending
                 cmp     r1, sp                          @
                 bne     .copy_stack_frame               @
+
+        mov     sp, fp                                  @ clear MSP -
+
         @ Save full current kernel state, EXC_RETURN is not needed, as it is stored on the stack already
         @ and control register is not needed as well, as we are already in handler mode
         @ r0-r3  are not needed either, as we expect return value there
@@ -156,8 +159,54 @@ signal_resource:
         tst     r3, #1                  @ 1 = unprivileged
         beq     .kernel_mode_return
 
-        @ restore context of a waiting process
+        @ save current process
+        push    {r0, r1}
+
+        save_state
+
+        bl      update_process
+
+        @ restore context of a kernel that was when the waiting process gave up control
+        ldr     r2, =resource_ptr
+        str     r0, [r2]
+
+        mov     r0, r1                                  @ resource code
+        bl      get_process_waiting_for_resource
+        mov     r4, r0                                  @ save pid
+        movs    r1, #1                                  @ pstate = RUNNING
+        bl      change_process_state
+        mov     r0, r4                                  @ restore pid
+        bl      scheduler_get_process_stack
+
+        @ with psp in r0, we can restore kernel stack (the opposite of block_on_resource)
+        ldmia   r0, {r4-r11}                            @ restore higher registers (r11 is fp)
+        ldr     r1, [r0, #0x24]
+        mov     lr, r1                                  @ restore LR
+
+        ldr     r2, =saved_pc
+        ldr     r1, [r0, #0x28]                         @ get return point of the kernel mode
+        str     r1, [r2]
+
+        ldr     r1, [r0, #0x2c]
+        msr     PSR, r1
+
+        adds    r0, r0, #(12 * 4)
+        mrs     r1, msp
+        .restore_stack_frame:
+                ldr     r2, [r0, #4]!
+                str     r2, [r1, #4]!                   @ copy from PSP to MSP
+                cmp                                     @ TODO: how to get how many words were saved on the stack?
+
+
+        ldr     r0, =resource_ptr
+        ldr     r0, [r0]
+        ldr     r1, =saved_pc
+        ldr     pc, [r1]
         bkpt    #0
 
         .kernel_mode_return:
                 bx      lr
+
+.section .data
+resource_ptr:   .word 0
+saved_pc:       .word 0

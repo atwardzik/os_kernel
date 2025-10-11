@@ -22,11 +22,11 @@
  */
 
 enum State {
-        NEW,
-        RUNNING,
-        READY,
-        WAITING_FOR_RESOURCE,
-        TERMINATED,
+        NEW                  = 0,
+        RUNNING              = 1,
+        READY                = 2,
+        WAITING_FOR_RESOURCE = 3,
+        TERMINATED           = 4,
 };
 
 // typedef unsigned int pid_t;
@@ -40,6 +40,8 @@ struct Process {
         unsigned int priority_level;
         size_t allocated_memory;
 };
+
+constexpr pid_t PID_NO_SUCH_PROCESS = 0xffff;
 
 void scheduler_init(void);
 

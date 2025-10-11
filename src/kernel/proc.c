@@ -59,7 +59,6 @@ pid_t scheduler_get_current_process() {
 
 void **scheduler_get_process_stack(const pid_t current_process) {
         size_t index = 0;
-        //TODO: determine task importance, also by implementing priority queue
         while (scheduler.processes[index].pid != current_process) {
                 index += 1;
 
@@ -88,9 +87,13 @@ void *get_next_process() {
         return scheduler.processes[current_index].pstack;
 }
 
-void *update_process_and_get_next(void *psp) {
+void update_process(void *psp) {
         scheduler.processes[current_index].pstate = READY;
         scheduler.processes[current_index].pstack = psp;
+}
+
+void *update_process_and_get_next(void *psp) {
+        update_process(psp);
 
         return get_next_process();
 }

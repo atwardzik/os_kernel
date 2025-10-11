@@ -5,14 +5,14 @@
 #include "drivers/time.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
+#include "kernel/file.h"
 #include "kernel/memory.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
-#include "kernel/file.h"
 
-#include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 void proc0(void) {
