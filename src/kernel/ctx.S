@@ -121,7 +121,7 @@ block_on_resource:
         mov     r2, sp
         sub     r1, r1, r2                              @ calculate how many words were saved
         mov     sp, fp                                  @ clear MSP
-        str     r1, [r0, #-4]!                          @ save stack words counter
+        mov     fp, r1
 
         @ Save full current kernel state, EXC_RETURN is not needed, as it is stored on the stack already
         @ and control register is not needed as well, as we are already in handler mode
@@ -137,6 +137,7 @@ block_on_resource:
         mov     r1, lr                                  @  where does the process return - CURRENT LR
         str     r1, [r0, #0x24]                         @
         ldr     r1, =.syscall_block_return_point        @  return to THIS FUNCTION
+        adds    r1, r1, #1                              @  THUMB_BIT - we will be jumping to this location & we have T32
         str     r1, [r0, #0x28]                         @
         mrs     r1, PSR
         str     r1, [r0, #0x2c]
@@ -152,6 +153,7 @@ block_on_resource:
 
         .syscall_block_return_point:
                 @ as we return here the pointer to the resource is already in r0
+                nop
                 pop    {pc}
 
 
@@ -197,7 +199,7 @@ signal_resource:
         msr     PSR, r1
 
         adds    r0, r0, #(12 * 4)
-        ldr     r3, [r0], #4
+        mov     r3, fp                                  @ fp was saved as a relative value
         mrs     r1, msp
         .restore_stack_frame:
                 ldr     r2, [r0], #4
@@ -206,7 +208,7 @@ signal_resource:
                 cmp     r3, #0                          @ TODO: how to get how many words were saved on the stack?
                 bne     .restore_stack_frame
 
-        msr     msp, r1
+        mov     fp, r1
 
         ldr     r0, =resource_ptr
         ldr     r0, [r0]
