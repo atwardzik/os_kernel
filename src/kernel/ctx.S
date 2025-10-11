@@ -129,7 +129,7 @@ block_on_resource:
         @        0x2c            0x28  0x24       0x20      0x00
         @
         subs    r0, r0, #(12 * 4)                       @  total number of registers to be stored
-        stmdb   r0, {r4-r11}                            @  save higher registers
+        stmia   r0, {r4-r11}                            @  save higher registers
         mov     r1, lr                                  @  where does the process return - CURRENT LR
         str     r1, [r0, #0x24]                         @
         ldr     r1, =.syscall_block_return_point        @  return to THIS FUNCTION
@@ -167,6 +167,7 @@ signal_resource:
         bl      update_process
 
         @ restore context of a kernel that was when the waiting process gave up control
+        pop     {r0, r1}
         ldr     r2, =resource_ptr
         str     r0, [r2]
 
@@ -177,6 +178,7 @@ signal_resource:
         bl      change_process_state
         mov     r0, r4                                  @ restore pid
         bl      scheduler_get_process_stack
+        ldr     r0, [r0]
 
         @ with psp in r0, we can restore kernel stack (the opposite of block_on_resource)
         ldmia   r0, {r4-r11}                            @ restore higher registers (r11 is fp)
@@ -195,7 +197,7 @@ signal_resource:
         .restore_stack_frame:
                 ldr     r2, [r0, #4]!
                 str     r2, [r1, #4]!                   @ copy from PSP to MSP
-                cmp                                     @ TODO: how to get how many words were saved on the stack?
+                @cmp                                     @ TODO: how to get how many words were saved on the stack?
 
 
         ldr     r0, =resource_ptr
