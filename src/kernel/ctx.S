@@ -117,7 +117,11 @@ block_on_resource:
                 cmp     r1, sp                          @
                 bne     .copy_stack_frame               @
 
-        mov     sp, fp                                  @ clear MSP -
+        mov     r1, fp
+        mov     r2, sp
+        sub     r1, r1, r2                              @ calculate how many words were saved
+        mov     sp, fp                                  @ clear MSP
+        str     r1, [r0, #-4]!                          @ save stack words counter
 
         @ Save full current kernel state, EXC_RETURN is not needed, as it is stored on the stack already
         @ and control register is not needed as well, as we are already in handler mode
@@ -193,12 +197,16 @@ signal_resource:
         msr     PSR, r1
 
         adds    r0, r0, #(12 * 4)
+        ldr     r3, [r0], #4
         mrs     r1, msp
         .restore_stack_frame:
-                ldr     r2, [r0, #4]!
-                str     r2, [r1, #4]!                   @ copy from PSP to MSP
-                @cmp                                     @ TODO: how to get how many words were saved on the stack?
+                ldr     r2, [r0], #4
+                str     r2, [r1], #4                    @ copy from PSP to MSP
+                subs    r3, #4
+                cmp     r3, #0                          @ TODO: how to get how many words were saved on the stack?
+                bne     .restore_stack_frame
 
+        msr     msp, r1
 
         ldr     r0, =resource_ptr
         ldr     r0, [r0]
