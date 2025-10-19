@@ -16,8 +16,8 @@ typedef uint8_t Resource;
  * Please note that this function <b>HAS</b> to be run in <b>handler mode</b>.
  * @return Pointer to the resource
  */
-void *block_on_resource(pid_t parent_process, Resource resource);
+void block_resource_on_condition(pid_t parent_process, Resource resource, bool (*condition)(void));
 
-void signal_resource(void *resource, Resource resource_type);
+pid_t get_resource_acquiring_process(void);
 
 #endif //OS_RESOURCES_H

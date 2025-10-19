@@ -1,3 +1,4 @@
+#include "tty.h"
 #include "drivers/divider.h"
 #include "drivers/gpio.h"
 #include "drivers/keyboard.h"
@@ -5,7 +6,7 @@
 #include "drivers/time.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
-#include "kernel/file.h"
+#include "fs/file.h"
 #include "kernel/memory.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
@@ -40,8 +41,9 @@ void proc2(void) {
         char buffer[255];
         while (1) {
                 printf(" > ");
-                gets(buffer);
+                // gets(buffer);
                 printf("\nResponse: %s\n", buffer);
+                delay_ms(1000);
         }
 }
 
@@ -57,7 +59,7 @@ int main(void) {
         init_pin_output(25);
         init_pin_output(11);
 
-        init_file_descriptors();
+        setup_keyboard_device_file();
         scheduler_init();
 
         setbuf(stdout, NULL);

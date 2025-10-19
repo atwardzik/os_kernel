@@ -3,8 +3,7 @@ add_library(kernel OBJECT
         proc.c
         ctx.S
         isr.S
-        file.c
-        printer.c
+        tty.c
 
         syscalls_newlib.c
         resources.c

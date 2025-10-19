@@ -96,6 +96,7 @@ init_process_stack_frame:
 
         bx      lr
 
+#if 0
 
 /**
  * void *block_on_resource(const pid_t parent_process, const Resource resource)
@@ -222,3 +223,5 @@ signal_resource:
 .section .data
 resource_ptr:   .word 0
 saved_pc:       .word 0
+
+#endif

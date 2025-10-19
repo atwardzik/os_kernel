@@ -7,6 +7,7 @@
 
 #include "memory.h"
 #include "syscalls.h"
+#include "fs/file.h"
 
 #include <stddef.h>
 #include <sys/types.h>
@@ -38,14 +39,15 @@ struct Process {
         pid_t pid;
         enum State pstate;
         unsigned int priority_level;
-        size_t allocated_memory;
+        // size_t allocated_memory;
+        struct Files files;
 };
 
 constexpr pid_t PID_NO_SUCH_PROCESS = 0xffff;
 
 void scheduler_init(void);
 
-pid_t scheduler_get_current_process(void);
+struct Process *scheduler_get_current_process(void);
 
 pid_t create_process(void (*process_entry_ptr)(void));
 

@@ -2,9 +2,9 @@
 // Created by Artur Twardzik on 26/08/2025.
 //
 
-#include "printer.h"
+#include "tty.h"
 #include "memory.h"
-#include "file.h"
+#include "../../include/fs/file.h"
 
 #include <sys/stat.h>
 #include <unistd.h>

@@ -5,7 +5,7 @@
 #ifndef OS_STDIO_H
 #define OS_STDIO_H
 
-#include "proc.h"
+#include "kernel/proc.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -33,5 +33,14 @@ void insert_byte(int c);
 int read_byte_with_cursor(void);
 
 int kread_byte_with_cursor(void);
+
+void setup_keyboard_device_file(void);
+
+void *get_current_keyboard_buffer_offset(void);
+
+int newline_buffered_at(void);
+
+[[deprecated]]
+struct Files create_tty_file_mock(void);
 
 #endif //OS_STDIO_H

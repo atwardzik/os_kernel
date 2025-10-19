@@ -41,7 +41,7 @@ _write:
         pop     {pc}
 
         .system_write:
-                bl      sys_write
+                bl      ksys_write
                 pop    {pc}
 
 .thumb_func

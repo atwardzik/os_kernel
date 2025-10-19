@@ -2,17 +2,19 @@
 // Created by Artur Twardzik on 21/08/2025.
 //
 
-#include "printer.h"
-#include "myctype.h"
+#include "tty.h"
+
 #include "escape_codes.h"
+#include "myctype.h"
+#include "resources.h"
+#include "drivers/keyboard.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
-#include "drivers/keyboard.h"
-#include "resources.h"
-
 
 #include <stddef.h>
 #include <string.h>
+
+//TODO: probably UART should be separated from screen terminal!
 
 
 extern uint8_t __screen_buffer_start__[];
@@ -22,9 +24,10 @@ uint8_t *const screen_buffer_ptr = __screen_buffer_start__;
 const uint8_t *const screen_length_ptr = __screen_buffer_length__;
 
 
-void raw_put_letter(const char letter, const unsigned int row_letter_position,
-                    const unsigned int column_letter_position,
-                    const ByteColorCode color_code
+void raw_put_letter(
+        const char letter, const unsigned int row_letter_position,
+        const unsigned int column_letter_position,
+        const ByteColorCode color_code
 ) {
         uart_set_cursor(row_letter_position, column_letter_position);
 
@@ -50,6 +53,7 @@ struct CharBuffer {
         struct SingleChar chars[BUFFER_HEIGHT][BUFFER_WIDTH];
 };
 
+//TODO: tty should be dynamic kernel "process", so that we can open multiple files
 static struct {
         size_t current_row_position;
         size_t current_column_position;
@@ -249,6 +253,9 @@ void write_byte(const int c) {
         else {
                 write_with_line_overflow_if_needed(c);
         }
+
+        //TODO: check?
+        // vga_update_cursor_position(ScreenWriter.current_row_position, ScreenWriter.current_column_position);
 }
 
 void insert_byte(const int c) {
@@ -276,8 +283,9 @@ int read_byte_with_cursor() {
         uart_set_cursor(row, column);
 
         clr_keyboard_buffer();
-        const pid_t parent_process = scheduler_get_current_process();
-        const int c = *(int *) (block_on_resource(parent_process, IO_KEYBOARD));
+        // const pid_t parent_process = scheduler_get_current_process();
+        // const int c = *(int *) (block_resource_on_condition(parent_process, IO_KEYBOARD, TODO));
+        const int c = 65;
 
         vga_clr_cursor();
         vga_set_cursor_off();
@@ -297,4 +305,163 @@ int kread_byte_with_cursor(void) {
         vga_set_cursor_off();
 
         return c;
+}
+
+
+static struct {
+        size_t length;
+        char buffer[] __attribute__((counted_by(length)));
+} *keyboard_device_file_stream;
+
+static int keyboard_buffer_final_length = 0;
+static int keyboard_buffer_current_position = 0;
+
+static bool signal_buffer_newline = false;
+
+void setup_keyboard_device_file() {
+        constexpr size_t buf_size = 1024;
+
+        keyboard_device_file_stream = kmalloc(
+                sizeof(*keyboard_device_file_stream)
+                + (buf_size - 1) * sizeof(char)
+        );
+
+        keyboard_device_file_stream->length = buf_size;
+}
+
+void *get_current_keyboard_buffer_offset() {
+        return keyboard_device_file_stream->buffer + keyboard_buffer_final_length;
+}
+
+static void insert_and_shift(const char c, const int pos_insert, const int len) {
+        int temp = pos_insert;
+        char next_char = *(keyboard_device_file_stream->buffer + temp);
+        *(keyboard_device_file_stream->buffer + temp) = c;
+
+        temp += 1;
+        while (temp < len) {
+                const char current_char = next_char;
+                next_char = *(keyboard_device_file_stream->buffer + temp);
+                *(keyboard_device_file_stream->buffer + temp) = current_char;
+
+                temp += 1;
+        }
+}
+
+static void delete_and_shift(const int pos_delete, const int len) {
+        int temp = pos_delete;
+
+        while (temp < len) {
+                *(keyboard_device_file_stream->buffer + temp) = *(keyboard_device_file_stream->buffer + temp + 1);
+
+                temp += 1;
+        }
+}
+
+void write_to_keyboard_buffer(const int c) {
+        if (c == BACKSPACE) {
+                if (keyboard_buffer_current_position) {
+                        keyboard_buffer_final_length -= 1;
+                        keyboard_buffer_current_position -= 1;
+                        delete_and_shift(keyboard_buffer_current_position, keyboard_buffer_final_length);
+
+                        write_byte(c);
+                }
+        }
+        else if (c == ARROW_LEFT) {
+                if (keyboard_buffer_current_position) {
+                        keyboard_buffer_current_position -= 1;
+                        write_byte(c);
+                }
+        }
+        else if (c == ARROW_RIGHT) {
+                if (keyboard_buffer_current_position < keyboard_buffer_final_length) {
+                        keyboard_buffer_current_position += 1;
+                        write_byte(c);
+                }
+        }
+        else {
+                keyboard_buffer_final_length += 1;
+                keyboard_buffer_current_position += 1;
+                if (c == ENDL) { //newline buffering
+                        *(keyboard_device_file_stream->buffer + keyboard_buffer_final_length - 1) = ENDL;
+
+                        signal_buffer_newline = true;
+                        return; //TODO: ASYNCHRONIOUSLY SIGNAL
+                }
+
+                if (keyboard_buffer_current_position < keyboard_buffer_final_length) {
+                        insert_and_shift(c, keyboard_buffer_current_position - 1, keyboard_buffer_final_length);
+
+                        insert_byte(c);
+                }
+                else {
+                        *(keyboard_device_file_stream->buffer + keyboard_buffer_current_position - 1) = (char) c;
+                }
+                write_byte(c);
+        }
+}
+
+int newline_buffered_at() {
+        if (signal_buffer_newline) {
+                const auto temp = keyboard_buffer_final_length;
+
+                signal_buffer_newline = false;
+                keyboard_buffer_final_length = 0;
+                keyboard_buffer_current_position = 0;
+
+                return temp;
+        }
+
+        return false;
+}
+
+//TODO: DELETE ALL THE BELOW CODE!!!!
+static ssize_t tty_read(struct File *, void *buf, size_t count, off_t file_offset) {
+        __asm__("bkpt #0");
+        char *ptr = (char *) buf;
+        void *stream_start = get_current_keyboard_buffer_offset();
+
+        int offset = 0;
+        while (offset < count && offset < file_offset) {
+                *(ptr + offset) = *(char *) (stream_start + offset);
+
+                offset += 1;
+        }
+
+        return offset;
+}
+
+static ssize_t tty_write(struct File *, void *buf, size_t count, off_t file_offset) {
+        char *ptr = (char *) buf;
+
+        for (int i = 0; i < count; i++) {
+                write_byte(*ptr++);
+        }
+
+        return count;
+}
+
+struct Files create_tty_file_mock() {
+        struct FileOperations *stdin_fop = kmalloc(sizeof(*stdin_fop));
+        stdin_fop->read = tty_read;
+        struct FileOperations *stdout_fop = kmalloc(sizeof(*stdout_fop));
+        stdout_fop->write = tty_write;
+
+        struct File *f_stdin = kmalloc(sizeof(*f_stdin));
+        f_stdin->f_pos = 0;
+        f_stdin->f_op = stdin_fop;
+
+        struct File *f_stdout = kmalloc(sizeof(*f_stdout));
+        f_stdout->f_pos = 0;
+        f_stdout->f_op = stdout_fop;
+
+        struct File **fdtable = (struct File **) kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
+        fdtable[0] = f_stdin;
+        fdtable[1] = f_stdout;
+        fdtable[2] = f_stdout;
+
+        const struct Files files = {3, fdtable};
+
+        return files;
 }

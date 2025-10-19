@@ -4,9 +4,12 @@
 
 #include "proc.h"
 
+#include "../../include/fs/file.h"
+#include "tty.h"
+#include "drivers/divider.h"
+
 #include <stdio.h>
 
-#include "drivers/divider.h"
 
 static constexpr size_t MAX_PROCESS_NUMBER = 20; //TODO: change to dynamic processes count
 static constexpr int HASH_MODULO = 3;            //has to be coprime with MAX_PROCESS_NUMBER
@@ -53,8 +56,8 @@ void scheduler_init(void) {
         scheduler.total_allocated_memory = 0;
 }
 
-pid_t scheduler_get_current_process() {
-        return scheduler.current_process;
+struct Process *scheduler_get_current_process() {
+        return &scheduler.processes[scheduler.current_process];
 }
 
 void **scheduler_get_process_stack(const pid_t current_process) {
@@ -109,7 +112,13 @@ pid_t create_process(void (*process_entry_ptr)(void)) {
         void *pstack = process_page + DEFAULT_PROCESS_SIZE - sizeof(size_t);
         init_process_stack_frame(&pstack, 0x0100'0000, (uint32_t) process_entry_ptr, 0xfffffffd);
 
-        const struct Process process = {process_page, pstack, pid, READY, DEFAULT_PROCESS_SIZE};
+
+        const struct Process process = {
+                process_page, pstack, pid,
+                READY,
+                DEFAULT_PROCESS_SIZE,
+                create_tty_file_mock()
+        };
         scheduler.processes[pid] = process;
 
         pid += 1;

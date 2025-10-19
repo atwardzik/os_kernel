@@ -529,8 +529,8 @@ keyboard_interrupt_handler:
 
         .exit_with_signal:
                 cpsie   i
-                movs    r1, IO_KEYBOARD
-                bl      signal_resource
+                ldr     r0, [r0]
+                bl      write_to_keyboard_buffer
                 pop     {pc}
 
 
