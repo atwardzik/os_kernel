@@ -6,10 +6,21 @@
 #define OS_RESOURCES_H
 
 #include "resources_codes.h"
+#include "proc.h"
 
 #include <sys/types.h>
 
 typedef uint8_t Resource;
+
+
+struct wait_queue_entry {
+        struct Process *waiting_process;
+        struct wait_queue_entry *next;
+};
+
+typedef struct wait_queue_entry *wait_queue_head_t;
+
+void add_to_wait_queue(wait_queue_head_t *wq_head, struct Process *process);
 
 /**
  * Blocks current process on a specified resource. \n

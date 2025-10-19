@@ -38,9 +38,11 @@ struct Process {
         void *pstack;
         pid_t pid;
         enum State pstate;
+        size_t allocated_memory;
         unsigned int priority_level;
-        // size_t allocated_memory;
         struct Files files;
+
+        void *kstack;
 };
 
 constexpr pid_t PID_NO_SUCH_PROCESS = 0xffff;
@@ -52,6 +54,12 @@ struct Process *scheduler_get_current_process(void);
 pid_t create_process(void (*process_entry_ptr)(void));
 
 void change_process_state(pid_t process, enum State state);
+
+void force_context_switch_on_syscall_entry(void);
+
+void clr_forcing_context_switch(void);
+
+bool is_context_switch_forced(void);
 
 pid_t fork(void);
 

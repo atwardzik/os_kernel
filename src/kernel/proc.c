@@ -4,18 +4,17 @@
 
 #include "proc.h"
 
-#include "../../include/fs/file.h"
 #include "tty.h"
-#include "drivers/divider.h"
+#include "fs/file.h"
 
 #include <stdio.h>
 
 
 static constexpr size_t MAX_PROCESS_NUMBER = 20; //TODO: change to dynamic processes count
-static constexpr int HASH_MODULO = 3;            //has to be coprime with MAX_PROCESS_NUMBER
-static constexpr int DELETED_TRACER = MAX_PROCESS_NUMBER * 2;
 
-static constexpr int DEFAULT_PROCESS_SIZE = 4 * 1024; //4 [KB]
+static constexpr int DEFAULT_PROCESS_SIZE = 8 * 1024; //8 [KB]
+
+static constexpr off_t DEFAULT_PROCESS_SP_OFFSET = 6 * 1024;
 
 #define THREAD_PSP_CODE ((void *) 0xfffffffd);
 
@@ -23,6 +22,8 @@ static struct {
         struct Process processes[MAX_PROCESS_NUMBER];
         size_t total_allocated_memory;
         pid_t current_process;
+
+        void *main_kernel_stack; //TODO: see if it is needed after processes start running
 } scheduler __attribute__ ((section (".data")));
 
 extern void init_process_stack_frame(void **initial_sp, uint32_t xpsr, uint32_t pc, uint32_t lr);
@@ -31,33 +32,27 @@ extern uint32_t save_state(void **process_stack);
 
 extern void recall_state(void *sp);
 
-
-static size_t calculate_pid_hash(pid_t pid, size_t i) {
-        static size_t pid_hash[MAX_PROCESS_NUMBER];
-        const size_t index = pid % 20;
-
-        if (!pid_hash[index] || pid_hash[index] == DELETED_TRACER || pid == 0) {
-                pid_hash[index] = pid;
-                return index;
-        }
-
-        return calculate_pid_hash(pid + HASH_MODULO * i, i + 1);
-}
-
-static size_t get_pid_position(pid_t pid) {
-        return calculate_pid_hash(pid, 0);
-}
-
 void scheduler_init(void) {
         for (size_t i = 0; i < MAX_PROCESS_NUMBER; ++i) {
                 scheduler.processes[i].ptr = nullptr;
         }
 
         scheduler.total_allocated_memory = 0;
+        scheduler.current_process = PID_NO_SUCH_PROCESS;
+
+        __asm__("mrs %0, msp\n\t" : "=r" (scheduler.main_kernel_stack));
 }
 
 struct Process *scheduler_get_current_process() {
         return &scheduler.processes[scheduler.current_process];
+}
+
+void **scheduler_get_current_process_kernel_stack(void) {
+        if (scheduler.current_process == PID_NO_SUCH_PROCESS) {
+                return nullptr;
+        }
+
+        return &scheduler.processes[scheduler.current_process].kstack;
 }
 
 void **scheduler_get_process_stack(const pid_t current_process) {
@@ -73,9 +68,9 @@ void **scheduler_get_process_stack(const pid_t current_process) {
         return &scheduler.processes[index].pstack;
 }
 
-static size_t current_index = 0;
 
 void *get_next_process() {
+        static size_t current_index = 0;
         do {
                 //TODO: determine task importance, also by implementing priority queue
                 current_index += 1;
@@ -84,19 +79,20 @@ void *get_next_process() {
                 }
         } while (scheduler.processes[current_index].pstate != READY);
 
-        scheduler.current_process = scheduler.processes[current_index].pid;
+        scheduler.current_process = current_index;
 
         scheduler.processes[current_index].pstate = RUNNING;
         return scheduler.processes[current_index].pstack;
 }
 
-void update_process(void *psp) {
-        scheduler.processes[current_index].pstate = READY;
-        scheduler.processes[current_index].pstack = psp;
+void update_process(void *psp, void *msp) {
+        scheduler.processes[scheduler.current_process].pstate = READY;
+        scheduler.processes[scheduler.current_process].pstack = psp;
+        scheduler.processes[scheduler.current_process].kstack = msp;
 }
 
-void *update_process_and_get_next(void *psp) {
-        update_process(psp);
+void *update_process_and_get_next(void *psp, void *msp) {
+        update_process(psp, msp);
 
         return get_next_process();
 }
@@ -109,17 +105,23 @@ pid_t create_process(void (*process_entry_ptr)(void)) {
         }
 
         void *process_page = kmalloc(DEFAULT_PROCESS_SIZE);
-        void *pstack = process_page + DEFAULT_PROCESS_SIZE - sizeof(size_t);
+        void *kstack = process_page + DEFAULT_PROCESS_SIZE - sizeof(size_t);
+        void *pstack = process_page + DEFAULT_PROCESS_SP_OFFSET - sizeof(size_t);
         init_process_stack_frame(&pstack, 0x0100'0000, (uint32_t) process_entry_ptr, 0xfffffffd);
 
 
         const struct Process process = {
-                process_page, pstack, pid,
-                READY,
-                DEFAULT_PROCESS_SIZE,
-                create_tty_file_mock()
+                .ptr = process_page,
+                .pstack = pstack,
+                .pid = pid,
+                .pstate = READY,
+                .allocated_memory = DEFAULT_PROCESS_SIZE,
+                .priority_level = 0,
+                .files = create_tty_file_mock(),
+                .kstack = kstack
         };
         scheduler.processes[pid] = process;
+        scheduler.total_allocated_memory += DEFAULT_PROCESS_SIZE;
 
         pid += 1;
         return process.pid;
@@ -133,6 +135,11 @@ void change_process_state(const pid_t process, const enum State state) {
         }
 }
 
+static bool context_switch_forced = false;
+void force_context_switch_on_syscall_entry(void) { context_switch_forced = true; }
+void clr_forcing_context_switch(void) { context_switch_forced = false; }
+bool is_context_switch_forced(void) { return context_switch_forced; }
+
 int __attribute__((naked)) exit() {
         __asm__("bkpt   #0");
 }
@@ -140,6 +147,8 @@ int __attribute__((naked)) exit() {
 extern void systick_enable(uint32_t cycles);
 
 void run_all_processes(void) {
+        scheduler.current_process = 0;
+        scheduler.processes[scheduler.current_process].pstate = RUNNING;
         __asm__("movs   r0, #0\n\r" // run process 0
                 "movs   r7, #255\n\r"
                 "svc    #0\n\r");

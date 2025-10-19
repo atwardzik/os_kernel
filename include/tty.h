@@ -5,9 +5,6 @@
 #ifndef OS_STDIO_H
 #define OS_STDIO_H
 
-#include "kernel/proc.h"
-
-#include <stddef.h>
 #include <stdint.h>
 
 constexpr uint8_t EOL = 0x00;
@@ -31,8 +28,6 @@ void write_byte(int c);
  * @param c Byte to be inserted
  */
 void insert_byte(int c);
-
-int read_byte_with_cursor(void);
 
 int kread_byte_with_cursor(void);
 

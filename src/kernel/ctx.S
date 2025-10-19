@@ -96,132 +96,14 @@ init_process_stack_frame:
 
         bx      lr
 
-#if 0
-
-/**
- * void *block_on_resource(const pid_t parent_process, const Resource resource)
- */
 .thumb_func
-.global block_on_resource
+.global context_switch
 .align 4
-block_on_resource:
-        push    {lr}
-        push    {r0}
-        bl      set_process_wait_for_resource
-        pop     {r3}                                    @ temporarily PID
-        @ Save kernel frame on psp
-        mrs     r0, psp
-        mov     r1, fp
-        .copy_stack_frame:
-                ldr     r2, [r1, #-4]!                  @ copy from MSP to PSP
-                str     r2, [r0, #-4]!                  @ stack is full descending
-                cmp     r1, sp                          @
-                bne     .copy_stack_frame               @
-
-        mov     r1, fp
-        mov     r2, sp
-        sub     r1, r1, r2                              @ calculate how many words were saved
-        mov     sp, fp                                  @ clear MSP
-        mov     fp, r1
-
-        @ Save full current kernel state, EXC_RETURN is not needed, as it is stored on the stack already
-        @ and control register is not needed as well, as we are already in handler mode
-        @ r0-r3  are not needed either, as we expect return value there
-        @
-        @  +------+----------------+----+----------+--------+
-        @  | xPSR | Return Address | lr | r12 (ip) | r11-r4 |        => 12
-        @  +------+----------------+----+----------+--------+
-        @        0x2c            0x28  0x24       0x20      0x00
-        @
-        subs    r0, r0, #(12 * 4)                       @  total number of registers to be stored
-        stmia   r0, {r4-r11}                            @  save higher registers
-        mov     r1, lr                                  @  where does the process return - CURRENT LR
-        str     r1, [r0, #0x24]                         @
-        ldr     r1, =.syscall_block_return_point        @  return to THIS FUNCTION
-        adds    r1, r1, #1                              @  THUMB_BIT - we will be jumping to this location & we have T32
-        str     r1, [r0, #0x28]                         @
-        mrs     r1, PSR
-        str     r1, [r0, #0x2c]
-        @ Update PSP in the struct
-        msr     psp, r0
-        mov     r0, r3                                  @ get back PID
-        bl      scheduler_get_process_stack
-        mrs     r1, psp
-        str     r1, [r0]
-        @ Force context switch
-        bl      get_next_process
-        recall_state
-
-        .syscall_block_return_point:
-                @ as we return here the pointer to the resource is already in r0
-                nop
-                pop    {pc}
-
-
-.thumb_func
-.global signal_resource
-.align 4
-signal_resource:
-        mrs     r3, CONTROL
-        tst     r3, #1                  @ 1 = unprivileged
-        beq     .kernel_mode_return
-
-        @ save current process
-        push    {r0, r1}
-
+context_switch:
         save_state
 
-        bl      update_process
+        bl      get_next_process
 
-        @ restore context of a kernel that was when the waiting process gave up control
-        pop     {r0, r1}
-        ldr     r2, =resource_ptr
-        str     r0, [r2]
+        recall_state
 
-        mov     r0, r1                                  @ resource code
-        bl      get_process_waiting_for_resource
-        mov     r4, r0                                  @ save pid
-        movs    r1, #1                                  @ pstate = RUNNING
-        bl      change_process_state
-        mov     r0, r4                                  @ restore pid
-        bl      scheduler_get_process_stack
-        ldr     r0, [r0]
-
-        @ with psp in r0, we can restore kernel stack (the opposite of block_on_resource)
-        ldmia   r0, {r4-r11}                            @ restore higher registers (r11 is fp)
-        ldr     r1, [r0, #0x24]
-        mov     lr, r1                                  @ restore LR
-
-        ldr     r2, =saved_pc
-        ldr     r1, [r0, #0x28]                         @ get return point of the kernel mode
-        str     r1, [r2]
-
-        ldr     r1, [r0, #0x2c]
-        msr     PSR, r1
-
-        adds    r0, r0, #(12 * 4)
-        mov     r3, fp                                  @ fp was saved as a relative value
-        mrs     r1, msp
-        .restore_stack_frame:
-                ldr     r2, [r0], #4
-                str     r2, [r1], #4                    @ copy from PSP to MSP
-                subs    r3, #4
-                cmp     r3, #0                          @ TODO: how to get how many words were saved on the stack?
-                bne     .restore_stack_frame
-
-        mov     fp, r1
-
-        ldr     r0, =resource_ptr
-        ldr     r0, [r0]
-        ldr     r1, =saved_pc
-        ldr     pc, [r1]
-        bkpt    #0
-
-        .kernel_mode_return:
-                bx      lr
-
-.section .data
-resource_ptr:   .word 0
-saved_pc:       .word 0
-
-#endif
+        bx      lr

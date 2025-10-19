@@ -121,14 +121,17 @@ isr_svcall:
                 mov     r4, lr
                 ldr     r0, =625000
                 bl      systick_enable
+
+                @ setup kernel stack for process
+                bl      scheduler_get_current_process_kernel_stack
+                ldr     r0, [r0]
+                msr     msp, r0
                 mov     lr, r4
 
                 bx      lr                              @ start proc0
 
         .standard_syscalls:
-                push    {fp, lr}
-                mov     fp, sp
-                add     fp, fp, #8                      @ move fp to be just before push
+                push    {lr}
 
                 cmp     r7, READ_SVC
                 beq     .read_svc
@@ -147,19 +150,7 @@ isr_svcall:
 
 
         .svcall_exit:
-                sub     fp, fp, #8
-                mov     sp, fp
-                pop     {fp, lr}
-
-                mrs     r1, psp
-
-                str     r0, [r1]                        @ save return value on the stack
-                                                        @ upon returning from this exception
-                                                        @ the stack frame is restored, at which
-                                                        @ r0 is at offset 0
-
-                bx      lr
-
+                pop     {pc}
 
 
 /**
@@ -170,6 +161,7 @@ isr_svcall:
 .align 4
 isr_pendsv:
         save_state
+        mrs     r1, msp
 
         bl      update_process_and_get_next
 
@@ -258,3 +250,7 @@ VTOR_OFFSET:            .word 0xed08
 NVIC_ICPR_OFFSET:       .word 0xe280        @ interrupt clear-pending register
 NVIC_ISER_OFFSET:       .word 0xe100        @ interrupt set-enable register
 NVIC_IPR_PEND_SV:       .word 0xe438        @ 14
+
+.section .data
+argument0:              .word 0
+argument1:              .word 1

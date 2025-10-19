@@ -6,12 +6,15 @@
 
 #include "escape_codes.h"
 #include "myctype.h"
-#include "resources.h"
 #include "drivers/keyboard.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
+#include "fs/file.h"
+#include "kernel/memory.h"
+#include "kernel/resources.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 //TODO: probably UART should be separated from screen terminal!
@@ -259,7 +262,6 @@ void write_byte(const int c) {
                 write_with_line_overflow_if_needed(c);
         }
 
-        //TODO: check?
         vga_update_cursor_position(ScreenWriter.current_row_position, ScreenWriter.current_column_position);
 }
 
@@ -281,23 +283,6 @@ void write_string(const char *str) {
         }
 }
 
-int read_byte_with_cursor() {
-        const auto row = ScreenWriter.current_row_position;
-        const auto column = ScreenWriter.current_column_position;
-        vga_setup_cursor(row, column, ScreenWriter.current_color_code, 500'000);
-        uart_set_cursor(row, column);
-
-        clr_keyboard_buffer();
-        // const pid_t parent_process = scheduler_get_current_process();
-        // const int c = *(int *) (block_resource_on_condition(parent_process, IO_KEYBOARD, TODO));
-        const int c = 65;
-
-        vga_clr_cursor();
-        vga_set_cursor_off();
-
-        return c;
-}
-
 int kread_byte_with_cursor(void) {
         const auto row = ScreenWriter.current_row_position;
         const auto column = ScreenWriter.current_column_position;
@@ -312,8 +297,10 @@ int kread_byte_with_cursor(void) {
         return c;
 }
 
-
+//TODO: remove and integrate with struct CharBuffer
 static struct {
+        wait_queue_head_t read_wait;
+
         size_t length;
         char buffer[] __attribute__((counted_by(length)));
 } *keyboard_device_file_stream;
@@ -332,6 +319,7 @@ void setup_keyboard_device_file() {
         );
 
         keyboard_device_file_stream->length = buf_size;
+        keyboard_device_file_stream->read_wait = nullptr;
 }
 
 void *get_current_keyboard_buffer_offset() {
@@ -392,7 +380,7 @@ void write_to_keyboard_buffer(const int c) {
                         *(keyboard_device_file_stream->buffer + keyboard_buffer_final_length - 1) = ENDL;
 
                         signal_buffer_newline = true;
-                        return; //TODO: ASYNCHRONIOUSLY SIGNAL
+                        return; //TODO: signal wait queue head
                 }
 
                 if (keyboard_buffer_current_position < keyboard_buffer_final_length) {
@@ -424,6 +412,9 @@ int newline_buffered_at() {
 
 //TODO: DELETE ALL THE BELOW CODE!!!!
 static ssize_t tty_read(struct File *, void *buf, size_t count, off_t file_offset) {
+        struct Process *process = scheduler_get_current_process();
+        add_to_wait_queue(&keyboard_device_file_stream->read_wait, process);
+
         __asm__("bkpt #0");
         char *ptr = (char *) buf;
         void *stream_start = get_current_keyboard_buffer_offset();

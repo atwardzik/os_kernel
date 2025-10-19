@@ -14,6 +14,31 @@ static struct {
         bool (*condition)(void);
 } process_blocked_on_io_keyboard = {true};
 
+void add_to_wait_queue(wait_queue_head_t *wq_head, struct Process *process) {
+        if (!wq_head) {
+                return;
+        }
+
+        struct wait_queue_entry *new_entry = kmalloc(sizeof(*new_entry));
+        new_entry->waiting_process = process;
+        new_entry->next = nullptr;
+
+        if (!*wq_head) {
+                *wq_head = new_entry;
+                return;
+        }
+
+        struct wait_queue_entry *entry = *wq_head;
+        while (entry->next) {
+                entry = entry->next;
+        }
+
+        entry->next = new_entry;
+
+        process->pstate = WAITING_FOR_RESOURCE;
+        force_context_switch_on_syscall_entry();
+}
+
 /**
  * Find the process waiting for the resource with the highest priority
  *
