@@ -59,6 +59,7 @@ int main(void) {
         init_pin_output(25);
         init_pin_output(11);
 
+        init_tty();
         setup_keyboard_device_file();
         scheduler_init();
 

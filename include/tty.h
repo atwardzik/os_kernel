@@ -20,6 +20,8 @@ constexpr uint8_t EMPTY_SPACE = 0x20;
 constexpr uint32_t ARROW_LEFT = 0x1b5b44;
 constexpr uint32_t ARROW_RIGHT = 0x1b5b43;
 
+void init_tty(void);
+
 void write_string(const char *str);
 
 void write_byte(int c);

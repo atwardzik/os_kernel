@@ -58,8 +58,9 @@ void vga_init(const uint32_t hsync_pin, const uint32_t vsync_pin, const uint32_t
         vga_start();
 }
 
-static void set_colors_from_escape(PhysicalColor *foreground_color, PhysicalColor *background_color,
-                                   const ByteColorCode escape_color_code
+static void set_colors_from_escape(
+        PhysicalColor *foreground_color, PhysicalColor *background_color,
+        const ByteColorCode escape_color_code
 ) {
         const uint8_t foreground_color_encoded = escape_color_code & FOREGROUND_COLOR_BITS;
         const bool foreground_color_light = escape_color_code & FOREGROUND_LIGHT_COLOR_BIT;
@@ -193,10 +194,11 @@ static void set_colors_from_escape(PhysicalColor *foreground_color, PhysicalColo
         }
 }
 
-void vga_put_physical_color_letter(const char letter, unsigned int row_letter_position,
-                                   unsigned int column_letter_position,
-                                   const PhysicalColor foreground_color,
-                                   const PhysicalColor background_color
+void vga_put_physical_color_letter(
+        const char letter, unsigned int row_letter_position,
+        unsigned int column_letter_position,
+        const PhysicalColor foreground_color,
+        const PhysicalColor background_color
 ) {
         const uint8_t *letter_lookup = font8x8[letter];
 
@@ -211,19 +213,20 @@ void vga_put_physical_color_letter(const char letter, unsigned int row_letter_po
                 for (size_t j = 0; j < 8; ++j) {
                         if (pixel_line & (1 << j)) {
                                 *(uint8_t *) (vidram_start_ptr + i * SCREEN_WIDTH + j + position) =
-                                                foreground_color;
+                                        foreground_color;
                         }
                         else {
                                 *(uint8_t *) (vidram_start_ptr + i * SCREEN_WIDTH + j + position) =
-                                                background_color;
+                                        background_color;
                         }
                 }
         }
 }
 
-void vga_put_byte_encoded_color_letter(const char letter, unsigned int row_letter_position,
-                                       unsigned int column_letter_position,
-                                       const ByteColorCode color_code
+void vga_put_byte_encoded_color_letter(
+        const char letter, unsigned int row_letter_position,
+        unsigned int column_letter_position,
+        const ByteColorCode color_code
 ) {
         PhysicalColor foreground_color;
         PhysicalColor background_color;
@@ -234,20 +237,21 @@ void vga_put_byte_encoded_color_letter(const char letter, unsigned int row_lette
                                       background_color);
 }
 
-void vga_put_pixel_map(const struct PixelMap *pixel_map, const unsigned int row_pixel_position,
-                       const unsigned int column_pixel_position
+void vga_put_pixel_map(
+        const struct PixelMap *pixel_map, const unsigned int row_pixel_position,
+        const unsigned int column_pixel_position
 ) {
         const unsigned int position = row_pixel_position * SCREEN_WIDTH + column_pixel_position;
 
         for (size_t i = 0; i < pixel_map->height; ++i) {
                 for (size_t j = 0; j < pixel_map->width; ++j) {
                         *(uint8_t *) (vidram_start_ptr + i * SCREEN_WIDTH + j + position) =
-                                        *(pixel_map->map + i * pixel_map->width + j);
+                                *(pixel_map->map + i * pixel_map->width + j);
                 }
         }
 }
 
-
+static bool cursor_on = false;
 static size_t cursor_row_position = 0;
 static size_t cursor_column_position = 0;
 static PhysicalColor current_cursor_foreground_color = PHYSICAL_WHITE;
@@ -287,7 +291,10 @@ static void vga_determine_letter_under_cursor() {
 }
 
 void vga_update_cursor_position(const unsigned int row, const unsigned int column) {
-        vga_clr_cursor();
+        if (cursor_on) {
+                vga_determine_letter_under_cursor();
+                vga_clr_cursor();
+        }
 
         cursor_row_position = row;
         cursor_column_position = column;
@@ -295,8 +302,9 @@ void vga_update_cursor_position(const unsigned int row, const unsigned int colum
         vga_determine_letter_under_cursor();
 }
 
-void vga_setup_cursor(const unsigned int row, const unsigned int column, const ByteColorCode color_code,
-                      const uint32_t us
+void vga_setup_cursor(
+        const unsigned int row, const unsigned int column, const ByteColorCode color_code,
+        const uint32_t us
 ) {
         PhysicalColor foreground_color;
         PhysicalColor background_color;
@@ -323,8 +331,6 @@ void vga_update_cursor_color(const ByteColorCode color_code) {
 }
 
 void vga_xor_cursor() {
-        static bool cursor_on = false;
-
         const auto row_position = cursor_row_position * FONT_HEIGHT + cursor_row_position;
         const auto col_position = cursor_column_position * FONT_WIDTH;
         if (cursor_on) {
@@ -342,6 +348,7 @@ void vga_clr_cursor() {
         const auto col_position = cursor_column_position * FONT_WIDTH;
 
         vga_put_pixel_map(&current_pixels_under_cursor_map, row_position, col_position);
+        cursor_on = false;
 }
 
 void vga_clr_all() {

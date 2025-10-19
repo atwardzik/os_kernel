@@ -388,11 +388,9 @@ keyboard_interrupt_handler:
                 adds    r3, r3, #1
                 strb    r3, [r2]
 
-                @ TODO: signal letter
-
                 adds    r3, r3, r1
                 subs    r0, r3, #1
-                b       .exit_with_signal
+                b       .exit_with_char
 
         .manage_escape_sequence:
                 ldr     r0, escape_flag
@@ -429,45 +427,19 @@ keyboard_interrupt_handler:
 
         .case_arrow_up:
                 movs    r0, ARROW_UP
-                b       .write_escape_code_sequence
+                b       .exit_with_escape_code
 
         .case_arrow_down:
                 movs    r0, ARROW_DOWN
-                b       .write_escape_code_sequence
+                b       .exit_with_escape_code
 
         .case_arrow_left:
                 movs    r0, ARROW_LEFT
-                b       .write_escape_code_sequence
+                b       .exit_with_escape_code
 
         .case_arrow_right:
                 movs    r0, ARROW_RIGHT
-                b       .write_escape_code_sequence
-
-        .write_escape_code_sequence:
-                ldr     r1, =keyboard_buffer
-                ldr     r2, =buffer_offset
-                ldrb    r2, [r2]
-
-                movs    r3, #0x1b
-                strb    r3, [r1, r2]
-                adds    r2, r2, #1
-
-                movs    r3, #0x5b
-                strb    r3, [r1, r2]
-                adds    r2, r2, #1
-
-                strb    r0, [r1, r2]
-                adds    r2, r2, #1
-
-                ldr     r0, =buffer_offset
-                strb    r2, [r0]
-
-
-                @ TODO: signal escape code sequence
-
-                adds    r2, r2, r1
-                subs    r0, r2, #3
-                b       .exit_with_signal
+                b       .exit_with_escape_code
 
         .shift_pressed:
                 ldr     r0, shift_flag
@@ -527,10 +499,19 @@ keyboard_interrupt_handler:
                 cpsie   i
                 pop     {pc}
 
-        .exit_with_signal:
+        .exit_with_escape_code:
+                cpsie   i
+                ldr     r1, =0x1b5b00
+                orrs    r0, r0, r1
+                bl      write_to_keyboard_buffer
+                bl      clr_keyboard_buffer
+                pop     {pc}
+
+        .exit_with_char:
                 cpsie   i
                 ldr     r0, [r0]
                 bl      write_to_keyboard_buffer
+                bl      clr_keyboard_buffer
                 pop     {pc}
 
 

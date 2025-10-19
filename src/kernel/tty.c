@@ -61,6 +61,10 @@ static struct {
         struct CharBuffer *buffer;
 } ScreenWriter = {0, 0, (BLACK << 4 | WHITE), (struct CharBuffer *) screen_buffer_ptr};
 
+void init_tty() {
+        vga_setup_cursor(0, 0, ScreenWriter.current_color_code, 500'000);
+}
+
 static void move_position_left() {
         if (ScreenWriter.current_column_position == 0) {
                 ScreenWriter.current_row_position -= 1;
@@ -229,6 +233,7 @@ void write_byte(const int c) {
                 return;
         }
 
+        vga_clr_cursor();
 
         if (c == ENDL) {
                 write_new_line();
@@ -255,7 +260,7 @@ void write_byte(const int c) {
         }
 
         //TODO: check?
-        // vga_update_cursor_position(ScreenWriter.current_row_position, ScreenWriter.current_column_position);
+        vga_update_cursor_position(ScreenWriter.current_row_position, ScreenWriter.current_column_position);
 }
 
 void insert_byte(const int c) {
@@ -394,6 +399,7 @@ void write_to_keyboard_buffer(const int c) {
                         insert_and_shift(c, keyboard_buffer_current_position - 1, keyboard_buffer_final_length);
 
                         insert_byte(c);
+                        return;
                 }
                 else {
                         *(keyboard_device_file_stream->buffer + keyboard_buffer_current_position - 1) = (char) c;
@@ -456,7 +462,7 @@ struct Files create_tty_file_mock() {
         f_stdout->f_pos = 0;
         f_stdout->f_op = stdout_fop;
 
-        struct File **fdtable = (struct File **) kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
+        struct File **fdtable = kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
         fdtable[0] = f_stdin;
         fdtable[1] = f_stdout;
         fdtable[2] = f_stdout;
