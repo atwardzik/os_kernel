@@ -5,8 +5,8 @@
 #ifndef OS_RESOURCES_H
 #define OS_RESOURCES_H
 
-#include "resources_codes.h"
 #include "proc.h"
+#include "resources_codes.h"
 
 #include <sys/types.h>
 
@@ -21,6 +21,12 @@ struct wait_queue_entry {
 typedef struct wait_queue_entry *wait_queue_head_t;
 
 void add_to_wait_queue(wait_queue_head_t *wq_head, struct Process *process);
+
+void remove_from_wait_queue(wait_queue_head_t *wq_head);
+
+void wait_event_interruptible(wait_queue_head_t *wq_head, bool (*condition)(void));
+
+void wake_up_interruptible(wait_queue_head_t *wq_head);
 
 /**
  * Blocks current process on a specified resource. \n

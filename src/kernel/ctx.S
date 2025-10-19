@@ -101,6 +101,7 @@ init_process_stack_frame:
 .align 4
 context_switch:
         save_state
+        mrs     r1, msp
 
         bl      get_next_process
 

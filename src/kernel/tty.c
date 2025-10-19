@@ -11,6 +11,7 @@
 #include "drivers/vga.h"
 #include "fs/file.h"
 #include "kernel/memory.h"
+#include "kernel/proc.h"
 #include "kernel/resources.h"
 
 #include <stddef.h>
@@ -410,10 +411,14 @@ int newline_buffered_at() {
         return false;
 }
 
+bool tty_is_ready() {
+        return signal_buffer_newline;
+}
+
 //TODO: DELETE ALL THE BELOW CODE!!!!
 static ssize_t tty_read(struct File *, void *buf, size_t count, off_t file_offset) {
-        struct Process *process = scheduler_get_current_process();
-        add_to_wait_queue(&keyboard_device_file_stream->read_wait, process);
+        //TODO: make a better condition
+        wait_event_interruptible(&keyboard_device_file_stream->read_wait, tty_is_ready);
 
         __asm__("bkpt #0");
         char *ptr = (char *) buf;

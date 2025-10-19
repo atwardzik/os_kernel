@@ -36,9 +36,34 @@ void add_to_wait_queue(wait_queue_head_t *wq_head, struct Process *process) {
         entry->next = new_entry;
 
         process->pstate = WAITING_FOR_RESOURCE;
-        force_context_switch_on_syscall_entry();
 }
 
+void remove_from_wait_queue(wait_queue_head_t *wq_head) {
+        if (!wq_head || !*wq_head) {
+                return;
+        }
+
+        struct wait_queue_entry *old_head = *wq_head;
+        *wq_head = old_head->next;
+
+        kfree(old_head);
+}
+
+void wait_event_interruptible(wait_queue_head_t *wq_head, bool (*condition)(void)) {
+        struct Process *process = scheduler_get_current_process();
+        add_to_wait_queue(wq_head, process);
+        process->pstate = WAITING_FOR_RESOURCE;
+
+        if (!condition()) {
+                //save state and context switch
+                context_switch();
+        }
+
+        process->pstate = RUNNING;
+        remove_from_wait_queue(wq_head);
+}
+
+void wake_up_interruptible(wait_queue_head_t *wq_head) {}
 /**
  * Find the process waiting for the resource with the highest priority
  *

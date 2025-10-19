@@ -41,7 +41,7 @@ void proc2(void) {
         char buffer[255];
         while (1) {
                 printf(" > ");
-                // gets(buffer);
+                gets(buffer);
                 printf("\nResponse: %s\n", buffer);
                 delay_ms(1000);
         }
