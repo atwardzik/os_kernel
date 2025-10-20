@@ -381,7 +381,8 @@ void write_to_keyboard_buffer(const int c) {
                         *(keyboard_device_file_stream->buffer + keyboard_buffer_final_length - 1) = ENDL;
 
                         signal_buffer_newline = true;
-                        return; //TODO: signal wait queue head
+                        wake_up_interruptible(&keyboard_device_file_stream->read_wait);
+                        return;
                 }
 
                 if (keyboard_buffer_current_position < keyboard_buffer_final_length) {
@@ -397,7 +398,7 @@ void write_to_keyboard_buffer(const int c) {
         }
 }
 
-int newline_buffered_at() {
+int newline_buffered_at() { //TODO: rename
         if (signal_buffer_newline) {
                 const auto temp = keyboard_buffer_final_length;
 
@@ -417,15 +418,15 @@ bool tty_is_ready() {
 
 //TODO: DELETE ALL THE BELOW CODE!!!!
 static ssize_t tty_read(struct File *, void *buf, size_t count, off_t file_offset) {
-        //TODO: make a better condition
         wait_event_interruptible(&keyboard_device_file_stream->read_wait, tty_is_ready);
 
-        __asm__("bkpt #0");
+        // __asm__("bkpt #0");
         char *ptr = (char *) buf;
-        void *stream_start = get_current_keyboard_buffer_offset();
+        const int stream_size = newline_buffered_at();
+        const void *stream_start = keyboard_device_file_stream->buffer;
 
         int offset = 0;
-        while (offset < count && offset < file_offset) {
+        while (offset < count && offset < stream_size) {
                 *(ptr + offset) = *(char *) (stream_start + offset);
 
                 offset += 1;

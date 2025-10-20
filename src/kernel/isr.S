@@ -53,8 +53,10 @@ _read:
         tst     r3, #1                  @ 1 - unprivileged
         beq     .system_read
 
+        push    {r7}
         movs    r7, #3                  @ syscall read
         svc     #0
+        pop     {r7}
         pop     {pc}
 
         .system_read:
@@ -89,6 +91,19 @@ _read:
         msr     psp, r0
 .endm
 
+.macro  recall_kernel_state
+        ldmia   r0!, {r2-r11}
+
+        mov     lr, r2
+        msr     CONTROL, r3
+        isb                             @ executes an Instruction Synchronization
+                                        @  Barrier after CONTROL updates
+        msr     msp, r0
+
+        bx      lr
+
+.endm
+
 
 /**
  * Syscall
@@ -119,11 +134,11 @@ isr_svcall:
 
                 @ enable systick
                 mov     r4, lr
-                ldr     r0, =625000
+                ldr     r0, =625000                     @ systick every 5[ms]
                 bl      systick_enable
 
                 @ setup kernel stack for process
-                bl      scheduler_get_current_process_kernel_stack
+                bl      scheduler_get_kernel_stack
                 ldr     r0, [r0]
                 msr     msp, r0
                 mov     lr, r4
@@ -132,6 +147,10 @@ isr_svcall:
 
         .standard_syscalls:
                 push    {lr}
+
+                push    {r0-r3}
+                bl      set_kernel_mode_flag
+                pop     {r0-r3}
 
                 cmp     r7, READ_SVC
                 beq     .read_svc
@@ -150,6 +169,13 @@ isr_svcall:
 
 
         .svcall_exit:
+                mrs     r1, psp
+                str     r0, [r1]                        @ save return value on the stack
+                                                        @ upon returning from this exception
+                                                        @ the stack frame is restored, at which
+                                                        @ r0 is at offset 0
+                bl      reset_kernel_mode_flag
+
                 pop     {pc}
 
 
@@ -165,9 +191,17 @@ isr_pendsv:
 
         bl      update_process_and_get_next
 
-        recall_state
+        mov     r4, r0
+        bl      is_in_kernel_mode
+        cmp     r0, #0
+        beq     .back_to_userspace
+        .back_to_kernelspace:
+                mov     r0, r4
+                recall_kernel_state
 
-        bx      lr
+        .back_to_userspace:
+                mov     r0, r4
+                recall_state
 
 
 

@@ -21,7 +21,7 @@ void proc0(void) {
 
         int i = 0;
         while (1) {
-                printf("proc0: i = %i\n", i++);
+                // printf("proc0: i = %i\n", i++);
                 delay_ms(1000);
         }
 }
@@ -41,7 +41,7 @@ void proc2(void) {
         char buffer[255];
         while (1) {
                 printf(" > ");
-                gets(buffer);
+                fgets(buffer, 255, stdin);
                 printf("\nResponse: %s\n", buffer);
                 delay_ms(1000);
         }

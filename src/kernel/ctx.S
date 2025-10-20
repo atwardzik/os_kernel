@@ -37,14 +37,14 @@
  *            0x64        ||       0x08         0x04          |-PSP
  */
 
-.macro  save_state
-        mrs     r0, psp
+.macro  save_kernel_state
+        mrs     r0, msp
 
         mov     r2, lr                  @ EXC_RETURN
         mrs     r3, CONTROL
         stmdb   r0!, {r2-r11}
 
-        msr     psp, r0                 @ save as a new stack pointer
+        msr     msp, r0                 @ save as a new stack pointer
                                         @ returns r0 - psp after all updates
 .endm
 
@@ -56,6 +56,19 @@
         isb                             @ executes an Instruction Synchronization
                                         @  Barrier after CONTROL updates
         msr     psp, r0
+
+        bx      lr
+
+.endm
+
+.macro  recall_kernel_state
+        ldmia   r0!, {r2-r11}
+
+        mov     lr, r2
+        msr     CONTROL, r3
+        isb                             @ executes an Instruction Synchronization
+                                        @  Barrier after CONTROL updates
+        msr     msp, r0
 
         bx      lr
 
@@ -97,14 +110,24 @@ init_process_stack_frame:
         bx      lr
 
 .thumb_func
-.global context_switch
+.global context_switch_from_kernel
 .align 4
-context_switch:
-        save_state
+context_switch_from_kernel:
+        save_kernel_state
+        mrs     r0, psp
         mrs     r1, msp
 
-        bl      get_next_process
+        bl      update_process_and_get_next
 
-        recall_state
+        mov     r4, r0
+        bl      is_in_kernel_mode
+        cmp     r0, #0
+        beq     .back_to_userspace
+        .back_to_kernelspace:
+                mov     r0, r4
+                recall_kernel_state
 
-        bx      lr
+        .back_to_userspace:
+                mov     r0, r4
+                recall_state
+

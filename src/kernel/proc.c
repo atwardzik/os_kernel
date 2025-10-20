@@ -47,7 +47,7 @@ struct Process *scheduler_get_current_process() {
         return &scheduler.processes[scheduler.current_process];
 }
 
-void **scheduler_get_current_process_kernel_stack(void) {
+void **scheduler_get_kernel_stack(void) {
         if (scheduler.current_process == PID_NO_SUCH_PROCESS) {
                 return nullptr;
         }
@@ -82,11 +82,21 @@ void *get_next_process() {
         scheduler.current_process = current_index;
 
         scheduler.processes[current_index].pstate = RUNNING;
+
+
+        if (scheduler.processes[current_index].kernel_mode) {
+                __asm__("msr    psp, %0" : : "r" (scheduler.processes[current_index].pstack));
+                return scheduler.processes[current_index].kstack;
+        }
+        __asm__("msr    msp, %0" : : "r" (scheduler.processes[current_index].kstack));
         return scheduler.processes[current_index].pstack;
 }
 
 void update_process(void *psp, void *msp) {
-        scheduler.processes[scheduler.current_process].pstate = READY;
+        if (!scheduler.processes[scheduler.current_process].kernel_mode) {
+                scheduler.processes[scheduler.current_process].pstate = READY;
+        }
+
         scheduler.processes[scheduler.current_process].pstack = psp;
         scheduler.processes[scheduler.current_process].kstack = msp;
 }
@@ -118,6 +128,7 @@ pid_t create_process(void (*process_entry_ptr)(void)) {
                 .allocated_memory = DEFAULT_PROCESS_SIZE,
                 .priority_level = 0,
                 .files = create_tty_file_mock(),
+                .kernel_mode = false,
                 .kstack = kstack
         };
         scheduler.processes[pid] = process;
@@ -127,6 +138,18 @@ pid_t create_process(void (*process_entry_ptr)(void)) {
         return process.pid;
 }
 
+bool is_in_kernel_mode() {
+        return scheduler.processes[scheduler.current_process].kernel_mode;
+}
+
+void set_kernel_mode_flag() {
+        scheduler.processes[scheduler.current_process].kernel_mode = true;
+}
+
+void reset_kernel_mode_flag() {
+        scheduler.processes[scheduler.current_process].kernel_mode = false;
+}
+
 void change_process_state(const pid_t process, const enum State state) {
         for (size_t i = 0; i < MAX_PROCESS_NUMBER; ++i) {
                 if (scheduler.processes[i].pid == process) {
@@ -134,11 +157,6 @@ void change_process_state(const pid_t process, const enum State state) {
                 }
         }
 }
-
-static bool context_switch_forced = false;
-void force_context_switch_on_syscall_entry(void) { context_switch_forced = true; }
-void clr_forcing_context_switch(void) { context_switch_forced = false; }
-bool is_context_switch_forced(void) { return context_switch_forced; }
 
 int __attribute__((naked)) exit() {
         __asm__("bkpt   #0");

@@ -14,7 +14,12 @@ static struct {
         bool (*condition)(void);
 } process_blocked_on_io_keyboard = {true};
 
-void add_to_wait_queue(wait_queue_head_t *wq_head, struct Process *process) {
+struct wait_queue_entry {
+        struct Process *waiting_process;
+        struct wait_queue_entry *next;
+};
+
+static void add_to_wait_queue(wait_queue_head_t *wq_head, struct Process *process) {
         if (!wq_head) {
                 return;
         }
@@ -38,15 +43,18 @@ void add_to_wait_queue(wait_queue_head_t *wq_head, struct Process *process) {
         process->pstate = WAITING_FOR_RESOURCE;
 }
 
-void remove_from_wait_queue(wait_queue_head_t *wq_head) {
+static struct Process *pop_from_wait_queue(wait_queue_head_t *wq_head) {
         if (!wq_head || !*wq_head) {
-                return;
+                return nullptr;
         }
 
         struct wait_queue_entry *old_head = *wq_head;
         *wq_head = old_head->next;
 
+        struct Process *head_process = old_head->waiting_process;
         kfree(old_head);
+
+        return head_process;
 }
 
 void wait_event_interruptible(wait_queue_head_t *wq_head, bool (*condition)(void)) {
@@ -55,15 +63,18 @@ void wait_event_interruptible(wait_queue_head_t *wq_head, bool (*condition)(void
         process->pstate = WAITING_FOR_RESOURCE;
 
         if (!condition()) {
-                //save state and context switch
-                context_switch();
+                context_switch_from_kernel();
         }
-
-        process->pstate = RUNNING;
-        remove_from_wait_queue(wq_head);
 }
 
-void wake_up_interruptible(wait_queue_head_t *wq_head) {}
+void wake_up_interruptible(wait_queue_head_t *wq_head) {
+        struct Process *head_process = pop_from_wait_queue(wq_head);
+
+        if (head_process) {
+                head_process->pstate = READY;
+        }
+}
+
 /**
  * Find the process waiting for the resource with the highest priority
  *

@@ -42,6 +42,7 @@ struct Process {
         unsigned int priority_level;
         struct Files files;
 
+        bool kernel_mode;
         void *kstack;
 };
 
@@ -55,13 +56,7 @@ pid_t create_process(void (*process_entry_ptr)(void));
 
 void change_process_state(pid_t process, enum State state);
 
-void context_switch(void);
-
-void force_context_switch_on_syscall_entry(void);
-
-void clr_forcing_context_switch(void);
-
-bool is_context_switch_forced(void);
+void context_switch_from_kernel(void);
 
 pid_t fork(void);
 
