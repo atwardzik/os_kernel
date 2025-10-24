@@ -130,3 +130,21 @@ context_switch_from_kernel:
         .back_to_userspace:
                 mov     r0, r4
                 recall_state
+
+.thumb_func
+.global force_context_switch
+.align 4
+force_context_switch:
+        bl      scheduler_get_next_process
+
+        mov     r4, r0
+        bl      is_in_kernel_mode
+        cmp     r0, #0
+        beq     .force_back_to_userspace
+        .force_back_to_kernelspace:
+                mov     r0, r4
+                recall_kernel_state
+
+        .force_back_to_userspace:
+                mov     r0, r4
+                recall_state

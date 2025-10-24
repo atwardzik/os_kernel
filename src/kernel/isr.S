@@ -8,20 +8,12 @@
 
 .syntax unified
 
-#include "syscalls.h"
+#include "syscall_codes.h"
 
 .equ USER_DEFINED_IVT_OFFSET, 0x40
 
 .extern __heap_start__
 .extern __heap_end__
-
-.thumb_func
-.global _exit
-.align 4
-_exit:
-        bkpt    #0
-        bx      lr
-
 
 .thumb_func
 .global _write
@@ -159,12 +151,25 @@ isr_svcall:
                 bl      set_kernel_mode_flag
                 pop     {r0-r3}
 
+                cmp     r4, EXIT_SVC
+                beq     .exit_svc
+
+                cmp     r4, SPAWN_SVC
+                beq     .spawn_svc
+
                 cmp     r4, READ_SVC
                 beq     .read_svc
 
                 cmp     r4, WRITE_SVC
                 beq     .write_svc
 
+        .exit_svc:
+                bl      sys_exit
+                b       .svcall_exit
+
+        .spawn_svc:
+                bl      sys_spawn_process
+                b       .svcall_exit
 
         .read_svc:
                 bl      sys_read
@@ -172,10 +177,6 @@ isr_svcall:
 
         .write_svc:
                 bl      sys_write
-                b       .svcall_exit
-
-        .exit_svc:
-                bl      sys_exit
                 b       .svcall_exit
 
         .svcall_exit:

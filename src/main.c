@@ -7,11 +7,11 @@
 #include "drivers/vga.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
+#include "kernel/syscalls.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <sys/unistd.h>
-
 
 void proc1(void) {
         printf("\n\x1b[96;40m[!]Welcome from proc1\x1b[0m\n");
@@ -39,14 +39,14 @@ void proc2_start(void) {
 
         int ret_value = proc2_main();
 
-        sys_exit(ret_value);
+        exit(ret_value);
 }
 
 void PATER_ADAMVS(void) {
         printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
 
-        sys_spawn_process(proc1, nullptr, nullptr, nullptr, nullptr);
-        sys_spawn_process(proc2_start, nullptr, nullptr, nullptr, nullptr);
+        spawn(proc1, nullptr, nullptr, nullptr, nullptr);
+        spawn(proc2_start, nullptr, nullptr, nullptr, nullptr);
 
         int i = 0;
         while (1) {

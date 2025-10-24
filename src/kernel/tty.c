@@ -434,14 +434,17 @@ struct Files create_tty_file_mock() {
         struct File *f_stdin = kmalloc(sizeof(*f_stdin));
         f_stdin->f_pos = 0;
         f_stdin->f_op = stdin_fop;
+        f_stdin->f_owner = 0;
 
         struct File *f_stdout = kmalloc(sizeof(*f_stdout));
         f_stdout->f_pos = 0;
         f_stdout->f_op = stdout_fop;
+        f_stdout->f_owner = 0;
 
         struct File *f_stderr = kmalloc(sizeof(*f_stderr));
         f_stderr->f_pos = 0;
         f_stderr->f_op = stdout_fop;
+        f_stderr->f_owner = 0;
 
         struct File **fdtable = kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
         fdtable[0] = f_stdin;

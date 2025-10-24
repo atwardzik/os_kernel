@@ -5,7 +5,7 @@ add_library(kernel OBJECT
         isr.S
         tty.c
 
-        syscalls_newlib.c
+        syscalls.c
         resources.c
 )
 

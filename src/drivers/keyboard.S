@@ -7,7 +7,6 @@
 .syntax unified
 
 
-#include "kernel/syscalls.h"
 #include "kernel/resources_codes.h"
 
 /**

@@ -6,7 +6,7 @@
 #define PROC_H
 
 #include "memory.h"
-#include "syscalls.h"
+#include "syscall_codes.h"
 #include "types.h"
 #include "fs/file.h"
 

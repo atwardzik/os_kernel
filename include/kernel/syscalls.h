@@ -1,24 +1,19 @@
 //
-// Created by Artur Twardzik on 05/01/2025.
+// Created by Artur Twardzik on 25/10/2025.
 //
 
-#ifndef SYSCALLS_H
-#define SYSCALLS_H
+#ifndef OS_SYSCALLS_H
+#define OS_SYSCALLS_H
 
-#define RESTART_SVC     0
-#define EXIT_SVC        1
-#define FORK_SVC        2
-#define READ_SVC        3
-#define WRITE_SVC       4
-#define OPEN_SVC        5
-#define CLOSE_SVC       6
-#define WAIT_PID_SVC    7
-#define GET_TIME_SVC    8
-#define GET_PID_SVC     9
-#define GET_PPID_SVC    10
-#define YIELD_SVC       11
-#define KILL            12
+#include "proc.h"
+#include "types.h"
 
-#define OS_INIT_SVC     255
+pid_t spawn(
+        void (*process_entry_ptr)(void),
+        const spawn_file_actions_t *file_actions,
+        const spawnattr_t *attrp,
+        char *const argv[],
+        char *const envp[]
+);
 
-#endif //SYSCALLS_H
+#endif //OS_SYSCALLS_H

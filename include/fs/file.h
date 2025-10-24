@@ -15,9 +15,10 @@ struct FileOperations;
 
 struct File {
         void *f_path;
-        const struct FileOperations *f_op;
+        struct FileOperations *f_op;
         unsigned int f_flags;
         off_t f_pos;
+        pid_t f_owner;
 #if 0
         spinlock_t f_lock;
 

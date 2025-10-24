@@ -66,7 +66,7 @@ void **scheduler_get_process_stack(const pid_t current_process) {
 }
 
 
-static void *scheduler_get_next_process() {
+void *scheduler_get_next_process() {
         static size_t current_index = 0;
 
         do {
@@ -205,7 +205,42 @@ pid_t create_process_init(void (*process_entry_ptr)(void)) {
         return process.pid;
 }
 
-int __attribute__((naked)) sys_exit(int status) { __asm__("bkpt   #0"); }
+extern void force_context_switch(void);
+
+int sys_exit(int status) { //and kill all children
+        struct Process *current = scheduler.current_process;
+
+        for (size_t i = 0; i < current->children_count; ++i) {
+                kill(current->children[i]->pid);
+        }
+
+        kill(current->pid);
+
+        __asm__("msr    msp, %0\n\r" : : "r"(scheduler.main_kernel_stack));
+        force_context_switch();
+}
+
+void kill(const pid_t pid) {
+        struct Process *current = &scheduler.processes[pid];
+        if (!current->ptr) {
+                return;
+        }
+
+        for (size_t i = 0; i < current->files.count; ++i) {
+                struct File *file = current->files.fdtable[i];
+
+                if (file->f_owner == current->pid) {
+                        kfree(file->f_op);
+                        kfree(file);
+                }
+        }
+
+        kfree(current->files.fdtable);
+        kfree(current);
+
+        const struct Process p = {};
+        scheduler.processes[pid] = p;
+}
 
 void run_process_init(void) {
         scheduler.current_process = &scheduler.processes[0];
