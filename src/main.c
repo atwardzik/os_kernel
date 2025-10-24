@@ -1,32 +1,20 @@
+#include "kstdio.h"
 #include "tty.h"
-#include "drivers/divider.h"
 #include "drivers/gpio.h"
 #include "drivers/keyboard.h"
-#include "drivers/pio.h"
 #include "drivers/time.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
-#include "fs/file.h"
-#include "kernel/memory.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
 
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/unistd.h>
 
-void PATER_ADAMVS(void) {
-        printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
-
-        int i = 0;
-        while (1) {
-                // printf("PATER ADAMVS DINUMERO: i = %i\n", i++);
-                delay_ms(1000);
-        }
-}
 
 void proc1(void) {
-        // printf("\n\x1b[96;40m[!]Welcome from proc1\x1b[0m\n");
+        printf("\n\x1b[96;40m[!]Welcome from proc1\x1b[0m\n");
 
         while (1) {
                 xor_pin(11);
@@ -35,12 +23,12 @@ void proc1(void) {
 }
 
 int proc2_main(void) {
-        // printf("\x1b[33;40m[!]Welcome from proc2\x1b[0m\n");
+        printf("\x1b[33;40m[!]Welcome from proc2\x1b[0m\n");
 
         char buffer[255];
 
         printf(" > ");
-        // fgets(buffer, 255, stdin);
+        fgets(buffer, 255, stdin);
         printf("\nResponse: %s\n", buffer);
 
         return 0;
@@ -54,6 +42,18 @@ void proc2_start(void) {
         sys_exit(ret_value);
 }
 
+void PATER_ADAMVS(void) {
+        printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
+
+        sys_spawn_process(proc1, nullptr, nullptr, nullptr, nullptr);
+        sys_spawn_process(proc2_start, nullptr, nullptr, nullptr, nullptr);
+
+        int i = 0;
+        while (1) {
+                printf("PATER ADAMVS DINUMERO: i = %i\n", i++);
+                delay_ms(1000);
+        }
+}
 
 int main(void) {
         reset_subsys();
@@ -72,7 +72,7 @@ int main(void) {
         __asm__("mrs    %0, msp" : "=r"(msp));
         scheduler_init(msp);
 
-        // setbuf(stdout, NULL);
+        setbuf(stdout, NULL);
 
 
         // FILE const *fp = fopen("test.txt", "r");
@@ -85,15 +85,12 @@ int main(void) {
 
         while (1) {
                 printf(" > ");
-                // gets(buffer);
                 fgets(buffer, 255, stdin);
                 buffer[strcspn(buffer, "\n")] = '\0';
                 if (strcmp(buffer, "r") == 0) {
                         printf("\n");
 
-                        create_process(PATER_ADAMVS);
-                        create_process(proc1);
-                        create_process(proc2_start);
+                        create_process_init(PATER_ADAMVS);
                         run_process_init();
                 }
                 else if (strcmp(buffer, "morcik") == 0) {

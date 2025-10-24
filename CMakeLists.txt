@@ -23,6 +23,7 @@ link_directories(${CMAKE_SOURCE_DIR} include tests)
 add_subdirectory(src/drivers)
 add_subdirectory(src/kernel)
 add_subdirectory(src/fs)
+add_subdirectory(src/kstdlib)
 
 add_executable(os
         src/start.S
@@ -30,6 +31,7 @@ add_executable(os
         $<TARGET_OBJECTS:drivers>
         $<TARGET_OBJECTS:kernel>
         $<TARGET_OBJECTS:fs>
+        $<TARGET_OBJECTS:kstdlib>
 )
 
 target_link_options(os PRIVATE

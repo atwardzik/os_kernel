@@ -5,12 +5,11 @@
 #include "tty.h"
 
 #include "escape_codes.h"
-#include "myctype.h"
+#include "kstdlib.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
 #include "fs/file.h"
 #include "kernel/memory.h"
-#include "kernel/proc.h"
 #include "kernel/resources.h"
 
 
@@ -440,10 +439,14 @@ struct Files create_tty_file_mock() {
         f_stdout->f_pos = 0;
         f_stdout->f_op = stdout_fop;
 
+        struct File *f_stderr = kmalloc(sizeof(*f_stderr));
+        f_stderr->f_pos = 0;
+        f_stderr->f_op = stdout_fop;
+
         struct File **fdtable = kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
         fdtable[0] = f_stdin;
         fdtable[1] = f_stdout;
-        fdtable[2] = f_stdout;
+        fdtable[2] = f_stderr;
 
         const struct Files files = {3, fdtable};
 

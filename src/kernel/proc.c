@@ -83,11 +83,11 @@ static void *scheduler_get_next_process() {
 
 
         if (scheduler.current_process->kernel_mode) {
-                __asm__("msr    psp, %0" : : "r"(scheduler.current_process->pstack));
+                __asm__("msr    psp, %0\n\r" : : "r"(scheduler.current_process->pstack));
                 return scheduler.current_process->kstack;
         }
         else {
-                __asm__("msr    msp, %0" : : "r"(scheduler.current_process->kstack));
+                __asm__("msr    msp, %0\n\r" : : "r"(scheduler.current_process->kstack));
                 return scheduler.current_process->pstack;
         }
 }
@@ -107,10 +107,71 @@ void *scheduler_update_process_and_get_next(void *psp, void *msp) {
         return scheduler_get_next_process();
 }
 
-pid_t create_process(void (*process_entry_ptr)(void)) {
-        static pid_t pid = 0;
 
-        if (pid == scheduler.max_processes) {
+bool is_in_kernel_mode() { return scheduler.current_process->kernel_mode; }
+
+void set_kernel_mode_flag() { scheduler.current_process->kernel_mode = true; }
+
+void reset_kernel_mode_flag() { scheduler.current_process->kernel_mode = false; }
+
+pid_t sys_spawn_process(
+        void (*process_entry_ptr)(void),
+        const spawn_file_actions_t *file_actions,
+        const spawnattr_t *attrp,
+        char *const argv[],
+        char *const envp[]
+) {
+        static pid_t pid = 1;
+
+        if (pid >= scheduler.max_processes) {
+                __asm__("bkpt   #0");
+        }
+
+        struct Process *current = scheduler.current_process;
+
+        void *process_page = kmalloc(DEFAULT_PROCESS_SIZE);
+        void *kstack = process_page + DEFAULT_PROCESS_SIZE - sizeof(size_t);
+        void *pstack = process_page + DEFAULT_PROCESS_SP_OFFSET - sizeof(size_t);
+        init_process_stack_frame(&pstack, 0x0100'0000, process_entry_ptr, THREAD_PSP_CODE);
+
+
+        struct File **fdtable = kmalloc(sizeof(struct File *) * current->files.count);
+        struct Files files = {current->files.count, fdtable};
+
+        for (size_t i = 0; i < current->files.count; ++i) {
+                files.fdtable[i] = current->files.fdtable[i];
+        }
+
+        struct Process process = {
+                .ptr = process_page,
+                .pstack = pstack,
+                .pid = pid,
+                .pstate = READY,
+                .allocated_memory = current->allocated_memory,
+                .priority_level = current->priority_level,
+                .files = files,
+                .parent = current,
+                .max_children_count = current->max_children_count - 1,
+                .children_count = 0,
+                .children = kmalloc(sizeof(struct Process *) * (current->max_children_count - 1)),
+                .kernel_mode = false,
+                .kstack = kstack
+        };
+        for (size_t i = 0; i < process.max_children_count; ++i) {
+                process.children[i] = nullptr;
+        }
+
+        scheduler.total_allocated_memory += process.allocated_memory;
+        scheduler.processes[pid] = process;
+        current->children[current->children_count] = &scheduler.processes[pid];
+
+        pid += 1;
+        return process.pid;
+}
+
+
+pid_t create_process_init(void (*process_entry_ptr)(void)) {
+        if (scheduler.current_process) {
                 __asm__("bkpt   #0");
         }
 
@@ -119,30 +180,30 @@ pid_t create_process(void (*process_entry_ptr)(void)) {
         void *pstack = process_page + DEFAULT_PROCESS_SP_OFFSET - sizeof(size_t);
         init_process_stack_frame(&pstack, 0x0100'0000, process_entry_ptr, THREAD_PSP_CODE);
 
-
-        const struct Process process = {
+        struct Process process = {
                 .ptr = process_page,
                 .pstack = pstack,
-                .pid = pid,
+                .pid = 0,
                 .pstate = READY,
                 .allocated_memory = DEFAULT_PROCESS_SIZE,
                 .priority_level = 0,
                 .files = create_tty_file_mock(),
+                .parent = nullptr,
+                .max_children_count = INITIAL_PROCESS_COUNT - 1,
+                .children_count = 0,
+                .children = kmalloc(sizeof(struct Process *) * (INITIAL_PROCESS_COUNT - 1)),
                 .kernel_mode = false,
                 .kstack = kstack
         };
-        scheduler.processes[pid] = process;
+        for (size_t i = 0; i < process.max_children_count; ++i) {
+                process.children[i] = nullptr;
+        }
+
+        scheduler.processes[0] = process;
         scheduler.total_allocated_memory += DEFAULT_PROCESS_SIZE;
 
-        pid += 1;
         return process.pid;
 }
-
-bool is_in_kernel_mode() { return scheduler.current_process->kernel_mode; }
-
-void set_kernel_mode_flag() { scheduler.current_process->kernel_mode = true; }
-
-void reset_kernel_mode_flag() { scheduler.current_process->kernel_mode = false; }
 
 int __attribute__((naked)) sys_exit(int status) { __asm__("bkpt   #0"); }
 

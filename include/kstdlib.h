@@ -1,9 +1,13 @@
 //
-// Created by Artur Twardzik on 25/08/2025.
+// Created by Artur Twardzik on 24/10/2025.
 //
 
-#ifndef OS_STDLIB_H
-#define OS_STDLIB_H
+#ifndef OS_KSTDLIB_H
+#define OS_KSTDLIB_H
+
+#include "types.h"
+
+#include <stdint.h>
 
 static inline char *itoa(int value, char *const str, const int base) {
         if (value == 0) {
@@ -34,4 +38,12 @@ static inline char *itoa(int value, char *const str, const int base) {
         return str;
 }
 
-#endif //OS_STDLIB_H
+static inline bool isprint(const char c) {
+        if (c >= 0x20 && c <= 0xff) {
+                return true;
+        }
+
+        return false;
+}
+
+#endif //OS_KSTDLIB_H

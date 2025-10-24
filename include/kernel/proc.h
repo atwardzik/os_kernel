@@ -28,8 +28,6 @@ enum State {
         TERMINATED           = 4,
 };
 
-// typedef unsigned int pid_t;
-
 // TODO: by using MPU forbid process to access system resources
 struct Process {
         void *ptr;
@@ -40,24 +38,46 @@ struct Process {
         unsigned int priority_level;
         struct Files files;
 
+        struct Process *parent;
+        size_t max_children_count;
+        size_t children_count;
+        struct Process **children;
+
         bool kernel_mode;
         void *kstack;
 };
+
+typedef struct SpawnFileActions spawn_file_actions_t;
+typedef struct SpawnAttr spawnattr_t;
 
 
 void scheduler_init(void *current_main_kernel_stack);
 
 struct Process *scheduler_get_current_process(void);
 
-struct Process *create_init_process();
-
-pid_t create_process(void (*process_entry_ptr)(void));
-
-void change_process_state(pid_t process, enum State state);
+pid_t create_process_init(void (*process_entry_ptr)(void));
 
 void context_switch_from_kernel(void);
 
-pid_t fork(void);
+/**
+ * Creates a new process, based on the current process.
+ * @param process_entry_ptr execution start pointer
+ * @param file_actions settings for copying fdtable
+ * @param attrp priority and permissions for spawned process
+ * @param argv arguments passed
+ * @param envp is an array of pointers to strings, conventionally of the form key=value,
+ *             which are passed as the environment of the new program
+ * @return positive for successful child creation, negative for error
+ */
+pid_t sys_spawn_process(
+        void (*process_entry_ptr)(void),
+        const spawn_file_actions_t *file_actions,
+        const spawnattr_t *attrp,
+        char *const argv[],
+        char *const envp[]
+);
+
+int sys_execve(const char *path, char *const argv[], char *const envp[]);
 
 int sys_exit(int status);
 
@@ -65,7 +85,6 @@ void kill(pid_t pid);
 
 void yield(void);
 
-[[deprecated("Debug only, use fork instead.")]]
 void run_process_init(void);
 
 #endif // PROC_H

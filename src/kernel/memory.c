@@ -155,6 +155,12 @@ size_t get_current_heap_size(void) {
         return Allocator.size + Allocator.count * sizeof(struct Chunk);
 }
 
+void kmemcpy(void *dst, const void *src, const size_t count) {
+        for (size_t i = 0; i < count; ++i) {
+                *((char *) dst + i) = *((const char *) src + i);
+        }
+}
+
 // void memset(void *dst, int value, size_t count) {
 //         for (size_t i = 0; i < count; ++i) {
 //                 *((size_t *) dst + i) = value;
