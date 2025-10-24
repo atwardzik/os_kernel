@@ -5,12 +5,10 @@
 #ifndef PROC_H
 #define PROC_H
 
-#include "fs/file.h"
 #include "memory.h"
 #include "syscalls.h"
-
-#include <stddef.h>
-#include <sys/types.h>
+#include "types.h"
+#include "fs/file.h"
 
 /*
  * The context switch routine has to:

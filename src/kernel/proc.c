@@ -6,8 +6,6 @@
 
 #include "tty.h"
 
-#include <stdio.h>
-
 
 static constexpr size_t INITIAL_PROCESS_COUNT = 20;
 

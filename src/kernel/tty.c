@@ -6,7 +6,6 @@
 
 #include "escape_codes.h"
 #include "myctype.h"
-#include "drivers/keyboard.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
 #include "fs/file.h"
@@ -14,9 +13,6 @@
 #include "kernel/proc.h"
 #include "kernel/resources.h"
 
-#include <stddef.h>
-#include <stdio.h>
-#include <string.h>
 
 //TODO: probably UART should be separated from screen terminal!
 
@@ -266,7 +262,7 @@ void write_byte(const int c) {
         vga_update_cursor_position(ScreenWriter.current_row_position, ScreenWriter.current_column_position);
 }
 
-void insert_byte(const int c) {
+static void insert_byte(const int c) {
         const auto row = ScreenWriter.current_row_position;
         const auto column = ScreenWriter.current_column_position;
 
@@ -275,27 +271,13 @@ void insert_byte(const int c) {
         write_byte(c);
 }
 
-void write_string(const char *str) {
+static void write_string(const char *str) {
         const char *c = str;
 
         while (*c != EOL) {
                 write_byte(*c);
                 c += 1;
         }
-}
-
-int kread_byte_with_cursor(void) {
-        const auto row = ScreenWriter.current_row_position;
-        const auto column = ScreenWriter.current_column_position;
-        vga_setup_cursor(row, column, ScreenWriter.current_color_code, 500'000);
-        uart_set_cursor(row, column);
-
-        const int c = keyboard_receive_char(); //spinlock
-
-        vga_clr_cursor();
-        vga_set_cursor_off();
-
-        return c;
 }
 
 //TODO: remove and integrate with struct CharBuffer
@@ -416,11 +398,9 @@ bool tty_is_ready() {
         return signal_buffer_newline;
 }
 
-//TODO: DELETE ALL THE BELOW CODE!!!!
-static ssize_t tty_read(struct File *, void *buf, size_t count, off_t file_offset) {
+ssize_t tty_read(struct File *, void *buf, const size_t count, off_t file_offset) {
         wait_event_interruptible(&keyboard_device_file_stream->read_wait, tty_is_ready);
 
-        // __asm__("bkpt #0");
         char *ptr = (char *) buf;
         const int stream_size = newline_buffered_at();
         const void *stream_start = keyboard_device_file_stream->buffer;
@@ -435,8 +415,8 @@ static ssize_t tty_read(struct File *, void *buf, size_t count, off_t file_offse
         return offset;
 }
 
-static ssize_t tty_write(struct File *, void *buf, size_t count, off_t file_offset) {
-        char *ptr = (char *) buf;
+ssize_t tty_write(struct File *, void *buf, const size_t count, off_t file_offset) {
+        const char *ptr = (const char *) buf;
 
         for (int i = 0; i < count; i++) {
                 write_byte(*ptr++);
@@ -445,6 +425,7 @@ static ssize_t tty_write(struct File *, void *buf, size_t count, off_t file_offs
         return count;
 }
 
+//TODO: manage or delete
 struct Files create_tty_file_mock() {
         struct FileOperations *stdin_fop = kmalloc(sizeof(*stdin_fop));
         stdin_fop->read = tty_read;

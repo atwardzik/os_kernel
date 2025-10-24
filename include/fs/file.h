@@ -5,10 +5,7 @@
 #ifndef OS_FILE_H
 #define OS_FILE_H
 
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-
+#include "types.h"
 
 struct Inode {};
 

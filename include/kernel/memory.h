@@ -5,7 +5,8 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 
-#include <stddef.h>
+#include "types.h"
+
 #include <stdint.h>
 
 extern uint8_t __heap_start__[];

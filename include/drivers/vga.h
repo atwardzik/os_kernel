@@ -5,9 +5,8 @@
 #ifndef KERNEL_VGA_H
 #define KERNEL_VGA_H
 
-#include <stddef.h>
-
 #include "escape_codes.h"
+#include "types.h"
 
 #include <stdint.h>
 

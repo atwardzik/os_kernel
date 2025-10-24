@@ -5,7 +5,9 @@
 #ifndef OS_STDIO_H
 #define OS_STDIO_H
 
-#include <stdint.h>
+#include "stdint.h"
+#include "types.h"
+#include "fs/file.h"
 
 constexpr uint8_t EOL = 0x00;
 constexpr uint8_t BACKSPACE = 0x08;
@@ -19,23 +21,19 @@ constexpr uint32_t ARROW_RIGHT = 0x1b5b43;
 
 void init_tty(void);
 
-void write_string(const char *str);
-
-void write_byte(int c);
-
-/**
- * Inserts byte at current position, while shifting the remaining characters one position to the right
- * @param c Byte to be inserted
- */
-void insert_byte(int c);
-
-int kread_byte_with_cursor(void);
+void write_byte(const int c);
 
 void setup_keyboard_device_file(void);
+
+void write_to_keyboard_buffer(int c);
 
 void *get_current_keyboard_buffer_offset(void);
 
 int newline_buffered_at(void);
+
+ssize_t tty_read(struct File *, void *buf, const size_t count, off_t file_offset);
+
+ssize_t tty_write(struct File *, void *buf, const size_t count, off_t file_offset);
 
 [[deprecated]]
 struct Files create_tty_file_mock(void);

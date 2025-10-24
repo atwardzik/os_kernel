@@ -4,8 +4,6 @@
 
 #include "memory.h"
 
-#include <math.h>
-
 //TODO: implement krealloc
 //TODO: implement defragmentation that will join all the chunks
 

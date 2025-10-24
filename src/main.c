@@ -11,14 +11,12 @@
 #include "kernel/proc.h"
 #include "kernel/resets.h"
 
-#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 void PATER_ADAMVS(void) {
-        printf("\n\x1b[92;40m[!] PATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS' FILIOS\x1b[0m\n");
+        printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
 
         int i = 0;
         while (1) {
@@ -28,7 +26,7 @@ void PATER_ADAMVS(void) {
 }
 
 void proc1(void) {
-        printf("\n\x1b[96;40m[!]Welcome from proc1\x1b[0m\n");
+        // printf("\n\x1b[96;40m[!]Welcome from proc1\x1b[0m\n");
 
         while (1) {
                 xor_pin(11);
@@ -37,15 +35,15 @@ void proc1(void) {
 }
 
 int proc2_main(void) {
-        printf("\x1b[33;40m[!]Welcome from proc2\x1b[0m\n");
+        // printf("\x1b[33;40m[!]Welcome from proc2\x1b[0m\n");
 
         char buffer[255];
 
         printf(" > ");
-        fgets(buffer, 255, stdin);
+        // fgets(buffer, 255, stdin);
         printf("\nResponse: %s\n", buffer);
 
-        return EXIT_SUCCESS;
+        return 0;
 }
 
 void proc2_start(void) {
@@ -74,7 +72,7 @@ int main(void) {
         __asm__("mrs    %0, msp" : "=r"(msp));
         scheduler_init(msp);
 
-        setbuf(stdout, NULL);
+        // setbuf(stdout, NULL);
 
 
         // FILE const *fp = fopen("test.txt", "r");

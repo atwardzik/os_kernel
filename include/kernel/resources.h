@@ -6,9 +6,8 @@
 #define OS_RESOURCES_H
 
 #include "proc.h"
-#include "resources_codes.h"
+#include "types.h"
 
-#include <sys/types.h>
 
 typedef uint8_t Resource;
 

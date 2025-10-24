@@ -2,14 +2,13 @@
 // Created by Artur Twardzik on 26/08/2025.
 //
 
-#include "tty.h"
 #include "memory.h"
-#include "../../include/fs/file.h"
+#include "tty.h"
+#include "fs/file.h"
 
-#include <sys/stat.h>
-#include <unistd.h>
 #include <errno.h>
-#include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 
 char *__env[1] = {0};

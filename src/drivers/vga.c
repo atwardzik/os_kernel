@@ -3,13 +3,11 @@
 //
 
 #include "drivers/vga.h"
-#include "font.h"
+
 #include "escape_codes.h"
+#include "font.h"
 
 #include <stdint.h>
-#include <stddef.h>
-#include <string.h>
-
 
 extern const uint8_t __vidram_start__[];
 const uint8_t *const vidram_start_ptr = __vidram_start__;

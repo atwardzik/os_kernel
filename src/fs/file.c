@@ -4,8 +4,8 @@
 
 #include "fs/file.h"
 
-#include "kernel/proc.h"
 #include "tty.h"
+#include "kernel/proc.h"
 
 
 int sys_open(const char *name, int flags, int mode) { return -1; }
