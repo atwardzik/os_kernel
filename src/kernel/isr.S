@@ -36,8 +36,7 @@ _write:
         tst     r3, #1                  @ 1 = unprivileged
         beq     .system_write
 
-        movs    r7, #4                  @ syscall write
-        svc     #0
+        svc     #4                      @ syscall write
         pop     {pc}
 
         .system_write:
@@ -53,10 +52,7 @@ _read:
         tst     r3, #1                  @ 1 - unprivileged
         beq     .system_read
 
-        push    {r7}
-        movs    r7, #3                  @ syscall read
-        svc     #0
-        pop     {r7}
+        svc     #3                      @ syscall read
         pop     {pc}
 
         .system_read:
@@ -106,15 +102,28 @@ _read:
 
 
 /**
- * Syscall
- *  r7          - syscall number
+ * Syscall        (svc #<syscall_number>)
  *  r0-r3       - arguments specified by syscalls
  */
 .thumb_func
 .global isr_svcall
 .align 4
 isr_svcall:
-        cmp     r7, OS_INIT_SVC
+        push    {r4, lr}
+        mrs     r4, CONTROL
+        tst     r4, #1                  @ 1 - unprivileged
+        itte    eq
+        mrseq   r4, msp
+        addeq   r4, r4, #8
+        mrsne   r4, psp
+
+        adds    r4, r4, #0x18           @ - offset for return address
+        ldr     r4, [r4]
+        subs    r4, r4, #2              @ - svc instruction is 2 bytes before, argument for svc is 2 byte before (little endian)
+        ldrb    r4, [r4]
+
+
+        cmp     r4, OS_INIT_SVC
         bne     .standard_syscalls
         .os_init_svc:
                 bl      scheduler_get_process_stack     @ gets a pointer to stack pointer
@@ -143,19 +152,17 @@ isr_svcall:
                 msr     msp, r0
                 mov     lr, r4
 
-                bx      lr                              @ start proc0
+                bx      lr                              @ start init (process with pid=0)
 
         .standard_syscalls:
-                push    {lr}
-
                 push    {r0-r3}
                 bl      set_kernel_mode_flag
                 pop     {r0-r3}
 
-                cmp     r7, READ_SVC
+                cmp     r4, READ_SVC
                 beq     .read_svc
 
-                cmp     r7, WRITE_SVC
+                cmp     r4, WRITE_SVC
                 beq     .write_svc
 
 
@@ -167,6 +174,9 @@ isr_svcall:
                 bl      sys_write
                 b       .svcall_exit
 
+        .exit_svc:
+                bl      sys_exit
+                b       .svcall_exit
 
         .svcall_exit:
                 mrs     r1, psp
@@ -176,7 +186,7 @@ isr_svcall:
                                                         @ r0 is at offset 0
                 bl      reset_kernel_mode_flag
 
-                pop     {pc}
+                pop     {r4, pc}
 
 
 /**
@@ -189,7 +199,7 @@ isr_pendsv:
         save_state
         mrs     r1, msp
 
-        bl      update_process_and_get_next
+        bl      scheduler_update_process_and_get_next
 
         mov     r4, r0
         bl      is_in_kernel_mode
@@ -284,7 +294,3 @@ VTOR_OFFSET:            .word 0xed08
 NVIC_ICPR_OFFSET:       .word 0xe280        @ interrupt clear-pending register
 NVIC_ISER_OFFSET:       .word 0xe100        @ interrupt set-enable register
 NVIC_IPR_PEND_SV:       .word 0xe438        @ 14
-
-.section .data
-argument0:              .word 0
-argument1:              .word 1

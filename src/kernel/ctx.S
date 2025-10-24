@@ -83,7 +83,7 @@
  * Additionally we could pass parameters to function in that manner TODO: check
  *
  *
- * void init_process_stack_frame(void **initial_sp, uint32_t xpsr, uint32_t return_address, uint32_t exc_return);
+ * void init_process_stack_frame(void **initial_sp, uint32_t xpsr, void *return_address, void *exc_return);
  */
 .thumb_func
 .global init_process_stack_frame
@@ -117,7 +117,7 @@ context_switch_from_kernel:
         mrs     r0, psp
         mrs     r1, msp
 
-        bl      update_process_and_get_next
+        bl      scheduler_update_process_and_get_next
 
         mov     r4, r0
         bl      is_in_kernel_mode
@@ -130,4 +130,3 @@ context_switch_from_kernel:
         .back_to_userspace:
                 mov     r0, r4
                 recall_state
-

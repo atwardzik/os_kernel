@@ -5,9 +5,9 @@
 #ifndef PROC_H
 #define PROC_H
 
+#include "fs/file.h"
 #include "memory.h"
 #include "syscalls.h"
-#include "fs/file.h"
 
 #include <stddef.h>
 #include <sys/types.h>
@@ -32,7 +32,7 @@ enum State {
 
 // typedef unsigned int pid_t;
 
-//TODO: by using MPU forbid process to access system resources
+// TODO: by using MPU forbid process to access system resources
 struct Process {
         void *ptr;
         void *pstack;
@@ -46,11 +46,12 @@ struct Process {
         void *kstack;
 };
 
-constexpr pid_t PID_NO_SUCH_PROCESS = 0xffff;
 
-void scheduler_init(void);
+void scheduler_init(void *current_main_kernel_stack);
 
 struct Process *scheduler_get_current_process(void);
+
+struct Process *create_init_process();
 
 pid_t create_process(void (*process_entry_ptr)(void));
 
@@ -60,13 +61,13 @@ void context_switch_from_kernel(void);
 
 pid_t fork(void);
 
-int exit(void);
+int sys_exit(int status);
 
 void kill(pid_t pid);
 
 void yield(void);
 
 [[deprecated("Debug only, use fork instead.")]]
-void run_all_processes(void);
+void run_process_init(void);
 
-#endif //PROC_H
+#endif // PROC_H

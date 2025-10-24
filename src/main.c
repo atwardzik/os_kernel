@@ -14,14 +14,15 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-void proc0(void) {
-        printf("\n\x1b[92;40m[!]Welcome from proc0\x1b[0m\n");
+void PATER_ADAMVS(void) {
+        printf("\n\x1b[92;40m[!] PATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS' FILIOS\x1b[0m\n");
 
         int i = 0;
         while (1) {
-                // printf("proc0: i = %i\n", i++);
+                // printf("PATER ADAMVS DINUMERO: i = %i\n", i++);
                 delay_ms(1000);
         }
 }
@@ -35,16 +36,24 @@ void proc1(void) {
         }
 }
 
-void proc2(void) {
+int proc2_main(void) {
         printf("\x1b[33;40m[!]Welcome from proc2\x1b[0m\n");
 
         char buffer[255];
-        while (1) {
-                printf(" > ");
-                fgets(buffer, 255, stdin);
-                printf("\nResponse: %s\n", buffer);
-                delay_ms(1000);
-        }
+
+        printf(" > ");
+        fgets(buffer, 255, stdin);
+        printf("\nResponse: %s\n", buffer);
+
+        return EXIT_SUCCESS;
+}
+
+void proc2_start(void) {
+        // setup crt
+
+        int ret_value = proc2_main();
+
+        sys_exit(ret_value);
 }
 
 
@@ -61,7 +70,9 @@ int main(void) {
 
         init_tty();
         setup_keyboard_device_file();
-        scheduler_init();
+        void *msp;
+        __asm__("mrs    %0, msp" : "=r"(msp));
+        scheduler_init(msp);
 
         setbuf(stdout, NULL);
 
@@ -82,10 +93,10 @@ int main(void) {
                 if (strcmp(buffer, "r") == 0) {
                         printf("\n");
 
-                        create_process(proc0);
+                        create_process(PATER_ADAMVS);
                         create_process(proc1);
-                        create_process(proc2);
-                        run_all_processes();
+                        create_process(proc2_start);
+                        run_process_init();
                 }
                 else if (strcmp(buffer, "morcik") == 0) {
                         printf("\n\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
