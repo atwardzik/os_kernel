@@ -10,31 +10,38 @@
 
 /**
  * All remaining registers must be saved to current process stack.
+ * On saving the usermode state we have to save registers on process stack pointer,
+ * however if we are in kernel mode, e.g. calling wait_event_interruptible() we
+ * must save on the kernel stack pointer (assigned to this process!)
  *
  * After interrupt of the current process lower registers are stored on the stack.
  * In order to switch the context properly, other registers must be saved as well.
  *
  * (Fig. 1) Exception Stack Frame Format after entering ISR:
+ * @code
  *  ++--------+-------++------+----------------+----+----------+-------+
- *  || s15-s0 | FPSCR || xPSR | Return Address | lr | r12 (ip) | r3-r0 |        => 25 registers / 8
+ *  || s15-s0 | FPSCR || xPSR | Return Address | lr | r12 (ip) | r3-r0 |        => 25 (FPU) or 8
  *  ++--------+-------++------+----------------+----+----------+-------+
  *  ||                ||                                               ^
  *  || if FPU present ||      |                |    |          |       |
  *  ||                ||     0x1c             0x18 0x14       0x10     |-PSP
+ * @endcode
  *
  * Please note the return address and link register.
  * During normal function call the return address is saved into the link register,
  * however, during exception a special EXC_RETURN (different in various exception scenarios)
  * value is loaded by hardware into lr to indicate return from EXCEPTION when it is loaded
- * into the PC. *That is why the return address is loaded into stack frame.*
+ * into the PC. <b>That is why the return address is loaded into stack frame.</b>
  *
  * (Fig. 2) Process stack after saving all registers by this method.
+ * @code
  *  +----------++---------++--------+------------+------------+
- *  | (Fig. 1) || s16-s31 || r11-r4 | CONTROL_NS | EXC_RETURN |                 => 25 + 26 = 51 registers / 10
+ *  | (Fig. 1) || s16-s31 || r11-r4 | CONTROL_NS | EXC_RETURN |                 => + 26 (FPU) or 10
  *  +----------++---------++--------+------------+------------+
  *             ||         ||                                  ^
  *             ||         ||        |            |            |
  *            0x64        ||       0x08         0x04          |-PSP
+ * @endcode
  */
 
 .macro  save_kernel_state
@@ -48,32 +55,16 @@
                                         @ returns r0 - psp after all updates
 .endm
 
-.macro  recall_state
-        ldmia   r0!, {r2-r11}
+.macro  save_state
+        mrs     r0, psp
 
-        mov     lr, r2
-        msr     CONTROL, r3
-        isb                             @ executes an Instruction Synchronization
-                                        @  Barrier after CONTROL updates
-        msr     psp, r0
+        mov     r2, lr                  @ EXC_RETURN
+        mrs     r3, CONTROL
+        stmdb   r0!, {r2-r11}
 
-        bx      lr
-
+        msr     psp, r0                 @ save as a new stack pointer
+                                        @ returns r0 - psp after all updates
 .endm
-
-.macro  recall_kernel_state
-        ldmia   r0!, {r2-r11}
-
-        mov     lr, r2
-        msr     CONTROL, r3
-        isb                             @ executes an Instruction Synchronization
-                                        @  Barrier after CONTROL updates
-        msr     msp, r0
-
-        bx      lr
-
-.endm
-
 
 /**
  * Initializes stack structure, cf. save_state and recall state.
@@ -110,41 +101,25 @@ init_process_stack_frame:
         bx      lr
 
 .thumb_func
-.global context_switch_from_kernel
+.global save_usermode_and_context_switch
 .align 4
-context_switch_from_kernel:
+save_usermode_and_context_switch:
+        save_state
+        mrs     r0, psp
+        mrs     r1, msp
+
+        bl      scheduler_update_process
+
+        bl      context_switch
+
+.thumb_func
+.global save_kernelmode_and_context_switch
+.align 4
+save_kernelmode_and_context_switch:
         save_kernel_state
         mrs     r0, psp
         mrs     r1, msp
 
-        bl      scheduler_update_process_and_get_next
+        bl      scheduler_update_process
 
-        mov     r4, r0
-        bl      is_in_kernel_mode
-        cmp     r0, #0
-        beq     .back_to_userspace
-        .back_to_kernelspace:
-                mov     r0, r4
-                recall_kernel_state
-
-        .back_to_userspace:
-                mov     r0, r4
-                recall_state
-
-.thumb_func
-.global force_context_switch
-.align 4
-force_context_switch:
-        bl      scheduler_get_next_process
-
-        mov     r4, r0
-        bl      is_in_kernel_mode
-        cmp     r0, #0
-        beq     .force_back_to_userspace
-        .force_back_to_kernelspace:
-                mov     r0, r4
-                recall_kernel_state
-
-        .force_back_to_userspace:
-                mov     r0, r4
-                recall_state
+        bl      context_switch

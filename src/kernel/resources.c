@@ -4,6 +4,7 @@
 
 #include "resources.h"
 
+#include "memory.h"
 #include "proc.h"
 
 // TODO: resource queue to be implemented...
@@ -57,7 +58,7 @@ void wait_event_interruptible(wait_queue_head_t *wq_head, bool (*condition)(void
         process->pstate = WAITING_FOR_RESOURCE;
 
         if (!condition()) {
-                context_switch_from_kernel();
+                save_kernelmode_and_context_switch();
         }
 }
 

@@ -5,28 +5,20 @@
 #ifndef OS_RESOURCES_H
 #define OS_RESOURCES_H
 
-#include "proc.h"
-#include "types.h"
-
-
-typedef uint8_t Resource;
-
-
 struct wait_queue_entry;
 
 typedef struct wait_queue_entry *wait_queue_head_t;
 
+/**
+ * Adds calling process to wait queue. Sets it state to WAITING_FOR_RESOURCE and if the condition is not met
+ * forces context switch.
+ * @param wq_head head of the waiting queue
+ * @param condition function that will return true if the resource is available
+ */
 void wait_event_interruptible(wait_queue_head_t *wq_head, bool (*condition)(void));
 
 void wake_up_interruptible(wait_queue_head_t *wq_head);
 
-/**
- * Blocks current process on a specified resource. \n
- * Please note that this function <b>HAS</b> to be run in <b>handler mode</b>.
- * @return Pointer to the resource
- */
-void block_resource_on_condition(pid_t parent_process, Resource resource, bool (*condition)(void));
-
-pid_t get_resource_acquiring_process(void);
+// void wake_up_parent()
 
 #endif //OS_RESOURCES_H

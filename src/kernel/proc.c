@@ -4,8 +4,11 @@
 
 #include "proc.h"
 
+#include "memory.h"
 #include "tty.h"
 
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
 
 static constexpr size_t INITIAL_PROCESS_COUNT = 20;
 
@@ -15,8 +18,23 @@ static constexpr off_t DEFAULT_PROCESS_SP_OFFSET = 6 * 1024;
 
 #define THREAD_PSP_CODE ((void *) 0xfffffffd)
 
+#define RECALL_STATE_FROM(sp)                           \
+        __asm__(                                        \
+                "mrs    r0," STR(sp) "\n\r"             \
+                "ldmia  r0!, {r2-r11}\n\r"             \
+                "mov    lr, r2\n\r"                    \
+                "msr    CONTROL, r3\n\r"               \
+                "isb\n\r"                               \
+                "msr    " STR(sp) ", r0\n\r"           \
+                "bx     lr\n\r"                        \
+        );
+
+#define RECALL_USERSPACE_STATE RECALL_STATE_FROM(psp)
+#define RECALL_KERNELSPACE_STATE RECALL_STATE_FROM(msp)
+
 static struct {
         size_t max_processes;
+        size_t processes_count;
         struct Process *processes;
         struct Process *current_process;
 
@@ -29,12 +47,13 @@ extern void init_process_stack_frame(void **initial_sp, uint32_t xpsr, void *pc,
 
 void scheduler_init(void *current_main_kernel_stack) {
         scheduler.max_processes = INITIAL_PROCESS_COUNT;
+        scheduler.processes_count = 0;
 
         struct Process *processes = kmalloc(sizeof(struct Process) * INITIAL_PROCESS_COUNT);
-        for (size_t i = 0; i < INITIAL_PROCESS_COUNT; ++i) {
-                scheduler.processes[i].ptr = nullptr;
-        }
         scheduler.processes = processes;
+        for (size_t i = 0; i < INITIAL_PROCESS_COUNT; ++i) {
+                processes[i].ptr = nullptr;
+        }
 
         scheduler.total_allocated_memory = 0;
         scheduler.current_process = nullptr;
@@ -66,33 +85,28 @@ void **scheduler_get_process_stack(const pid_t current_process) {
 }
 
 
-void *scheduler_get_next_process() {
+static struct Process *scheduler_get_next_process() {
         static size_t current_index = 0;
 
+        if (scheduler.processes_count == 0) {
+                return nullptr;
+        }
+        else if (scheduler.processes_count == 1) {
+                return scheduler.current_process;
+        }
+
         do {
-                // TODO: determine task importance, also by implementing priority queue
+                // TODO: determine task importance, also by implementing priority queue. FIXME: this may spinlock
                 current_index += 1;
                 if (current_index == scheduler.max_processes) {
                         current_index = 0;
                 }
         } while (scheduler.processes[current_index].pstate != READY);
 
-        scheduler.current_process = &scheduler.processes[current_index];
-
-        scheduler.current_process->pstate = RUNNING;
-
-
-        if (scheduler.current_process->kernel_mode) {
-                __asm__("msr    psp, %0\n\r" : : "r"(scheduler.current_process->pstack));
-                return scheduler.current_process->kstack;
-        }
-        else {
-                __asm__("msr    msp, %0\n\r" : : "r"(scheduler.current_process->kstack));
-                return scheduler.current_process->pstack;
-        }
+        return &scheduler.processes[current_index];
 }
 
-static void scheduler_update_process(void *psp, void *msp) {
+void scheduler_update_process(void *psp, void *msp) {
         if (!scheduler.current_process->kernel_mode) {
                 scheduler.current_process->pstate = READY;
         }
@@ -101,18 +115,29 @@ static void scheduler_update_process(void *psp, void *msp) {
         scheduler.current_process->kstack = msp;
 }
 
-void *scheduler_update_process_and_get_next(void *psp, void *msp) {
-        scheduler_update_process(psp, msp);
-
-        return scheduler_get_next_process();
-}
-
-
 bool is_in_kernel_mode() { return scheduler.current_process->kernel_mode; }
 
 void set_kernel_mode_flag() { scheduler.current_process->kernel_mode = true; }
 
 void reset_kernel_mode_flag() { scheduler.current_process->kernel_mode = false; }
+
+void context_switch(void) {
+        struct Process *process = scheduler_get_next_process();
+
+        scheduler.current_process = process;
+        process->pstate = RUNNING;
+
+
+        __asm__("msr    psp, %0\n\r" : : "r"(process->pstack));
+        __asm__("msr    msp, %0\n\r" : : "r"(process->kstack));
+
+        if (process->kernel_mode) {
+                RECALL_KERNELSPACE_STATE
+        }
+        else {
+                RECALL_USERSPACE_STATE
+        }
+}
 
 pid_t sys_spawn_process(
         void (*process_entry_ptr)(void),
@@ -163,6 +188,7 @@ pid_t sys_spawn_process(
 
         scheduler.total_allocated_memory += process.allocated_memory;
         scheduler.processes[pid] = process;
+        scheduler.processes_count += 1;
         current->children[current->children_count] = &scheduler.processes[pid];
 
         pid += 1;
@@ -171,7 +197,7 @@ pid_t sys_spawn_process(
 
 
 pid_t create_process_init(void (*process_entry_ptr)(void)) {
-        if (scheduler.current_process) {
+        if (scheduler.current_process || scheduler.processes[0].ptr) {
                 __asm__("bkpt   #0");
         }
 
@@ -200,27 +226,33 @@ pid_t create_process_init(void (*process_entry_ptr)(void)) {
         }
 
         scheduler.processes[0] = process;
+        scheduler.processes_count = 1;
         scheduler.total_allocated_memory += DEFAULT_PROCESS_SIZE;
 
         return process.pid;
 }
 
-extern void force_context_switch(void);
 
-int sys_exit(int status) { //and kill all children
+void sys_exit(int status) {
         struct Process *current = scheduler.current_process;
 
-        for (size_t i = 0; i < current->children_count; ++i) {
-                kill(current->children[i]->pid);
+        current->exit_code = status;
+        current->exit_signal = SIGCHLD;
+
+        if (current->parent->wait_child_exit) {
+                current->parent->pstate = READY;
+                current->parent->wait_child_exit = false;
         }
 
-        kill(current->pid);
+        for (size_t i = 0; i < current->children_count; ++i) {
+                signal_notify(current->children[i], SIGHUP);
+        }
 
         __asm__("msr    msp, %0\n\r" : : "r"(scheduler.main_kernel_stack));
-        force_context_switch();
+        context_switch();
 }
 
-void kill(const pid_t pid) {
+void sys_kill(const pid_t pid) {
         struct Process *current = &scheduler.processes[pid];
         if (!current->ptr) {
                 return;
@@ -236,7 +268,7 @@ void kill(const pid_t pid) {
         }
 
         kfree(current->files.fdtable);
-        kfree(current);
+        kfree(current->ptr);
 
         const struct Process p = {};
         scheduler.processes[pid] = p;
@@ -247,4 +279,10 @@ void run_process_init(void) {
         scheduler.current_process->pstate = RUNNING;
         __asm__("movs   r0, #0\n\r"  // run init (pid=0)
                 "svc    #0xff\n\r"); // OS_INIT_SVC
+}
+
+void signal_notify(struct Process *process, const int sig) {
+        if (process->sighandlers[sig]) {
+                (*process->sighandlers[sig])();
+        }
 }

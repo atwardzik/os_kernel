@@ -52,47 +52,6 @@ _read:
                 pop    {pc}
 
 
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@                                      @
-@@          Context Switch              @
-@@                                      @
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-.macro  save_state
-        mrs     r0, psp
-
-        mov     r2, lr                  @ EXC_RETURN
-        mrs     r3, CONTROL
-        stmdb   r0!, {r2-r11}
-
-        msr     psp, r0                 @ save as a new stack pointer
-                                        @ returns r0 - psp after all updates
-.endm
-
-.macro  recall_state
-        ldmia   r0!, {r2-r11}
-
-        mov     lr, r2
-        msr     CONTROL, r3
-        isb                             @ executes an Instruction Synchronization
-                                        @  Barrier after CONTROL updates
-        msr     psp, r0
-.endm
-
-.macro  recall_kernel_state
-        ldmia   r0!, {r2-r11}
-
-        mov     lr, r2
-        msr     CONTROL, r3
-        isb                             @ executes an Instruction Synchronization
-                                        @  Barrier after CONTROL updates
-        msr     msp, r0
-
-        bx      lr
-
-.endm
-
-
 /**
  * Syscall        (svc #<syscall_number>)
  *  r0-r3       - arguments specified by syscalls
@@ -122,8 +81,12 @@ isr_svcall:
                 mov     r12, r0
                 ldr     r0, [r12]
 
-                recall_state
-
+                ldmia   r0!, {r2-r11}
+                mov     lr, r2
+                msr     CONTROL, r3
+                isb                             @ executes an Instruction Synchronization
+                                                        @  Barrier after CONTROL updates
+                msr     psp, r0
                 str     r0, [r12]
 
 
@@ -197,22 +160,7 @@ isr_svcall:
 .global isr_pendsv
 .align 4
 isr_pendsv:
-        save_state
-        mrs     r1, msp
-
-        bl      scheduler_update_process_and_get_next
-
-        mov     r4, r0
-        bl      is_in_kernel_mode
-        cmp     r0, #0
-        beq     .back_to_userspace
-        .back_to_kernelspace:
-                mov     r0, r4
-                recall_kernel_state
-
-        .back_to_userspace:
-                mov     r0, r4
-                recall_state
+        b       save_usermode_and_context_switch
 
 
 
