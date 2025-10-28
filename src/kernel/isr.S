@@ -77,37 +77,42 @@ isr_svcall:
         cmp     r4, OS_INIT_SVC
         bne     .standard_syscalls
         .os_init_svc:
-                bl      scheduler_get_process_stack     @ gets a pointer to stack pointer
+                bl      scheduler_get_current_process_stack     @ gets a pointer to stack pointer
                 mov     r12, r0
                 ldr     r0, [r12]
+
+                @ cmp     r0, #0
+                @ itttt   eq
+                @ TODO: IMPLEMENT PANIC
+
 
                 ldmia   r0!, {r2-r11}
                 mov     lr, r2
                 msr     CONTROL, r3
-                isb                             @ executes an Instruction Synchronization
-                                                        @  Barrier after CONTROL updates
+                isb                                             @ executes an Instruction Synchronization
+                                                                @  Barrier after CONTROL updates
                 msr     psp, r0
                 str     r0, [r12]
 
 
                 @ set PENDSV to the lowest priority level
-                @ ldr     r2, NVIC_IPR_PEND_SV          @ FIXME: change to proper IPR address bits
+                @ ldr     r2, NVIC_IPR_PEND_SV                  @ FIXME: change to proper IPR address bits
                 @ ldr     r1, PPB_BASE
                 @ movs    r0, #0xff
                 @ str     r0, [r1, r2]
 
                 @ enable systick
                 mov     r4, lr
-                ldr     r0, =625000                     @ systick every 5[ms]
+                ldr     r0, =625000                             @ systick every 5[ms]
                 bl      systick_enable
 
                 @ setup kernel stack for process
-                bl      scheduler_get_kernel_stack
+                bl      scheduler_get_current_kernel_stack
                 ldr     r0, [r0]
                 msr     msp, r0
                 mov     lr, r4
 
-                bx      lr                              @ start init (process with pid=0)
+                bx      lr                                      @ start init (process with pid=0)
 
         .standard_syscalls:
                 push    {r0-r3}
@@ -243,3 +248,5 @@ VTOR_OFFSET:            .word 0xed08
 NVIC_ICPR_OFFSET:       .word 0xe280        @ interrupt clear-pending register
 NVIC_ISER_OFFSET:       .word 0xe100        @ interrupt set-enable register
 NVIC_IPR_PEND_SV:       .word 0xe438        @ 14
+
+no_init_message:        .asciz "No init method provided, aborting."
