@@ -9,9 +9,17 @@
 #include "kernel/resets.h"
 #include "kernel/syscalls.h"
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+// #include <sys/signal.h>
+
+void test_signal_handler(int signum) {
+        if (signum == SIGCHLD) {
+                printf("My child is dead...\n");
+        }
+}
 
 void proc1(void) {
         printf("\n\x1b[96;40m[!]Welcome from proc1\x1b[0m\n");
@@ -44,6 +52,8 @@ void proc2_start(void) {
 
 void PATER_ADAMVS(void) {
         printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
+
+        signal(SIGCHLD, test_signal_handler);
 
         spawn(proc1, nullptr, nullptr, nullptr, nullptr);
         spawn(proc2_start, nullptr, nullptr, nullptr, nullptr);

@@ -53,6 +53,11 @@ void sigreturn(void) {
         SYSCALL(SIGRETURN_SVC)
 }
 
+typedef typeof(void (int)) *sighandler_t;
+sighandler_t signal(int signum, sighandler_t handler) {
+        SYSCALL(SIGNAL_SVC)
+}
+
 caddr_t _sbrk(int incr) {
         static uint8_t *current_bump_address = __heap_start__;
         uint8_t *prev_bump_addr;

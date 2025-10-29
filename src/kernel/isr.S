@@ -131,6 +131,9 @@ isr_svcall:
                 cmp     r4, WRITE_SVC
                 beq     .write_svc
 
+                cmp     r4, SIGNAL_SVC
+                beq     .signal_svc
+
                 cmp     r4, SIGRETURN_SVC
                 beq     .sigreturn_svc
 
@@ -148,6 +151,10 @@ isr_svcall:
 
         .write_svc:
                 bl      sys_write
+                b       .svcall_exit
+
+        .signal_svc:
+                bl      sys_signal
                 b       .svcall_exit
 
         .sigreturn_svc:

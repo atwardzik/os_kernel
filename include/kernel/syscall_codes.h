@@ -18,7 +18,8 @@
 #define GET_PPID_SVC    10
 #define YIELD_SVC       11
 #define KILL_SVC        12
-#define SIGRETURN_SVC   13
+#define SIGNAL_SVC      13
+#define SIGRETURN_SVC   14
 
 #define OS_INIT_SVC     255
 

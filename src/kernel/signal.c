@@ -90,7 +90,7 @@ void signal_notify(struct Process *process, const int sig) {
 }
 
 int get_pending_signal() {
-        const struct Process *current_process = scheduler_get_current_process();
+        struct Process *current_process = scheduler_get_current_process();
 
         if (current_process->pending_signals) {
                 return pop_from_signal_queue(&current_process->pending_signals);
@@ -116,17 +116,24 @@ void handle_pending_signal(const int pending_signal) {
         }
         else {
                 current_process->signal_handled = true;
-                create_process_stack_frame(current_process->pstack,
+                create_process_stack_frame(&current_process->pstack,
                                            &sigreturn,
                                            current_process->sighandlers[pending_signal],
                                            EXC_RETURN_THREAD_PSP_CODE);
+                //signal code for this pending signal must be stored on a stack as r0
+                *((uint32_t *) (current_process->pstack + 40)) = pending_signal;
         }
 }
 
 void sys_sigreturn(void) {
         struct Process *current_process = scheduler_get_current_process();
+        __asm__("mrs    %0, psp" : "=r"(current_process->pstack));
 
         current_process->signal_handled = false;
+        current_process->pstate = READY;
+
+        current_process->pstack += 40;     // discard registers saved on ISR entry, as the current frame is not important anymore
+        current_process->kernel_mode = false;
         context_switch();
 }
 
