@@ -9,7 +9,8 @@
 #include "types.h"
 #include "fs/file.h"
 
-#include <sys/signal.h>
+#include <stdint.h>
+
 
 /*
  * The context switch routine has to:
@@ -29,6 +30,10 @@ enum State {
         TERMINATED           = 4,
 };
 
+struct signal_queue_entry;
+
+typedef struct signal_queue_entry *signal_queue_head_t;
+
 // TODO: by using MPU forbid process to access system resources
 struct Process {
         void *ptr;
@@ -46,7 +51,9 @@ struct Process {
         bool wait_child_exit;
 
         int exit_code;
-        int exit_signal; // the parent will receive this signal and clean up after the child
+
+        uint32_t signal_mask;
+        signal_queue_head_t pending_signals;
 
         void (*sighandlers[32])(void);
 
@@ -130,7 +137,5 @@ void sys_kill(pid_t pid);
 void yield(void);
 
 void run_process_init(void);
-
-void signal_notify(struct Process *process, int sig);
 
 #endif // PROC_H

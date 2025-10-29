@@ -259,41 +259,42 @@ void sys_exit(int status) {
         struct Process *current = scheduler.current_process;
 
         current->exit_code = status;
-        current->exit_signal = SIGCHLD;
 
-        if (current->parent->wait_child_exit) {
-                current->parent->pstate = READY;
-                current->parent->wait_child_exit = false;
-        }
+        signal_notify(current->parent, SIGCHLD);
 
         for (size_t i = 0; i < current->children_count; ++i) {
                 signal_notify(current->children[i], SIGHUP);
         }
+
+        sys_kill(current->pid);
 
         __asm__("msr    msp, %0\n\r" : : "r"(scheduler.main_kernel_stack));
         context_switch();
 }
 
 void sys_kill(const pid_t pid) {
-        struct Process *current = &scheduler.processes[pid];
-        if (!current->ptr) {
+        struct Process *process = &scheduler.processes[pid];
+        if (!process->ptr) {
                 return;
         }
 
-        for (size_t i = 0; i < current->files.count; ++i) {
-                struct File *file = current->files.fdtable[i];
+        for (size_t i = 0; i < process->files.count; ++i) {
+                struct File *file = process->files.fdtable[i];
 
-                if (file->f_owner == current->pid) {
+                if (file->f_owner == process->pid) {
                         kfree(file->f_op);
                         kfree(file);
                 }
         }
 
-        kfree(current->files.fdtable);
-        kfree(current->ptr);
+        kfree(process->files.fdtable);
+        kfree(process->children);
+        deallocate_signal_queue(&process->pending_signals);
+        kfree(process->ptr);
+        scheduler.total_allocated_memory -= process->allocated_memory;
+        process->allocated_memory = 0;
 
-        const struct Process p = {};
-        scheduler.processes[pid] = p;
+        scheduler.processes[pid].pstate = TERMINATED;
 }
 
 void run_process_init(void) {
