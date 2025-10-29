@@ -49,6 +49,10 @@ pid_t spawn(
         SYSCALL(SPAWN_SVC)
 }
 
+void sigreturn(void) {
+        SYSCALL(SIGRETURN_SVC)
+}
+
 caddr_t _sbrk(int incr) {
         static uint8_t *current_bump_address = __heap_start__;
         uint8_t *prev_bump_addr;

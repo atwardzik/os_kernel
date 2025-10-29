@@ -5,6 +5,9 @@
 #include "signal.h"
 
 #include "memory.h"
+#include "syscalls.h"
+
+#include <stdlib.h>
 
 struct signal_queue_entry {
         int pending_signal;
@@ -49,22 +52,16 @@ static int pop_from_signal_queue(signal_queue_head_t *sq_head) {
 }
 
 static int top_from_signal_queue(const signal_queue_head_t *sq_head) {
-        struct signal_queue_entry const *head = *sq_head;
-
-        return head->pending_signal;
+        return (*sq_head)->pending_signal;
 }
 
 void deallocate_signal_queue(signal_queue_head_t *sq_head) {
-        if (!sq_head) {
-
-        }
-
         while (*sq_head) {
                 pop_from_signal_queue(sq_head);
         }
 }
 
-[[noreturn]] static void action_terminate() {
+[[noreturn]] static void action_terminate(int) {
         //Termination due to an uncaught signal results in exit status 128+[<signal number>]
         struct Process *current_process = scheduler_get_current_process();
         const int pending = pop_from_signal_queue(&current_process->pending_signals);
@@ -72,7 +69,7 @@ void deallocate_signal_queue(signal_queue_head_t *sq_head) {
         sys_exit(128 + pending);
 }
 
-static void action_ignore() {
+static void action_ignore(int) {
         //As the name suggests, this ignores the signal.
 }
 
@@ -92,17 +89,56 @@ void signal_notify(struct Process *process, const int sig) {
         }
 }
 
-void handle_pending_signal() {
-        struct Process *current_process = scheduler_get_current_process();
-        const int pending = top_from_signal_queue(&current_process->pending_signals);
+int get_pending_signal() {
+        const struct Process *current_process = scheduler_get_current_process();
 
-        if (pending < 0 || pending >= 32) {
+        if (current_process->pending_signals) {
+                return pop_from_signal_queue(&current_process->pending_signals);
+        }
+
+        return -1;
+}
+
+void handle_pending_signal(const int pending_signal) {
+        struct Process *current_process = scheduler_get_current_process();
+
+        if (pending_signal < 0 || pending_signal >= 32 || !current_process->sighandlers[pending_signal]) {
                 return;
         }
 
-        if (current_process->sighandlers[pending]) {
-                (*current_process->sighandlers[pending])();
+        void (*current_action)(int) = current_process->sighandlers[pending_signal];
+
+        if (current_action == &action_terminate) {
+                sys_exit(128 + pending_signal);
+        }
+        else if (current_action == &action_ignore) {
+                //do nothing
+        }
+        else {
+                current_process->signal_handled = true;
+                create_process_stack_frame(current_process->pstack,
+                                           &sigreturn,
+                                           current_process->sighandlers[pending_signal],
+                                           EXC_RETURN_THREAD_PSP_CODE);
+        }
+}
+
+void sys_sigreturn(void) {
+        struct Process *current_process = scheduler_get_current_process();
+
+        current_process->signal_handled = false;
+        context_switch();
+}
+
+sighandler_t sys_signal(int signum, sighandler_t handler) {
+        struct Process *current_process = scheduler_get_current_process();
+
+        if (signum < 0 || signum >= 32) {
+                return nullptr;
         }
 
-        pop_from_signal_queue(&current_process->pending_signals);
+        sighandler_t old_handler = current_process->sighandlers[signum];
+        current_process->sighandlers[signum] = handler;
+
+        return old_handler;
 }

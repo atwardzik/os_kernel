@@ -16,4 +16,6 @@ pid_t spawn(
         char *const envp[]
 );
 
+[[noreturn]] void sigreturn(void);
+
 #endif //OS_SYSCALLS_H

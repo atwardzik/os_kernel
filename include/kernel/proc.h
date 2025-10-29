@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 
+#define EXC_RETURN_THREAD_PSP_CODE ((void *) 0xfffffffd)
 /*
  * The context switch routine has to:
  * - Manually stack remaining registers r4-r11 on the Process Stack
@@ -54,8 +55,10 @@ struct Process {
 
         uint32_t signal_mask;
         signal_queue_head_t pending_signals;
+        bool signal_handled;
 
-        void (*sighandlers[32])(void);
+        void (*sighandlers[32])(int);
+
 
         bool kernel_mode;
         void *kstack;
@@ -71,6 +74,8 @@ struct Process *scheduler_get_current_process(void);
 
 void scheduler_update_process(void *psp, void *msp);
 
+void create_process_stack_frame(void **initial_sp, void *lr, void *pc, void *exc_return);
+
 /**
  * Performs context switch without saving the current process. Scheduler
  * chooses a new process and switches to it.
@@ -84,6 +89,11 @@ void scheduler_update_process(void *psp, void *msp);
  * a new process and switches to it.
  */
 [[noreturn]] void save_usermode_and_context_switch(void);
+
+/**
+ * Saves the current state of the kernelmode
+ */
+void save_kernelmode(void);
 
 /**
  * Similar to standard context switch, but the current process was in kernel mode.

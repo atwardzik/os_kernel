@@ -52,6 +52,14 @@ static struct Process *pop_from_wait_queue(wait_queue_head_t *wq_head) {
         return head_process;
 }
 
+static struct Process *top_from_wait_queue(wait_queue_head_t *wq_head) {
+        if (!wq_head || !*wq_head) {
+                return nullptr;
+        }
+
+        return (*wq_head)->waiting_process;
+}
+
 void wait_event_interruptible(wait_queue_head_t *wq_head, bool (*condition)(void)) {
         struct Process *process = scheduler_get_current_process();
         add_to_wait_queue(wq_head, process);
@@ -60,10 +68,13 @@ void wait_event_interruptible(wait_queue_head_t *wq_head, bool (*condition)(void
         if (!condition()) {
                 save_kernelmode_and_context_switch();
         }
+
+        process = pop_from_wait_queue(wq_head);
+        process->pstate = READY;
 }
 
 void wake_up_interruptible(wait_queue_head_t *wq_head) {
-        struct Process *head_process = pop_from_wait_queue(wq_head);
+        struct Process *head_process = top_from_wait_queue(wq_head);
 
         if (head_process) {
                 head_process->pstate = READY;

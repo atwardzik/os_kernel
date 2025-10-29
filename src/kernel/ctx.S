@@ -74,12 +74,12 @@
  * Additionally we could pass parameters to function in that manner TODO: check
  *
  *
- * void init_process_stack_frame(void **initial_sp, uint32_t xpsr, void *return_address, void *exc_return);
+ * void create_process_stack_frame(void **initial_sp, void *lr, void *pc, void *exc_return);
  */
 .thumb_func
-.global init_process_stack_frame
+.global create_process_stack_frame
 .align 4
-init_process_stack_frame:
+create_process_stack_frame:
         mov     r12, r0
         ldr     r0, [r0]
         subs    r0, r0, #(18 * 4)       @ total number of registers to be stored
@@ -89,12 +89,12 @@ init_process_stack_frame:
         movs    r3, #3                  @ unprivileged task, psp, in CONTROL
         str     r3, [r0, #4]
 
-        ldr     r3, =exit
-        str     r3, [r0, #60]           @ where does the process return - default to EXIT
+        str     r1, [r0, #60]           @ where does the process return (lr)
 
-        str     r2, [r0, #64]           @ return to the process execution
+        str     r2, [r0, #64]           @ return to the process execution (pc)
 
-        str     r1, [r0, #68]           @ xPSR
+        ldr     r3, =0x01000000         @ initial xPSR
+        str     r3, [r0, #68]           @ xPSR
 
         str     r0, [r12]
 
@@ -111,6 +111,16 @@ save_usermode_and_context_switch:
         bl      scheduler_update_process
 
         bl      context_switch
+
+.thumb_func
+.global save_kernelmode
+.align 4
+save_kernelmode:
+        save_kernel_state
+        mrs     r0, psp
+        mrs     r1, msp
+
+        bl      scheduler_update_process
 
 .thumb_func
 .global save_kernelmode_and_context_switch

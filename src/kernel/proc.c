@@ -8,6 +8,8 @@
 #include "signal.h"
 #include "tty.h"
 
+#include <stdlib.h>
+
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
@@ -17,8 +19,6 @@ static constexpr int DEFAULT_PROCESS_SIZE = 8 * 1024; // 8 [KB]
 
 static constexpr off_t DEFAULT_PROCESS_SP_OFFSET = 6 * 1024;
 
-#define THREAD_PSP_CODE ((void *) 0xfffffffd)
-
 #define RECALL_STATE_FROM(sp)                           \
         __asm__(                                        \
                 "mrs    r0," STR(sp) "\n\r"             \
@@ -27,6 +27,7 @@ static constexpr off_t DEFAULT_PROCESS_SP_OFFSET = 6 * 1024;
                 "msr    CONTROL, r3\n\r"                \
                 "isb\n\r"                               \
                 "msr    " STR(sp) ", r0\n\r"            \
+                "bx     lr\n\r"                         \
         );
 
 #define RECALL_USERSPACE_STATE RECALL_STATE_FROM(psp)
@@ -43,7 +44,6 @@ static struct {
         void *main_kernel_stack; // TODO: see if it is needed after processes start running
 } scheduler __attribute__((section(".data")));
 
-extern void init_process_stack_frame(void **initial_sp, uint32_t xpsr, void *pc, void *lr);
 
 void scheduler_init(void *current_main_kernel_stack) {
         scheduler.max_processes = INITIAL_PROCESS_COUNT;
@@ -116,39 +116,41 @@ void set_kernel_mode_flag() { scheduler.current_process->kernel_mode = true; }
 
 void reset_kernel_mode_flag() { scheduler.current_process->kernel_mode = false; }
 
-static void perform_context_switch(void) {
-        struct Process *process = scheduler_get_current_process();
-        if (process->pending_signals) {
-                handle_pending_signal(); //FIXME: should handling signals be in kernel mode?
-        }
-
-        process->pstate = RUNNING; //at the bottom
-}
-
 __attribute__((optimize("omit-frame-pointer")))
 void context_switch(void) {
-        // As the context changes and everything is new, we must separate this code.
-        // However, the compiler is really dumb... It doesn't know in the second part of context switch
-        // that all registers have new values... Therefore, we MUST jump to another function
-        // and effectively jump with assembly branch instruction. We cannot rely on the 'register' keyword UNFORTUNATELY
+        // While it might be tempting to "refactor" this code and extract the forthcoming inline assembly
+        // it is not the best idea. The compiler CANNOT guarantee (unfortunately) that the current process
+        // pointer will be stored in a register. Therefore, the stack pointers must be restored
+        // just before context switching. Moreover, there is a hierarchy of handling:
+        //      handled signals -> pending signals -> kernel mode -> user mode
         register struct Process *process = scheduler_get_next_process();
+        process->pstate = RUNNING;
 
         scheduler.current_process = process;
 
-        // Also here, while this may seem like the code repetition, we cannot ensure the compiler would know
-        // where the variable is after changing stack pointers
-        if (process->kernel_mode) {
-                __asm__("msr    psp, %0\n\r" : : "r"(process->pstack));
-                __asm__("msr    msp, %0\n\r" : : "r"(process->kstack));
-                RECALL_KERNELSPACE_STATE
-        }
-        else {
-                __asm__("msr    psp, %0\n\r" : : "r"(process->pstack));
-                __asm__("msr    msp, %0\n\r" : : "r"(process->kstack));
-                RECALL_USERSPACE_STATE
+        if (process->signal_handled) {
+                goto switch_to_userspace;
         }
 
-        __asm__("b      perform_context_switch");
+        int pending_signal = get_pending_signal();
+        if (pending_signal >= 0) {
+                handle_pending_signal(pending_signal);
+                goto switch_to_userspace;
+        }
+
+        if (process->kernel_mode) {
+                goto switch_to_kernelspace;
+        }
+
+switch_to_userspace:
+        __asm__("msr    psp, %0\n\r" : : "r"(process->pstack));
+        __asm__("msr    msp, %0\n\r" : : "r"(process->kstack));
+        RECALL_USERSPACE_STATE
+
+switch_to_kernelspace:
+        __asm__("msr    psp, %0\n\r" : : "r"(process->pstack));
+        __asm__("msr    msp, %0\n\r" : : "r"(process->kstack));
+        RECALL_KERNELSPACE_STATE
 }
 
 static struct Process *create_blank_process(void (*process_entry_ptr)(void)) {
@@ -161,7 +163,10 @@ static struct Process *create_blank_process(void (*process_entry_ptr)(void)) {
         void *process_page = kmalloc(DEFAULT_PROCESS_SIZE);
         void *kstack = process_page + DEFAULT_PROCESS_SIZE - sizeof(size_t);
         void *pstack = process_page + DEFAULT_PROCESS_SP_OFFSET - sizeof(size_t);
-        init_process_stack_frame(&pstack, 0x0100'0000, process_entry_ptr, THREAD_PSP_CODE);
+        create_process_stack_frame(&pstack,
+                                   &exit,
+                                   process_entry_ptr,
+                                   EXC_RETURN_THREAD_PSP_CODE);
 
         struct Process process = {
                 .ptr = process_page,
@@ -179,6 +184,7 @@ static struct Process *create_blank_process(void (*process_entry_ptr)(void)) {
 
                 .signal_mask = 0,
                 .pending_signals = nullptr,
+                .signal_handled = false,
 
                 .kernel_mode = false,
                 .kstack = kstack
