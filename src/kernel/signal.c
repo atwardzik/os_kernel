@@ -109,9 +109,7 @@ void handle_pending_signal(const int pending_signal) {
                 sys_exit(128 + pending_signal);
         }
         else if (current_action == &action_ignore) {
-                if (pending_signal == SIGCHLD && current_process->pstate == WAITING_FOR_CHILD_EXIT) {
-                        current_process->pstate = READY;
-                }
+
                 //do nothing
         }
         else {

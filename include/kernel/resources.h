@@ -9,6 +9,10 @@ struct wait_queue_entry;
 
 typedef struct wait_queue_entry *wait_queue_head_t;
 
+struct Process *pop_from_wait_queue(wait_queue_head_t *wq_head);
+
+struct Process *top_from_wait_queue(wait_queue_head_t *wq_head);
+
 /**
  * Adds calling process to wait queue. Sets it state to WAITING_FOR_RESOURCE and if the condition is not met
  * forces context switch.

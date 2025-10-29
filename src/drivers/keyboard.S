@@ -339,46 +339,97 @@ keyboard_interrupt_handler:
 
                 ldr     r3, alt_flag
                 tst     r2, r3
+                bne     .alt_lookup
+
+                ldr     r3, ctrl_flag
+                tst     r2, r3
+                bne     .ctrl_lookup
+
                 beq     .write_to_buffer
 
 @TODO: make version for ARCH_RP2040
 #ifdef ARCH_RP2350
-                @ umlauts
-                cmp     r0, #65         @ 65->196, 97->228
-                it      eq
-                movseq  r0, #196
 
-                cmp     r0, #97
-                it      eq
-                movseq  r0, #228
+                .alt_lookup:
+                        @ umlauts
+                        cmp     r0, 'A'         @ 65->196, 97->228
+                        it      eq
+                        movseq  r0, #196
 
-                cmp     r0, #79         @ 79->214, 111->246
-                it      eq
-                movseq  r0, #214
+                        cmp     r0, 'a'
+                        it      eq
+                        movseq  r0, #228
 
-                cmp     r0, #111
-                it      eq
-                movseq  r0, #246
+                        cmp     r0, 'O'         @ 79->214, 111->246
+                        it      eq
+                        movseq  r0, #214
 
-                cmp     r0, #85         @ 85->220, 117->252
-                it      eq
-                movseq  r0, #220
+                        cmp     r0, 'o'
+                        it      eq
+                        movseq  r0, #246
 
-                cmp     r0, #117
-                it      eq
-                movseq  r0, #252
+                        cmp     r0, 'U'         @ 85->220, 117->252
+                        it      eq
+                        movseq  r0, #220
 
-                cmp     r0, #115        @ 115 -> 223
-                it      eq
-                movseq  r0, #223
+                        cmp     r0, 'u'
+                        it      eq
+                        movseq  r0, #252
 
-                @ e->EUR
-                cmp     r0, #101        @ 101->128
-                it      eq
-                movseq  r0, #128
+                        cmp     r0, 's'         @ 115 -> 223
+                        it      eq
+                        movseq  r0, #223
+
+                        @ e->EUR
+                        cmp     r0, 'e'         @ 101->128
+                        it      eq
+                        movseq  r0, #128
+
+                        b       .write_to_buffer
+
+                .ctrl_lookup:
+                        @ Escape sequences
+                        cmp     r0, 'c'
+                        it      eq
+                        movseq  r0, #0x03
+
+                        cmp     r0, 'd'
+                        it      eq
+                        movseq  r0, #0x04       @ (EOT, ^D) End Of File character on Unix terminals.[3]
+
+                        cmp     r0, 'g'
+                        it      eq
+                        movseq  r0, #0x07       @ (bell, BEL, \a, ^G), which may cause the device to emit a warning such as a bell or beep sound or the screen flashing.
+
+                        cmp     r0, 'h'
+                        it      eq
+                        movseq  r0, #0x08       @ (backspace, BS, \b, ^H), may overprint the previous character.
+
+                        cmp     r0, 'i'
+                        it      eq
+                        movseq  r0, #0x09       @ (horizontal tab, HT, \t, ^I), moves the printing position right to the next tab stop.
+
+                        cmp     r0, 'j'
+                        it      eq
+                        movseq  r0, #0x0A       @ (line feed, LF, \n, ^J), moves the print head down one line (and maybe to the left edge). Used as the end of line marker in Unix-like systems.
+
+                        cmp     r0, 'k'
+                        it      eq
+                        movseq  r0, #0x0B       @ (vertical tab, VT, \v, ^K), vertical tabulation.
+
+                        cmp     r0, 'l'
+                        it      eq
+                        movseq  r0, #0x0C       @ (form feed, FF, \f, ^L), to cause a printer to eject paper to the top of the next page, or a video terminal to clear the screen.
+
+                        cmp     r0, 'm'
+                        it      eq
+                        movseq  r0, #0x0D       @ (carriage return, CR, \r, ^M), moves the printing position to the start of the line, allowing overprinting. Used as the end of line marker in Classic Mac OS, OS-9, FLEX (and variants). A CR+LF pair is used by CP/M-80 and its derivatives including DOS and Windows.
+
+                        cmp     r0, '['
+                        it      eq
+                        movseq  r0, #0x1B       @ (escape, ESC, \e (GCC only), ^[). Introduces an escape sequence.
 
 #endif
-
         .write_to_buffer:
                 ldr     r1, =keyboard_buffer
                 ldr     r2, =buffer_offset
@@ -460,7 +511,6 @@ keyboard_interrupt_handler:
                 b       .exit
 
         .ctrl_pressed:
-
                 ldr     r0, ctrl_flag
                 bl      set_flag
                 b       .exit

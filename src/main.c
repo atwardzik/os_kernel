@@ -16,9 +16,11 @@
 #include <sys/wait.h>
 
 void test_signal_handler(int signum) {
-        if (signum == SIGCHLD) {
-                printf("My child is dead...\n");
+        if (signum == SIGINT) {
+                printf("[SIGINT DETECTED] Aborting...\n");
         }
+
+        exit(-1);
 }
 
 void proc1(void) {
@@ -31,6 +33,8 @@ void proc1(void) {
 }
 
 int proc2_main(void) {
+        signal(SIGINT, test_signal_handler);
+
         printf("\x1b[33;40m[!]Welcome from proc2\x1b[0m\n");
 
         char buffer[255];
@@ -58,7 +62,7 @@ void PATER_ADAMVS(void) {
         spawn(proc2_start, nullptr, nullptr, nullptr, nullptr);
         int code;
         const int returned_pid = wait(&code);
-        printf("[PATER ADAMVS] My child with ID:%i is dead with code %i. I can now resume my execution.\n",
+        printf("[PATER ADAMVS] My child with ID:%i is dead with code %i. I can now resume my exec.\n",
                returned_pid, code);
 
         int i = 0;

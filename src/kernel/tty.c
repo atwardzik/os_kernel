@@ -6,6 +6,7 @@
 
 #include "escape_codes.h"
 #include "kstdlib.h"
+#include "signal.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
 #include "fs/file.h"
@@ -34,6 +35,9 @@ void raw_put_letter(
 
         if (isprint(letter)) {
                 uart_putc(letter);
+        }
+        else if (letter == ENDL) {
+                //do nothing
         }
         else {
                 uart_putc(EMPTY_SPACE);
@@ -334,6 +338,22 @@ static void delete_and_shift(const int pos_delete, const int len) {
 }
 
 void write_to_keyboard_buffer(const int c) {
+        if (c == ETX) {
+                write_string("^C");
+
+                struct Process *process = scheduler_get_current_process();
+
+                if (process) {
+                        signal_notify(process, SIGINT);
+                }
+
+                if (keyboard_device_file_stream->read_wait) {
+                        pop_from_wait_queue(&keyboard_device_file_stream->read_wait);
+                }
+
+                return;
+        }
+
         if (c == BACKSPACE) {
                 if (keyboard_buffer_current_position) {
                         keyboard_buffer_final_length -= 1;

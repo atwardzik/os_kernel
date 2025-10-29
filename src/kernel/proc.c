@@ -100,7 +100,7 @@ static struct Process *scheduler_get_next_process() {
                 struct Process *current_process = &scheduler.processes[current_index];
 
 
-                if (current_process->pstate == WAITING_FOR_CHILD_EXIT && current_process->pending_signals) {
+                if (current_process->pending_signals) {
                         return &scheduler.processes[current_index];
                 }
         } while (scheduler.processes[current_index].pstate != READY);
@@ -139,8 +139,13 @@ void context_switch(void) {
         }
 
         int pending_signal = get_pending_signal();
-        if (pending_signal >= 0) {
+        if (pending_signal == SIGCHLD && process->pstate == WAITING_FOR_CHILD_EXIT) {
+                process->pstate = READY;
+                goto switch_to_kernelspace;
+        }
+        else if (pending_signal >= 0) {
                 handle_pending_signal(pending_signal);
+                goto switch_to_userspace;
         }
 
         if (process->kernel_mode) {

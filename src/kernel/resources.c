@@ -38,7 +38,7 @@ static void add_to_wait_queue(wait_queue_head_t *wq_head, struct Process *proces
         process->pstate = WAITING_FOR_RESOURCE;
 }
 
-static struct Process *pop_from_wait_queue(wait_queue_head_t *wq_head) {
+struct Process *pop_from_wait_queue(wait_queue_head_t *wq_head) {
         if (!wq_head || !*wq_head) {
                 return nullptr;
         }
@@ -52,7 +52,7 @@ static struct Process *pop_from_wait_queue(wait_queue_head_t *wq_head) {
         return head_process;
 }
 
-static struct Process *top_from_wait_queue(wait_queue_head_t *wq_head) {
+struct Process *top_from_wait_queue(wait_queue_head_t *wq_head) {
         if (!wq_head || !*wq_head) {
                 return nullptr;
         }
