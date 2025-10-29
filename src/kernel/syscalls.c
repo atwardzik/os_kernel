@@ -54,6 +54,7 @@ void sigreturn(void) {
 }
 
 typedef typeof(void (int)) *sighandler_t;
+
 sighandler_t signal(int signum, sighandler_t handler) {
         SYSCALL(SIGNAL_SVC)
 }
@@ -107,9 +108,8 @@ int _getpid(void) {
         return 1;
 }
 
-int _kill(int pid, int sig) {
-        errno = EINVAL;
-        return -1;
+int kill(int pid, int sig) {
+        SYSCALL(KILL_SVC)
 }
 
 int _link(char *old, char *new) {

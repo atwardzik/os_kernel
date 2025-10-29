@@ -13,6 +13,8 @@
 #include "kernel/memory.h"
 #include "kernel/resources.h"
 
+#include <sys/errno.h>
+
 
 //TODO: probably UART should be separated from screen terminal!
 
@@ -341,14 +343,23 @@ void write_to_keyboard_buffer(const int c) {
         if (c == ETX) {
                 write_string("^C");
 
+#if 0
                 struct Process *process = scheduler_get_current_process();
 
                 if (process) {
                         signal_notify(process, SIGINT);
                 }
+#endif
 
+                struct Process *process = nullptr;
                 if (keyboard_device_file_stream->read_wait) {
-                        pop_from_wait_queue(&keyboard_device_file_stream->read_wait);
+                        process = pop_from_wait_queue(&keyboard_device_file_stream->read_wait);
+                }
+                else {
+                        process = scheduler_get_current_process();
+                }
+                if (process) {
+                        signal_notify(process, SIGINT);
                 }
 
                 return;
@@ -380,6 +391,12 @@ void write_to_keyboard_buffer(const int c) {
                 keyboard_buffer_current_position += 1;
                 if (c == ENDL) { //newline buffering
                         *(keyboard_device_file_stream->buffer + keyboard_buffer_final_length - 1) = ENDL;
+
+                        while (keyboard_buffer_current_position < keyboard_buffer_final_length) {
+                                keyboard_buffer_current_position += 1;
+                                write_byte(ARROW_RIGHT);
+                        }
+                        write_byte(ENDL);
 
                         signal_buffer_newline = true;
                         wake_up_interruptible(&keyboard_device_file_stream->read_wait);
@@ -423,6 +440,10 @@ ssize_t tty_read(struct File *, void *buf, const size_t count, off_t file_offset
         char *ptr = (char *) buf;
         const int stream_size = newline_buffered_at();
         const void *stream_start = keyboard_device_file_stream->buffer;
+        if (stream_size == 0) {
+                errno = EINTR;
+                return -1;
+        }
 
         int offset = 0;
         while (offset < count && offset < stream_size) {

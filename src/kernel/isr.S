@@ -141,6 +141,9 @@ isr_svcall:
                 cmp     r4, WAIT_SVC
                 beq     .wait_svc
 
+                cmp     r4, KILL_SVC
+                beq     .kill_svc
+
                 cmp     r4, SIGNAL_SVC
                 beq     .signal_svc
 
@@ -169,6 +172,10 @@ isr_svcall:
 
         .signal_svc:
                 bl      sys_signal
+                b       .svcall_exit
+
+        .kill_svc:
+                bl      sys_kill
                 b       .svcall_exit
 
         .sigreturn_svc:

@@ -109,7 +109,6 @@ void handle_pending_signal(const int pending_signal) {
                 sys_exit(128 + pending_signal);
         }
         else if (current_action == &action_ignore) {
-
                 //do nothing
         }
         else {
@@ -130,9 +129,8 @@ void sys_sigreturn(void) {
         current_process->signal_handled = false;
         current_process->pstate = READY;
 
-        current_process->pstack += 40;
         // discard registers saved on ISR entry, as the current frame is not important anymore
-        current_process->kernel_mode = false;
+        current_process->pstack += 40;
         context_switch();
 }
 

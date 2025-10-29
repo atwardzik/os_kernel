@@ -18,4 +18,6 @@ pid_t spawn(
 
 [[noreturn]] void sigreturn(void);
 
+int kill(int pid, int sig);
+
 #endif //OS_SYSCALLS_H

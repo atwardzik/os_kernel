@@ -273,7 +273,7 @@ pid_t create_process_init(void (*process_entry_ptr)(void)) {
 
 void sys_exit(int status) {
         struct Process *current = scheduler.current_process;
-
+        current->pstate = TERMINATED;
         current->exit_code = status;
 
         signal_notify(current->parent, SIGCHLD);
@@ -282,16 +282,20 @@ void sys_exit(int status) {
                 signal_notify(current->children[i], SIGHUP);
         }
 
-        sys_kill(current->pid);
+        sys_kill(current->pid, SIGKILL);
 
         __asm__("msr    msp, %0\n\r" : : "r"(scheduler.main_kernel_stack));
         context_switch();
 }
 
-void sys_kill(const pid_t pid) {
+void sys_kill(const pid_t pid, int sig) {
         struct Process *process = &scheduler.processes[pid];
         if (!process->ptr) {
                 return;
+        }
+
+        if (sig == SIGTERM) {
+                signal_notify(process, SIGTERM);
         }
 
         for (size_t i = 0; i < process->files.count; ++i) {

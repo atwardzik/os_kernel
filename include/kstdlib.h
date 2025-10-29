@@ -39,6 +39,10 @@ static inline char *itoa(int value, char *const str, const int base) {
 }
 
 static inline bool isprint(const char c) {
+        if (c == '\r' || c == '\t' || c == '\n' || c == '\b') {
+                return true;
+        }
+
         if (c >= 0x20 && c <= 0xff) {
                 return true;
         }

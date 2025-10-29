@@ -140,7 +140,7 @@ pid_t sys_wait(int *stat_loc);
  */
 [[noreturn]] void sys_exit(int status);
 
-void sys_kill(pid_t pid);
+void sys_kill(pid_t pid, int sig);
 
 void yield(void);
 
