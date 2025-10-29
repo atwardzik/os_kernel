@@ -28,7 +28,7 @@ _write:
         tst     r3, #1                  @ 1 = unprivileged
         beq     .system_write
 
-        svc     #4                      @ syscall write
+        svc     WRITE_SVC               @ syscall write
         pop     {pc}
 
         .system_write:
@@ -44,13 +44,20 @@ _read:
         tst     r3, #1                  @ 1 - unprivileged
         beq     .system_read
 
-        svc     #3                      @ syscall read
+        svc     READ_SVC                @ syscall read
         pop     {pc}
 
         .system_read:
                 bl      ksys_read       @ spinlocks
                 pop    {pc}
 
+.thumb_func
+.global _wait
+.align 4
+_wait:
+        push    {lr}
+        svc     WAIT_SVC
+        pop     {pc}
 
 /**
  * Syscall        (svc #<syscall_number>)
@@ -131,6 +138,9 @@ isr_svcall:
                 cmp     r4, WRITE_SVC
                 beq     .write_svc
 
+                cmp     r4, WAIT_SVC
+                beq     .wait_svc
+
                 cmp     r4, SIGNAL_SVC
                 beq     .signal_svc
 
@@ -151,6 +161,10 @@ isr_svcall:
 
         .write_svc:
                 bl      sys_write
+                b       .svcall_exit
+
+        .wait_svc:
+                bl      sys_wait
                 b       .svcall_exit
 
         .signal_svc:

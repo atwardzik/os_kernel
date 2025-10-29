@@ -24,11 +24,12 @@
  */
 
 enum State {
-        NEW                  = 0,
-        RUNNING              = 1,
-        READY                = 2,
-        WAITING_FOR_RESOURCE = 3,
-        TERMINATED           = 4,
+        NEW                    = 0,
+        RUNNING                = 1,
+        READY                  = 2,
+        WAITING_FOR_RESOURCE   = 3,
+        WAITING_FOR_CHILD_EXIT = 4,
+        TERMINATED             = 5,
 };
 
 struct signal_queue_entry;
@@ -49,7 +50,6 @@ struct Process {
         size_t max_children_count;
         size_t children_count;
         struct Process **children;
-        bool wait_child_exit;
 
         int exit_code;
 
@@ -91,11 +91,6 @@ void create_process_stack_frame(void **initial_sp, void *lr, void *pc, void *exc
 [[noreturn]] void save_usermode_and_context_switch(void);
 
 /**
- * Saves the current state of the kernelmode
- */
-void save_kernelmode(void);
-
-/**
  * Similar to standard context switch, but the current process was in kernel mode.
  *
  * The context of the current process is saved on it's MSP, scheduler chooses
@@ -129,6 +124,9 @@ pid_t sys_spawn_process(
 /**
  * Suspends execution of current process until stat_loc information is available for a terminated child process,
  * or a signal is received (e.g. SIGCHLD, SIGTERM).
+ *
+ * In the case of a terminated child, performing a wait allows the system to release the resources associated
+ * with the child; if a wait is not performed, then the terminated child remains in a "zombie" state.
  *
  * @param stat_loc contains bitwise OR of options. SIGSTOP/SIGCHLD | exit_code
  * @return the process ID of the child to the calling process. Otherwise, a value of -1.

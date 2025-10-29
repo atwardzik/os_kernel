@@ -12,7 +12,7 @@
 #define WRITE_SVC       4
 #define OPEN_SVC        5
 #define CLOSE_SVC       6
-#define WAIT_PID_SVC    7
+#define WAIT_SVC        7
 #define GET_TIME_SVC    8
 #define GET_PID_SVC     9
 #define GET_PPID_SVC    10

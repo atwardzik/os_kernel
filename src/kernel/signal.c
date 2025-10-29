@@ -61,12 +61,8 @@ void deallocate_signal_queue(signal_queue_head_t *sq_head) {
         }
 }
 
-[[noreturn]] static void action_terminate(int) {
-        //Termination due to an uncaught signal results in exit status 128+[<signal number>]
-        struct Process *current_process = scheduler_get_current_process();
-        const int pending = pop_from_signal_queue(&current_process->pending_signals);
-
-        sys_exit(128 + pending);
+static void action_terminate(int) {
+        // This is only the address, as the killing is done by the kernel
 }
 
 static void action_ignore(int) {
@@ -109,9 +105,13 @@ void handle_pending_signal(const int pending_signal) {
         void (*current_action)(int) = current_process->sighandlers[pending_signal];
 
         if (current_action == &action_terminate) {
+                //Termination due to an uncaught signal results in exit status 128+[<signal number>]
                 sys_exit(128 + pending_signal);
         }
         else if (current_action == &action_ignore) {
+                if (pending_signal == SIGCHLD && current_process->pstate == WAITING_FOR_CHILD_EXIT) {
+                        current_process->pstate = READY;
+                }
                 //do nothing
         }
         else {
@@ -132,7 +132,8 @@ void sys_sigreturn(void) {
         current_process->signal_handled = false;
         current_process->pstate = READY;
 
-        current_process->pstack += 40;     // discard registers saved on ISR entry, as the current frame is not important anymore
+        current_process->pstack += 40;
+        // discard registers saved on ISR entry, as the current frame is not important anymore
         current_process->kernel_mode = false;
         context_switch();
 }

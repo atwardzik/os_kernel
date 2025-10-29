@@ -96,6 +96,13 @@ static struct Process *scheduler_get_next_process() {
                 if (current_index == scheduler.max_processes) {
                         current_index = 0;
                 }
+
+                struct Process *current_process = &scheduler.processes[current_index];
+
+
+                if (current_process->pstate == WAITING_FOR_CHILD_EXIT && current_process->pending_signals) {
+                        return &scheduler.processes[current_index];
+                }
         } while (scheduler.processes[current_index].pstate != READY);
 
         return &scheduler.processes[current_index];
@@ -124,7 +131,6 @@ void context_switch(void) {
         // just before context switching. Moreover, there is a hierarchy of handling:
         //      handled signals -> pending signals -> kernel mode -> user mode
         register struct Process *process = scheduler_get_next_process();
-        process->pstate = RUNNING;
 
         scheduler.current_process = process;
 
@@ -135,7 +141,6 @@ void context_switch(void) {
         int pending_signal = get_pending_signal();
         if (pending_signal >= 0) {
                 handle_pending_signal(pending_signal);
-                goto switch_to_userspace;
         }
 
         if (process->kernel_mode) {
@@ -143,6 +148,7 @@ void context_switch(void) {
         }
 
 switch_to_userspace:
+        process->pstate = RUNNING;
         __asm__("msr    psp, %0\n\r" : : "r"(process->pstack));
         __asm__("msr    msp, %0\n\r" : : "r"(process->kstack));
         RECALL_USERSPACE_STATE
@@ -180,7 +186,6 @@ static struct Process *create_blank_process(void (*process_entry_ptr)(void)) {
                 .max_children_count = 0,
                 .children_count = 0,
                 .children = nullptr,
-                .wait_child_exit = false,
 
                 .signal_mask = 0,
                 .pending_signals = nullptr,
@@ -301,6 +306,26 @@ void sys_kill(const pid_t pid) {
         process->allocated_memory = 0;
 
         scheduler.processes[pid].pstate = TERMINATED;
+}
+
+pid_t sys_wait(int *stat_loc) {
+        struct Process *current = scheduler.current_process;
+
+        current->pstate = WAITING_FOR_CHILD_EXIT;
+        if (current->children[current->children_count - 1]->pstate != TERMINATED) {
+                save_kernelmode_and_context_switch();
+        }
+        current->pstate = RUNNING;
+
+        *stat_loc = current->children[current->children_count - 1]->exit_code;
+        const pid_t dead_process = current->children[current->children_count - 1]->pid;
+
+        //evaporate zombie process
+        const struct Process p = {};
+        *current->children[current->children_count - 1] = p;
+        current->children_count -= 1;
+
+        return dead_process;
 }
 
 void run_process_init(void) {

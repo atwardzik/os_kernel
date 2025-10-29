@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-// #include <sys/signal.h>
+#include <sys/wait.h>
 
 void test_signal_handler(int signum) {
         if (signum == SIGCHLD) {
@@ -53,10 +53,13 @@ void proc2_start(void) {
 void PATER_ADAMVS(void) {
         printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
 
-        signal(SIGCHLD, test_signal_handler);
-
+        printf("[PATER ADAMVS] I will be waiting until my child is dead . . .\n");
         spawn(proc1, nullptr, nullptr, nullptr, nullptr);
         spawn(proc2_start, nullptr, nullptr, nullptr, nullptr);
+        int code;
+        const int returned_pid = wait(&code);
+        printf("[PATER ADAMVS] My child with ID:%i is dead with code %i. I can now resume my execution.\n",
+               returned_pid, code);
 
         int i = 0;
         while (1) {

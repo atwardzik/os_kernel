@@ -125,8 +125,3 @@ int _unlink(char *name) {
 int _lseek(int file, int ptr, int dir) {
         return 0;
 }
-
-int _wait(int *status) {
-        errno = ECHILD;
-        return -1;
-}
