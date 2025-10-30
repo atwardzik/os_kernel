@@ -22,7 +22,7 @@ void signal_notify(struct Process *process, int sig);
  */
 int get_pending_signal(void);
 
-void handle_pending_signal(int pending_signal);
+bool handle_pending_signal(int pending_signal);
 
 void sys_sigreturn(void);
 

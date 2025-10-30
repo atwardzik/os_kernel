@@ -65,7 +65,7 @@ void wait_event_interruptible(wait_queue_head_t *wq_head, bool (*condition)(void
         add_to_wait_queue(wq_head, process);
         process->pstate = WAITING_FOR_RESOURCE;
 
-        if (!condition()) {
+        while (!condition()) {
                 save_kernelmode_and_context_switch();
         }
 

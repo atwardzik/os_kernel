@@ -10,6 +10,8 @@
 
 #include <stdlib.h>
 
+//TODO: processes should be better organized than a static array with fixed-position for give pid.
+
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
@@ -42,8 +44,47 @@ static struct {
         size_t total_allocated_memory;
 
         void *main_kernel_stack; // TODO: see if it is needed after processes start running
+
+        struct Process process_idle;
 } scheduler __attribute__((section(".data")));
 
+constexpr int PID_IDLE = 0xffff;
+static void idle(void) { while (1); }
+
+static void create_idle_process() {
+        const int idle_process_size = 512;
+        void *process_page = kmalloc(idle_process_size);
+        void *kstack = process_page + idle_process_size - sizeof(size_t);
+        void *pstack = process_page + (idle_process_size / 2) - sizeof(size_t);
+        create_process_stack_frame(&pstack,
+                                   &exit,
+                                   &idle,
+                                   EXC_RETURN_THREAD_PSP_CODE);
+
+        struct Process process = {
+                .ptr = process_page,
+                .pstack = pstack,
+                .pid = PID_IDLE,
+                .pstate = READY,
+                .allocated_memory = idle_process_size,
+                .priority_level = 0,
+
+                .parent = nullptr,
+                .max_children_count = 0,
+                .children_count = 0,
+                .children = nullptr,
+
+                .signal_mask = 0,
+                .pending_signals = nullptr,
+                .signal_handled = false,
+
+                .kernel_mode = false,
+                .kstack = kstack
+        };
+        init_default_sighandlers(&process);
+
+        scheduler.process_idle = process;
+}
 
 void scheduler_init(void *current_main_kernel_stack) {
         scheduler.max_processes = INITIAL_PROCESS_COUNT;
@@ -59,6 +100,7 @@ void scheduler_init(void *current_main_kernel_stack) {
         scheduler.current_process = nullptr;
 
         scheduler.main_kernel_stack = current_main_kernel_stack;
+        create_idle_process();
 }
 
 struct Process *scheduler_get_current_process() { return scheduler.current_process; }
@@ -90,15 +132,19 @@ static struct Process *scheduler_get_next_process() {
                 return scheduler.current_process;
         }
 
+        int max_depth_counter = 0;
         do {
                 // TODO: determine task importance, also by implementing priority queue. FIXME: this may spinlock
                 current_index += 1;
+                max_depth_counter += 1;
                 if (current_index == scheduler.max_processes) {
                         current_index = 0;
                 }
+                if (max_depth_counter == 2 * scheduler.max_processes) {
+                        return &scheduler.process_idle;
+                }
 
                 struct Process *current_process = &scheduler.processes[current_index];
-
 
                 if (current_process->pending_signals) {
                         return &scheduler.processes[current_index];
@@ -143,8 +189,7 @@ void context_switch(void) {
                 process->pstate = READY;
                 goto switch_to_kernelspace;
         }
-        else if (pending_signal >= 0) {
-                handle_pending_signal(pending_signal);
+        else if (pending_signal >= 0 && handle_pending_signal(pending_signal)) {
                 goto switch_to_userspace;
         }
 
@@ -296,6 +341,7 @@ void sys_kill(const pid_t pid, int sig) {
 
         if (sig == SIGTERM) {
                 signal_notify(process, SIGTERM);
+                return;
         }
 
         for (size_t i = 0; i < process->files.count; ++i) {

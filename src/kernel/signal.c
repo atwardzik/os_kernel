@@ -95,11 +95,11 @@ int get_pending_signal() {
         return -1;
 }
 
-void handle_pending_signal(const int pending_signal) {
+bool handle_pending_signal(const int pending_signal) {
         struct Process *current_process = scheduler_get_current_process();
 
         if (pending_signal < 0 || pending_signal >= 32 || !current_process->sighandlers[pending_signal]) {
-                return;
+                return false;
         }
 
         void (*current_action)(int) = current_process->sighandlers[pending_signal];
@@ -119,7 +119,11 @@ void handle_pending_signal(const int pending_signal) {
                                            EXC_RETURN_THREAD_PSP_CODE);
                 //signal code for this pending signal must be stored on a stack as r0
                 *((uint32_t *) (current_process->pstack + 40)) = pending_signal;
+
+                return true;
         }
+
+        return false;
 }
 
 void sys_sigreturn(void) {

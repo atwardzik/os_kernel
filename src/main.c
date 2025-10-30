@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/errno.h>
 #include <sys/wait.h>
 
 void proc1_terminate_signal_handler(int signum) {
@@ -37,36 +38,30 @@ int proc2_main(void) {
 
         char buffer[255];
 
-        printf(" > ");
+        printf(" ~ ");
         fgets(buffer, 255, stdin);
-        printf("\nResponse: %s\n", buffer);
+        printf("Response: %s\n", buffer);
 
         return 0;
 }
 
-// void proc2_start(void) {
-//         // setup crt
-//
-//         int ret_value = proc2_main();
-//
-//         exit(ret_value);
-// }
-
 void PATER_ADAMVS_SIGINT(int signum) {
-        printf("Trying to exit the init process is a bloody bad idea.\n");
+        printf("\x1b[91;40mTrying to exit the init process is a bloody bad idea.\x1b[0m\n");
 }
 
 void PATER_ADAMVS(void) {
         signal(SIGINT, PATER_ADAMVS_SIGINT);
         printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
 
-        int proc1_pid = spawn(proc1, nullptr, nullptr, nullptr, nullptr);
+        const int proc1_pid = spawn(proc1, nullptr, nullptr, nullptr, nullptr);
 
 
-        char buffer[256];
         while (1) {
                 printf(" > ");
-                fgets(buffer, 256, stdin);
+                char buffer[256];
+                if (fgets(buffer, sizeof(buffer), stdin) == nullptr) {
+                        continue;
+                }
                 buffer[strcspn(buffer, "\n")] = '\0';
 
                 if (strcmp(buffer, "help") == 0 || strcmp(buffer, "h") == 0) {
@@ -79,13 +74,13 @@ void PATER_ADAMVS(void) {
                         );
                 }
                 else if (strcmp(buffer, "run") == 0 || strcmp(buffer, "r") == 0) {
-                        printf("[PATER ADAMVS] I will be waiting until my child is dead . . .\n");
+                        printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m I will be waiting until my child is dead . . .\n");
 
                         spawn((void *) &proc2_main, nullptr, nullptr, nullptr, nullptr);
                         int code;
                         const int returned_pid = wait(&code);
 
-                        printf("[PATER ADAMVS] My child with ID:%i is dead with code %i. I can now resume my exec.\n",
+                        printf("\n\x1b[96;40m[PATER ADAMVS]\x1b[0m Child process %i exited with code %i.\n",
                                returned_pid, code
                         );
                 }
@@ -98,10 +93,10 @@ void PATER_ADAMVS(void) {
 
 
                         if (choice == 1) {
-                                kill(proc1_pid, SIGKILL);
+                                kill(proc1_pid, SIGTERM);
                         }
                         else if (choice == 2) {
-                                kill(proc1_pid, SIGTERM);
+                                kill(proc1_pid, SIGKILL);
                         }
                         else {
                                 printf("This is not a valid signal. I won't kill the process.\n");
@@ -111,7 +106,7 @@ void PATER_ADAMVS(void) {
                         printf("\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
                 }
                 else {
-                        printf("[PATER ADAMVS] command unknown, type (h)elp to get help.\n");
+                        printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m command unknown, type (h)elp to get help.\n");
                 }
         }
 }
@@ -133,7 +128,6 @@ int main(void) {
         __asm__("mrs    %0, msp" : "=r"(msp));
         scheduler_init(msp);
 
-        setbuf(stdout, NULL);
 
         printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"
                 "\x1b[92;40mSwitching to init process (temporary shell).\x1b[0m\n"

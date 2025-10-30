@@ -46,7 +46,11 @@ pid_t spawn(
         char *const argv[],
         char *const envp[]
 ) {
+        int ret;
         SYSCALL(SPAWN_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
 }
 
 void sigreturn(void) {
