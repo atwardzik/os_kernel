@@ -80,6 +80,13 @@ struct Dentry {
         struct SuperBlock *sb;
 };
 
+struct DirectoryEntry {
+        uint32_t inode_index;
+        uint8_t file_type;
+        uint16_t rec_len;
+        char name[];
+};
+
 struct InodeOperations {
         struct Dentry *(*lookup)(struct VFS_Inode *, struct Dentry *, unsigned int);
 

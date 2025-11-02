@@ -279,6 +279,7 @@ pid_t sys_spawn_process(
         }
 
         process->files = files;
+        process->root = current->root;
         process->parent = current;
         process->max_children_count = current->max_children_count - 1;
         process->children = kmalloc(sizeof(struct Process *) * (current->max_children_count - 1));
@@ -294,7 +295,7 @@ pid_t sys_spawn_process(
 }
 
 
-pid_t create_process_init(void (*process_entry_ptr)(void)) {
+pid_t create_process_init(void (*process_entry_ptr)(void), struct VFS_Inode *root) {
         if (scheduler.current_process || scheduler.processes[0].ptr) {
                 __asm__("bkpt   #0");
         }
@@ -305,6 +306,7 @@ pid_t create_process_init(void (*process_entry_ptr)(void)) {
         }
 
         process->files = create_tty_file_mock();
+        process->root = root;
         process->max_children_count = INITIAL_PROCESS_COUNT - 1;
         process->children = kmalloc(sizeof(struct Process *) * (INITIAL_PROCESS_COUNT - 1));
         for (size_t i = 0; i < process->max_children_count; ++i) {

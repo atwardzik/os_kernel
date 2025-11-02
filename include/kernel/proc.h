@@ -45,6 +45,7 @@ struct Process {
         size_t allocated_memory;
         unsigned int priority_level;
         struct Files files;
+        struct VFS_Inode *root;
 
         struct Process *parent;
         size_t max_children_count;
@@ -99,7 +100,7 @@ void create_process_stack_frame(void **initial_sp, void *lr, void *pc, void *exc
 [[noreturn]] void save_kernelmode_and_context_switch(void);
 
 
-pid_t create_process_init(void (*process_entry_ptr)(void));
+pid_t create_process_init(void (*process_entry_ptr)(void), struct VFS_Inode *root);
 
 /**
  * Creates a new process, based on the current process.

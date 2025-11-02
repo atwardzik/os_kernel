@@ -5,10 +5,58 @@
 #include "fs/file.h"
 
 #include "tty.h"
+#include "kernel/memory.h"
 #include "kernel/proc.h"
+
+#include <string.h>
 
 
 int sys_open(const char *name, int flags, int mode) {
+        struct Process *current_process = scheduler_get_current_process();
+
+        // usage read first file in directory
+        struct File parent_handler = {
+                .f_inode = current_process->root,
+                .f_op = current_process->root->i_fop,
+        };
+
+        char *buf = kmalloc(sizeof(char) * current_process->root->i_size);
+
+        parent_handler.f_op->read(&parent_handler, buf, current_process->root->i_size, 0);
+
+        size_t offset = 0;
+        while (offset < current_process->root->i_size) {
+                size_t record_size = ((struct DirectoryEntry *) (buf))->rec_len;
+                struct DirectoryEntry *file_dentry = kmalloc(record_size);
+
+                for (size_t i = 0; i < record_size; ++i) {
+                        *((char *) (file_dentry) + i) = buf[offset];
+                        offset += 1;
+                }
+
+                if (strcmp(file_dentry->name, name) != 0) {
+                        kfree(file_dentry);
+                        continue;
+                }
+
+                auto file_inode =
+                        (struct VFS_Inode *) current_process->root->i_sb->inode_table[file_dentry->inode_index];
+
+                //new file descriptor
+                struct File *found_file = kmalloc(sizeof(*found_file));
+                found_file->f_op = file_inode->i_fop;
+                found_file->f_inode = file_inode;
+                found_file->f_pos = 0;
+                found_file->f_path = name; //TODO: it's not a valid path
+                current_process->files.fdtable[current_process->files.count] = found_file;
+                current_process->files.count += 1;
+
+                kfree(file_dentry);
+                kfree(buf);
+                return current_process->files.count - 1;
+        }
+
+        kfree(buf);
         return -1;
 }
 

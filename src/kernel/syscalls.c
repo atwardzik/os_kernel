@@ -80,7 +80,11 @@ caddr_t _sbrk(int incr) {
 
 
 int _open(const char *name, int flags, int mode) {
-        return -1;
+        int ret;
+        SYSCALL(OPEN_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
 }
 
 int _close(int file) {

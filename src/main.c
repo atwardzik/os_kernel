@@ -17,7 +17,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/errno.h>
+#include <sys/unistd.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 void proc1_terminate_signal_handler(int signum) {
         if (signum == SIGTERM) {
@@ -73,6 +75,7 @@ void PATER_ADAMVS(void) {
                                 "\t   (r)un - runs proc2 (standard input test). Proc1 is already running (diode)\n"
                                 "\t  (k)ill - kills proc1 (diode)\n"
                                 "\t(m)orcik - prints a colorful message\n"
+                                "\t  (o)pen - opens file file.txt\n"
                                 "\t      ls - lists current directory\n\n"
                         );
                 }
@@ -107,6 +110,19 @@ void PATER_ADAMVS(void) {
                 }
                 else if (strcmp(buffer, "morcik") == 0 || strcmp(buffer, "m") == 0) {
                         printf("\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
+                }
+                else if (strcmp(buffer, "open") == 0 || strcmp(buffer, "o") == 0) {
+                        int fd = open("test.txt", O_RDWR);
+
+                        char file_contents[100];
+                        read(fd, &file_contents, 100);
+                        printf("File contents pre-write: %s\n", file_contents);
+                        constexpr char new_file_contents[] = "HELLO WORLD [ANGRIER]!";
+                        write(fd, &new_file_contents, sizeof(new_file_contents));
+                        read(fd, &file_contents, 100);
+                        printf("File contents post-write: %s\n", file_contents);
+
+                        break;
                 }
                 else {
                         printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m command unknown, type (h)elp to get help.\n");
@@ -188,26 +204,8 @@ int main(void) {
                first_inode->i_gid, first_inode->i_size,
                first_dentry->name);
 
-#if 0
-        struct Dentry **dentries;
-        size_t entries_size;
-        fs.s_op->lookup(root, &dentries, &entries_size);
 
-        for (size_t i = 0; i < entries_size; ++i) {
-                printf("Mode: %i UID: %i GID: %i <time> %ldB %s\n", dentries[i]->inode->i_mode,
-                       dentries[i]->inode->i_uid,
-                       dentries[i]->inode->i_gid, dentries[i]->inode->i_size,
-                       dentries[i]->name);
-        }
-
-        char contents[] = {"Hello World!"};
-
-        struct File *f1 = fs.s_op->open(file1, 0);
-
-        f1->f_op->write(f1, contents, sizeof(contents), f1->f_pos);
-#endif
-
-        create_process_init(PATER_ADAMVS);
+        create_process_init(PATER_ADAMVS, root_inode);
         run_process_init();
 
         return 0;

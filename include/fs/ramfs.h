@@ -14,12 +14,6 @@ struct RAMFS_Inode {
         void *file_begin;
 };
 
-struct DirectoryEntry {
-        uint32_t inode_index;
-        uint8_t file_type;
-        uint16_t rec_len;
-        char name[];
-};
 
 struct Dentry *ramfs_mount(
         const char *source, const char *target,

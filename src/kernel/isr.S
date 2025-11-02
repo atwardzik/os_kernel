@@ -138,6 +138,9 @@ isr_svcall:
                 cmp     r4, WRITE_SVC
                 beq     .write_svc
 
+                cmp     r4, OPEN_SVC
+                beq     .open_svc
+
                 cmp     r4, WAIT_SVC
                 beq     .wait_svc
 
@@ -164,6 +167,10 @@ isr_svcall:
 
         .write_svc:
                 bl      sys_write
+                b       .svcall_exit
+
+        .open_svc:
+                bl      sys_open
                 b       .svcall_exit
 
         .wait_svc:
