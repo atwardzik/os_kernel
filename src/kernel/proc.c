@@ -348,7 +348,7 @@ void sys_kill(const pid_t pid, int sig) {
                 struct File *file = process->files.fdtable[i];
 
                 if (file->f_owner == process->pid) {
-                        kfree(file->f_op);
+                        kfree((struct FileOperations *) file->f_op);
                         kfree(file);
                 }
         }

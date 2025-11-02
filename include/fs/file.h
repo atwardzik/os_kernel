@@ -7,52 +7,128 @@
 
 #include "types.h"
 
-struct Inode {};
+#include <stdint.h>
+#include <time.h>
+
+/*
+ * /home/user/foo.txt
+ *       ├── Directory "/home/user/"
+ *       │     └── entry: ("foo.txt" → inode 12345)
+ *       ├── Inode 12345
+ *       │     ├── size = 1024 bytes
+ *       │     ├── owner = UID 1000
+ *       │     ├── block pointers = [42, 43]
+ *       └── Data blocks
+ *             ├── Block 42: first 512 bytes of the file
+ *             └── Block 43: next 512 bytes
+ */
+
+/*
+ *      [Superblock]
+ *      [Inode Table]
+ *         ├── inode 1 (root directory pointer)
+ *         ├── inode 2 (etc pointer)
+ *         ├── inode 3 (foo.txt pointer)
+ *      [Data Blocks]
+ *         ├── (directories, file contents)
+ */
 
 constexpr int MAX_OPEN_FILE_DESCRIPTORS = 8;
 
+struct SuperBlock;
+
+struct VFS_Inode;
+
+struct Dentry;
+
 struct FileOperations;
+
+struct File;
+
+enum FileType {
+        REGULAR_FILE,
+        DIRECTORY,
+};
+
+
+struct SuperBlockOperations {
+        struct VFS_Inode *(*alloc_inode)(struct SuperBlock *sb);
+
+        void (*destroy_inode)(struct VFS_Inode *);
+
+        void (*free_inode)(struct VFS_Inode *);
+};
+
+struct SuperBlock {
+        const char *name;
+        const struct SuperBlockOperations *s_op;
+        struct Dentry *s_root;
+
+        // struct Dentry *(*mount)();
+
+        size_t max_inode_count;
+        size_t current_inode_count;
+
+        void *inode_table[] __attribute__((counted_by(max_inode_count)));
+};
+
+
+struct Dentry {
+        char *name;
+        unsigned int inode_index;
+
+        struct SuperBlock *sb;
+};
+
+struct InodeOperations {
+        struct Dentry *(*lookup)(struct VFS_Inode *, struct Dentry *, unsigned int);
+
+        int (*create)(struct VFS_Inode *, struct Dentry *, uint16_t);
+
+        struct Dentry *(*mkdir)(struct VFS_Inode *, struct Dentry *, mode_t);
+};
+
+struct VFS_Inode {
+        uint16_t i_mode; // File type and permissions
+        uint16_t i_uid;
+        uint16_t i_gid;
+        uint32_t i_flags; // Compressed; append only; don't update access time etc.
+
+        const struct InodeOperations *i_op;
+        const struct FileOperations *i_fop;
+        struct SuperBlock *i_sb;
+
+        off_t i_size;
+        time_t i_atime;
+        time_t i_ctime;
+        time_t i_mtime;
+        uint32_t i_generation; // File Version
+        uint32_t i_blocks;     // Total number or 512-bytes blocks reserved to contain the data of this inode
+
+        uint16_t i_links_count; // How many times this inode is linked (referred to)
+};
 
 struct File {
         void *f_path;
-        struct FileOperations *f_op;
+        struct VFS_Inode *f_inode;
+        const struct FileOperations *f_op;
         unsigned int f_flags;
         off_t f_pos;
         pid_t f_owner;
-#if 0
-        spinlock_t f_lock;
 
-        struct Path f_path;
-#endif
+        // struct Path f_path;
 };
 
 struct FileOperations {
-        /**
-         * size_t lseek(struct File *file, size_t offset, int whence);
-         */
-        ssize_t (*lseek)(struct File *, size_t, int);
+        ssize_t (*lseek)(struct File *file, size_t offset, int whence);
 
-        /**
-         * ssize_t read(struct File *file, void buf, size_t count, off_t file_offset);
-         */
-        ssize_t (*read)(struct File *, void *, size_t, off_t);
+        ssize_t (*read)(struct File *file, void *buf, size_t count, off_t file_offset);
 
-        /**
-         * ssize_t write(struct File *file, const void buf, size_t count, off_t file_offset);
-         */
-        ssize_t (*write)(struct File *, void *, size_t, off_t);
+        ssize_t (*write)(struct File *file, void *buf, size_t count, off_t file_offset);
 
         int (*open)(struct Inode *, struct File *);
 
         int (*flush)(struct File *);
-
-#if 0
-        int (*lock)(struct File *, int, struct File_lock *);
-
-        int (*check_flags)(int);
-
-        void (*show_fdinfo)(struct seq_File *m, struct File *f);
-#endif
 };
 
 struct Files {
@@ -60,65 +136,6 @@ struct Files {
         struct File **fdtable;
         // struct File *next;
 };
-
-typedef struct fs fs_t;
-
-typedef enum fs_object_type {
-        ENTRY_TYPE_DIR,
-        ENTRY_TYPE_FILE,
-} fs_object_type_t;
-
-typedef struct fs_object fs_object_t;
-
-#if 0
-fs_t *fs_init(void);
-
-void fs_deinit(fs_t *fs);
-
-fs_object_t *f_get_parent(fs_t *fs, const char *path);
-
-fs_object_t *f_get_entry(fs_t *fs, const char *path);
-
-char *f_get_name(const fs_object_t *entry);
-
-char *get_path(const fs_object_t *entry);
-
-int is_dir(const fs_object_t *entry);
-
-int is_file(const fs_object_t *entry);
-
-fs_object_t *f_create(fs_t *fs, const char *path, int flags);
-
-fs_object_t *f_open(fs_t *fs, const fs_object_t *entry, unsigned int flags);
-
-void f_close(fs_object_t *fh);
-
-ssize_t f_read(fs_object_t *fh, char *buf, size_t len);
-
-ssize_t f_write(fs_object_t *fh, const char *buf, size_t len);
-
-ssize_t f_seek(fs_object_t *fh, off_t offset, int mode);
-
-size_t f_tell_current_position(const fs_object_t *fh);
-
-int f_unlink(fs_object_t *entry);
-
-int f_rename(fs_t *fs, const char *src, const char *dst);
-
-fs_object_t *opendir(fs_t *fs, const fs_object_t *entry);
-
-void closedir(fs_object_t *dh);
-
-const fs_object_t *readdir(fs_object_t *dh);
-
-void seekdir(fs_object_t *dh, long loc);
-
-long telldir(fs_object_t *dh);
-
-fs_object_t *mkdir(fs_t *fs, const char *name);
-
-int rmdir(fs_object_t *entry);
-#endif
 
 
 void init_file_descriptors(void);

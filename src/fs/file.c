@@ -8,7 +8,9 @@
 #include "kernel/proc.h"
 
 
-int sys_open(const char *name, int flags, int mode) { return -1; }
+int sys_open(const char *name, int flags, int mode) {
+        return -1;
+}
 
 int sys_close(int file) { return -1; }
 

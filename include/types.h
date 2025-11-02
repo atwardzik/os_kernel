@@ -4,6 +4,7 @@
 
 #ifndef OS_TYPES_H
 #define OS_TYPES_H
+#include <stdint.h>
 
 
 // typedef blkcnt_t; // Used for file block counts.
@@ -68,7 +69,7 @@ typedef int ssize_t; // Used for a count of bytes or an error indication.
 
 // typedef suseconds_t; // Used for time in microseconds.
 
-// typedef time_t; // Used for time in seconds.
+// typedef uint32_t time_t; // Used for time in seconds.
 
 // typedef timer_t; // Used for timer ID returned by timer_create().
 

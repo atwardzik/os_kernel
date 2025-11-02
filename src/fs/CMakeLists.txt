@@ -1,5 +1,6 @@
 add_library(fs OBJECT
         file.c
+        ramfs.c
 )
 
 target_include_directories(fs PUBLIC ${CMAKE_SOURCE_DIR}/include/fs)

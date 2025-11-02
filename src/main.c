@@ -5,6 +5,9 @@
 #include "drivers/time.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
+#include "fs/file.h"
+#include "fs/ramfs.h"
+#include "kernel/memory.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
 #include "kernel/syscalls.h"
@@ -132,6 +135,77 @@ int main(void) {
         printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"
                 "\x1b[92;40mSwitching to init process (temporary shell).\x1b[0m\n"
         );
+
+
+        // create root directory and two test files
+        const struct Dentry *root = ramfs_mount(nullptr, nullptr, nullptr, 0);
+        struct VFS_Inode *root_inode = root->sb->inode_table[root->inode_index];
+
+        struct Dentry file1 = {
+                .name = "test.txt",
+        };
+        struct Dentry file2 = {
+                .name = "a.out",
+        };
+        root_inode->i_op->create(root_inode, &file1, 0666);
+        root_inode->i_op->create(root_inode, &file2, 0777);
+
+        // usage read first file in directory
+        struct File parent_handler = {
+                .f_inode = root_inode,
+                .f_op = root_inode->i_fop,
+        };
+
+        char buf[512];
+        parent_handler.f_op->read(&parent_handler, &buf, 512, 0);
+        size_t first_size = ((struct DirectoryEntry *) (&buf))->rec_len;
+        struct DirectoryEntry *first_dentry = kmalloc(first_size);
+        for (size_t i = 0; i < first_size; ++i) {
+                *((char *) (first_dentry) + i) = buf[i];
+        }
+
+        auto first_inode = (struct VFS_Inode *) root->sb->inode_table[first_dentry->inode_index];
+        printf("Mode: %o UID: %i GID: %i <time> %ldB %s\n", first_inode->i_mode,
+               first_inode->i_uid,
+               first_inode->i_gid, first_inode->i_size,
+               first_dentry->name);
+
+        // write to first file
+        printf("\nWriting to file . . .\n\n");
+        struct File first_file = {
+                .f_inode = first_inode,
+                .f_pos = 0,
+        };
+        char message[] = "Hello World!";
+        first_inode->i_fop->write(&first_file, &message, sizeof(message), 0);
+
+        char bytes_in_file[512];
+        first_inode->i_fop->read(&first_file, &bytes_in_file, first_inode->i_size, 0);
+        printf("New File Contents:\n\t%s\n", bytes_in_file);
+
+        printf("New File Status:\nMode: %o UID: %i GID: %i <time> %ldB %s\n", first_inode->i_mode,
+               first_inode->i_uid,
+               first_inode->i_gid, first_inode->i_size,
+               first_dentry->name);
+
+#if 0
+        struct Dentry **dentries;
+        size_t entries_size;
+        fs.s_op->lookup(root, &dentries, &entries_size);
+
+        for (size_t i = 0; i < entries_size; ++i) {
+                printf("Mode: %i UID: %i GID: %i <time> %ldB %s\n", dentries[i]->inode->i_mode,
+                       dentries[i]->inode->i_uid,
+                       dentries[i]->inode->i_gid, dentries[i]->inode->i_size,
+                       dentries[i]->name);
+        }
+
+        char contents[] = {"Hello World!"};
+
+        struct File *f1 = fs.s_op->open(file1, 0);
+
+        f1->f_op->write(f1, contents, sizeof(contents), f1->f_pos);
+#endif
 
         create_process_init(PATER_ADAMVS);
         run_process_init();
