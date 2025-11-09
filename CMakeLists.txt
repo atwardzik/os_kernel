@@ -3,12 +3,13 @@ set(CMAKE_TOOLCHAIN_FILE pico_toolchain.cmake)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+add_compile_definitions(VGA_640x480)
 if (DEFINED ARCH_RP2040)
-    add_compile_definitions(ARCH_RP2040=1 VGA_640x480)
+    add_compile_definitions(ARCH_RP2040=1)
     set(LINKER_SCRIPT "linker_rp2040.ld")
 
 elseif (DEFINED ARCH_RP2350)
-    add_compile_definitions(ARCH_RP2350=1 VGA_640x480)
+    add_compile_definitions(ARCH_RP2350=1)
     set(LINKER_SCRIPT "linker_rp2350.ld")
 
 else ()

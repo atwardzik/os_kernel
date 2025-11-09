@@ -26,10 +26,7 @@ void ramfs_destroy_inode(struct VFS_Inode *);
 
 struct Dentry *ramfs_lookup(struct VFS_Inode *parent, struct Dentry *file, unsigned int);
 
-int ramfs_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_t permissions);
-
-struct Dentry *ramfs_mkdir(struct VFS_Inode *parent, struct Dentry *new_dir, mode_t permissions);
-
+int ramfs_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_t mode);
 
 ssize_t ramfs_write(struct File *file, void *buf, size_t count, off_t file_offset);
 

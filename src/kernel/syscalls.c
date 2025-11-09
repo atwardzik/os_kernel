@@ -59,7 +59,7 @@ void sigreturn(void) {
 
 typedef typeof(void (int)) *sighandler_t;
 
-sighandler_t signal(int signum, sighandler_t handler) {
+sighandler_t _signal(int signum, sighandler_t handler) {
         SYSCALL(SIGNAL_SVC)
 }
 
@@ -92,8 +92,6 @@ int _close(int file) {
 }
 
 
-extern char *my_gets(char *ptr, int len);
-
 int _fstat(char *file, struct stat *st) {
         st->st_mode = S_IFCHR;
         return 0;
@@ -118,6 +116,10 @@ int _getpid(void) {
 
 int kill(int pid, int sig) {
         SYSCALL(KILL_SVC)
+}
+
+int _kill(int pid, int sig) {
+        kill(pid, sig);
 }
 
 int _link(char *old, char *new) {

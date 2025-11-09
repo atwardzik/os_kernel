@@ -33,6 +33,18 @@
  *         ├── (directories, file contents)
  */
 
+#define O_DIRECTORY 0x200000
+
+// Bits:   [15........12][11....9][8....6][5....3][2....0]
+//            file type   special   user    group   other
+#define	S_IFREG 0100000
+#define	S_IFDIR 0040000
+#define	S_IFCHR 0020000
+#define	S_IFBLK 0060000
+#define	S_IFLNK 0120000
+#define	S_IFSOCK 0140000
+#define	S_IFIFO 0010000
+
 constexpr int MAX_OPEN_FILE_DESCRIPTORS = 8;
 
 struct SuperBlock;
@@ -74,8 +86,8 @@ struct SuperBlock {
 
 
 struct Dentry {
-        char *name;
-        unsigned int inode_index;
+        const char *name;
+        struct VFS_Inode *inode;
 
         struct SuperBlock *sb;
 };
@@ -92,7 +104,8 @@ struct InodeOperations {
 
         int (*create)(struct VFS_Inode *, struct Dentry *, uint16_t);
 
-        struct Dentry *(*mkdir)(struct VFS_Inode *, struct Dentry *, mode_t);
+        // create with specific flag
+        // struct Dentry *(*mkdir)(struct VFS_Inode *, struct Dentry *, mode_t);
 };
 
 struct VFS_Inode {
@@ -133,7 +146,7 @@ struct FileOperations {
 
         ssize_t (*write)(struct File *file, void *buf, size_t count, off_t file_offset);
 
-        int (*open)(struct Inode *, struct File *);
+        int (*open)(struct VFS_Inode *, struct File *);
 
         int (*flush)(struct File *);
 };

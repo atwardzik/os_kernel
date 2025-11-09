@@ -25,7 +25,7 @@ struct Dentry *ramfs_mount(
         struct VFS_Inode *root_inode = fs->s_op->alloc_inode(fs);
         struct Dentry *root = kmalloc(sizeof(*root));
         root->name = "/";
-        root->inode_index = 0;
+        root->inode = root_inode;
         root->sb = fs;
 
         fs->s_root = root;
@@ -41,7 +41,6 @@ struct VFS_Inode *ramfs_alloc_inode(struct SuperBlock *sb) {
         struct InodeOperations *i_op = kmalloc(sizeof(*i_op));
         i_op->lookup = &ramfs_lookup;
         i_op->create = &ramfs_create_file;
-        i_op->mkdir = &ramfs_mkdir;
 
         struct FileOperations *i_fop = kmalloc(sizeof(*i_fop));
         i_fop->read = ramfs_read;
@@ -75,50 +74,73 @@ void ramfs_destroy_inode(struct VFS_Inode *) {
 
 
 struct Dentry *ramfs_lookup(struct VFS_Inode *parent, struct Dentry *file, unsigned int) {
-        // *children = kmalloc(sizeof(struct Dentry *) * parent->children_count);
-        // *children_count = parent->children_count;
-        //
-        // for (size_t i = 0; i < parent->children_count; ++i) {
-        //         (*children)[i] = parent->children[i];
-        // }
+        char *buf = kmalloc(sizeof(char) * parent->i_size);
+        struct File parent_wrapper = {
+                .f_inode = parent
+        };
+        parent->i_fop->read(&parent_wrapper, buf, parent->i_size, 0);
 
+        size_t offset = 0;
+        while (offset < parent->i_size) {
+                const size_t record_size = ((struct DirectoryEntry *) buf + offset)->rec_len;
+                struct DirectoryEntry file_dentry;
+
+                for (size_t i = 0; i < record_size; ++i) {
+                        *((char *) (&file_dentry) + i) = buf[offset];
+                        offset += 1;
+                }
+
+                if (strcmp(file_dentry.name, file->name) == 0) {
+                        struct Dentry *dentry = kmalloc(sizeof(*dentry));
+                        dentry->name = file_dentry.name;
+                        dentry->inode = parent->i_sb->inode_table[file_dentry.inode_index];
+                        dentry->sb = parent->i_sb;
+
+                        kfree(buf);
+                        return dentry;
+                }
+        }
+
+        kfree(buf);
         return nullptr;
 }
 
 
-int ramfs_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_t permissions) {
+int ramfs_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_t mode) {
         struct SuperBlock *fs = parent->i_sb;
 
         struct VFS_Inode *new_inode = fs->s_op->alloc_inode(parent->i_sb);
         if (!new_inode) {
                 return -1;
         }
-        new_inode->i_mode = permissions;
+        new_inode->i_mode = mode;
 
-        new_file->inode_index = fs->current_inode_count - 1;
+        new_file->inode = new_inode;
 
         //update parent contents
 
         const uint16_t rec_len = sizeof(struct DirectoryEntry) + strlen(new_file->name) + 1;
         struct DirectoryEntry *directory_entry = kmalloc(rec_len);
         directory_entry->rec_len = rec_len;
-        directory_entry->inode_index = new_file->inode_index;
-        directory_entry->file_type = '-';
+        directory_entry->inode_index = fs->current_inode_count - 1;
+        if (mode & S_IFREG) {
+                directory_entry->file_type = '-';
+        }
+        if (mode & S_IFDIR) {
+                directory_entry->file_type = 'd';
+        }
+        else {
+                // TODO: add other file types, c(haracter) b(lock) s(ocket) p(ipe) l(ink)
+        }
         strcpy(directory_entry->name, new_file->name);
 
         struct File parent_handler = {
                 .f_inode = parent,
         };
-        parent->i_fop->write(&parent_handler, directory_entry, directory_entry->rec_len, parent->i_size);
+        parent->i_fop->write(&parent_handler, directory_entry, rec_len, parent->i_size);
 
+        kfree(directory_entry);
         return 0;
-}
-
-struct Dentry *ramfs_mkdir(struct VFS_Inode *parent, struct Dentry *new_dir, mode_t permissions) {
-        // new_dir->max_children_count = 8;
-        // new_dir->children = kmalloc(sizeof(struct Dentry *) * 8); //TODO: REPLACE TO DYNAMIC
-
-        return new_dir;
 }
 
 ssize_t ramfs_write(struct File *file, void *buf, size_t count, off_t file_offset) {
@@ -131,6 +153,7 @@ ssize_t ramfs_write(struct File *file, void *buf, size_t count, off_t file_offse
         }
         else if (file_offset + count > inode_ptr->bytes_allocated) {
                 // inode_ptr->file_begin = krealloc(inode_ptr->file_begin, current_size + 512); // +relocate!!!
+                __asm__("bkpt #0\n\r");
         }
 
         for (int i = 0; i < count; i++) {
@@ -165,7 +188,7 @@ struct File *ramfs_get_file_handler(struct Dentry *file, unsigned int flags) {
         f_std->f_pos = 0;
         f_std->f_op = std_fop;
         f_std->f_owner = 0;
-        f_std->f_inode = file->sb->inode_table[file->inode_index];
+        f_std->f_inode = file->inode;
 
         return f_std;
 }

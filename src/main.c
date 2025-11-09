@@ -12,6 +12,7 @@
 #include "kernel/resets.h"
 #include "kernel/syscalls.h"
 
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +20,6 @@
 #include <sys/errno.h>
 #include <sys/unistd.h>
 #include <sys/wait.h>
-#include <fcntl.h>
 
 void proc1_terminate_signal_handler(int signum) {
         if (signum == SIGTERM) {
@@ -54,6 +54,11 @@ void PATER_ADAMVS_SIGINT(int signum) {
         printf("\x1b[91;40mTrying to exit the init process is a bloody bad idea.\x1b[0m\n");
 }
 
+static uint16_t raw_bytes_function[] __attribute__((aligned(4))) = {
+        0xf04f, 0x0001, 0xf20f, 0x010c, 0xf04f, 0x020d, 0xdf04, 0xf04f, 0x0000,
+        0xdf01, 0x6548, 0x6c6c, 0x206f, 0x6f57, 0x6c72, 0x2164, 0x0000, 0xbf00,
+};
+
 void PATER_ADAMVS(void) {
         signal(SIGINT, PATER_ADAMVS_SIGINT);
         printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
@@ -76,8 +81,7 @@ void PATER_ADAMVS(void) {
                                 "\t  (k)ill - kills proc1 (diode)\n"
                                 "\t(m)orcik - prints a colorful message\n"
                                 "\t  (o)pen - opens file file.txt\n"
-                                "\t      ls - lists current directory\n\n"
-                        );
+                                "\t      ls - lists current directory\n\n");
                 }
                 else if (strcmp(buffer, "run") == 0 || strcmp(buffer, "r") == 0) {
                         printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m I will be waiting until my child is dead . . .\n");
@@ -87,8 +91,7 @@ void PATER_ADAMVS(void) {
                         const int returned_pid = wait(&code);
 
                         printf("\n\x1b[96;40m[PATER ADAMVS]\x1b[0m Child process %i exited with code %i.\n",
-                               returned_pid, code
-                        );
+                               returned_pid, code);
                 }
                 else if (strcmp(buffer, "kill") == 0 || strcmp(buffer, "k") == 0) {
                         printf("You are willing to kill the process. Choose (1) SIGTERM or (2) SIGKILL: ");
@@ -112,7 +115,9 @@ void PATER_ADAMVS(void) {
                         printf("\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
                 }
                 else if (strcmp(buffer, "open") == 0 || strcmp(buffer, "o") == 0) {
-                        int fd = open("test.txt", O_RDWR);
+                        int dirfd1 = open("dir1", O_DIRECTORY | O_CREAT);
+
+                        int fd = open("dir1/test.txt", O_RDWR | O_CREAT);
 
                         char file_contents[100];
                         read(fd, &file_contents, 100);
@@ -121,8 +126,14 @@ void PATER_ADAMVS(void) {
                         write(fd, &new_file_contents, sizeof(new_file_contents));
                         read(fd, &file_contents, 100);
                         printf("File contents post-write: %s\n", file_contents);
+                }
+                else if (strcmp(buffer, "rb") == 0) {
+                        spawn((void *) raw_bytes_function, nullptr, nullptr, nullptr, nullptr);
+                        int code;
+                        const int returned_pid = wait(&code);
 
-                        break;
+                        printf("\n\x1b[96;40m[PATER ADAMVS]\x1b[0m Child raw-bytes process %i exited with code %i.\n",
+                               returned_pid, code);
                 }
                 else {
                         printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m command unknown, type (h)elp to get help.\n");
@@ -143,6 +154,7 @@ int main(void) {
 
         init_tty();
         setup_keyboard_device_file();
+
         void *msp;
         __asm__("mrs    %0, msp" : "=r"(msp));
         scheduler_init(msp);
@@ -155,8 +167,7 @@ int main(void) {
 
         // create root directory and two test files
         const struct Dentry *root = ramfs_mount(nullptr, nullptr, nullptr, 0);
-        struct VFS_Inode *root_inode = root->sb->inode_table[root->inode_index];
-
+#if 0
         struct Dentry file1 = {
                 .name = "test.txt",
         };
@@ -165,6 +176,7 @@ int main(void) {
         };
         root_inode->i_op->create(root_inode, &file1, 0666);
         root_inode->i_op->create(root_inode, &file2, 0777);
+
 
         // usage read first file in directory
         struct File parent_handler = {
@@ -203,10 +215,9 @@ int main(void) {
                first_inode->i_uid,
                first_inode->i_gid, first_inode->i_size,
                first_dentry->name);
+#endif
 
-
-        create_process_init(PATER_ADAMVS, root_inode);
+        create_process_init(PATER_ADAMVS, root->inode);
         run_process_init();
-
         return 0;
 }
