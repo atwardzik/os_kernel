@@ -267,7 +267,7 @@ pid_t sys_spawn_process(
         }
 
         struct Process *current = scheduler.current_process;
-        struct File **fdtable = kmalloc(sizeof(struct File *) * current->files.count);
+        struct File **fdtable = kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
         struct Files files = {current->files.count, fdtable};
         for (size_t i = 0; i < current->files.count; ++i) {
                 files.fdtable[i] = current->files.fdtable[i];

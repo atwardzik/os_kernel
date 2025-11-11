@@ -150,11 +150,17 @@ isr_svcall:
                 cmp     r4, SIGNAL_SVC
                 beq     .signal_svc
 
+                cmp     r4, READDIR_SVC
+                beq     .readdir_svc
+
                 cmp     r4, CHDIR_SVC
                 beq     .chdir_svc
 
                 cmp     r4, SIGRETURN_SVC
                 beq     .sigreturn_svc
+
+                cmp     r4, LSEEK_SVC
+                beq     .lseek_svc
 
         .exit_svc:
                 bl      sys_exit
@@ -180,6 +186,14 @@ isr_svcall:
                 bl      sys_wait
                 b       .svcall_exit
 
+        .readdir_svc:
+                bl      sys_readdir
+                b       .svcall_exit
+
+        .chdir_svc:
+                bl      sys_chdir
+                b       .svcall_exit
+
         .signal_svc:
                 bl      sys_signal
                 b       .svcall_exit
@@ -188,12 +202,12 @@ isr_svcall:
                 bl      sys_kill
                 b       .svcall_exit
 
-        .chdir_svc:
-                bl      sys_chdir
-                b       .svcall_exit
-
         .sigreturn_svc:
                 bl      sys_sigreturn
+                b       .svcall_exit
+
+        .lseek_svc:
+                bl      sys_lseek
                 b       .svcall_exit
 
         .svcall_exit:

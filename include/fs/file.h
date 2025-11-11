@@ -92,11 +92,13 @@ struct Dentry {
         struct SuperBlock *sb;
 };
 
+constexpr size_t MAX_FILENAME_LEN = 32;
+
 struct DirectoryEntry {
-        uint32_t inode_index;
         uint8_t file_type;
-        uint16_t rec_len;
-        char name[];
+        uint32_t inode_index;
+        // uint16_t rec_len;
+        char name[MAX_FILENAME_LEN];
 };
 
 struct InodeOperations {

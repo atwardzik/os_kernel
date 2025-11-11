@@ -74,8 +74,9 @@ void PATER_ADAMVS(void) {
                         continue;
                 }
                 buffer[strcspn(buffer, "\n")] = '\0';
+                const char *cmd = kstrtok(buffer, " ");
 
-                if (strcmp(buffer, "help") == 0 || strcmp(buffer, "h") == 0) {
+                if (strcmp(cmd, "help") == 0 || strcmp(cmd, "h") == 0) {
                         printf("Temporarily available commands:\n"
                                 "\t  (h)elp - prints this help screen\n"
                                 "\t   (r)un - runs proc2 (standard input test). Proc1 is already running (diode)\n"
@@ -85,7 +86,7 @@ void PATER_ADAMVS(void) {
                                 "\t      rb - runs raw-bytes written process (mock for userspace program)\n"
                                 "\t      ls - lists current directory\n\n");
                 }
-                else if (strcmp(buffer, "run") == 0 || strcmp(buffer, "r") == 0) {
+                else if (strcmp(cmd, "run") == 0 || strcmp(cmd, "r") == 0) {
                         printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m I will be waiting until my child is dead . . .\n");
 
                         spawn((void *) &proc2_main, nullptr, nullptr, nullptr, nullptr);
@@ -95,7 +96,7 @@ void PATER_ADAMVS(void) {
                         printf("\n\x1b[96;40m[PATER ADAMVS]\x1b[0m Child process %i exited with code %i.\n",
                                returned_pid, code);
                 }
-                else if (strcmp(buffer, "kill") == 0 || strcmp(buffer, "k") == 0) {
+                else if (strcmp(cmd, "kill") == 0 || strcmp(cmd, "k") == 0) {
                         printf("You are willing to kill the process. Choose (1) SIGTERM or (2) SIGKILL: ");
 
                         char line[80];
@@ -113,10 +114,10 @@ void PATER_ADAMVS(void) {
                                 printf("This is not a valid signal. I won't kill the process.\n");
                         }
                 }
-                else if (strcmp(buffer, "morcik") == 0 || strcmp(buffer, "m") == 0) {
+                else if (strcmp(cmd, "morcik") == 0 || strcmp(cmd, "m") == 0) {
                         printf("\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
                 }
-                else if (strcmp(buffer, "open") == 0 || strcmp(buffer, "o") == 0) {
+                else if (strcmp(cmd, "open") == 0 || strcmp(cmd, "o") == 0) {
                         int dirfd1 = open("home/dir1", O_DIRECTORY | O_CREAT);
 
                         int fd = open("home/dir1/test.txt", O_RDWR | O_CREAT);
@@ -136,13 +137,26 @@ void PATER_ADAMVS(void) {
                         read(fd, &file_contents, 128);
                         printf("File contents post-write: %s\n", file_contents);
                 }
-                else if (strcmp(buffer, "rb") == 0) {
+                else if (strcmp(cmd, "rb") == 0) {
                         spawn((void *) raw_bytes_function, nullptr, nullptr, nullptr, nullptr);
                         int code;
                         const int returned_pid = wait(&code);
 
                         printf("\n\x1b[96;40m[PATER ADAMVS]\x1b[0m Child raw-bytes process %i exited with code %i.\n",
                                returned_pid, code);
+                }
+                else if (strcmp(cmd, "ls") == 0) {
+                        const int dirfd = open("/", O_RDONLY);
+
+                        struct DirectoryEntry dentry;
+                        while (readdir(dirfd, &dentry)) {
+                                printf("%c %s\n", dentry.file_type, dentry.name);
+                        }
+
+                        lseek(dirfd, 0, SEEK_SET);
+                }
+                else if (strcmp(cmd, "mkdir") == 0) {
+                        //
                 }
                 else {
                         printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m command unknown, type (h)elp to get help.\n");

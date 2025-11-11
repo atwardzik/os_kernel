@@ -11,6 +11,22 @@
 
 #include <fcntl.h>
 #include <string.h>
+#include <sys/unistd.h>
+
+
+int ksys_write(const int file, char *ptr, const int len) {
+        if (file != 1 && file != 2) {
+                ksys_write(1, "[!] There is no such file descriptor\n", 37);
+                __asm__("bkpt   #0");
+                return 0;
+        }
+
+        for (int i = 0; i < len; i++) {
+                write_byte(*ptr++);
+        }
+
+        return len;
+}
 
 static struct VFS_Inode *get_parent(const char *name) {
         const struct Process *current_process = scheduler_get_current_process();
@@ -18,7 +34,7 @@ static struct VFS_Inode *get_parent(const char *name) {
         if (name[0] == '/') {
                 inode = current_process->root;
         }
-        if (strcmp(name, "/") == 0) {
+        if (strcmp(name, "/") == 0 || strlen(name) == 0) {
                 return inode;
         }
 
@@ -51,6 +67,10 @@ static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
                 return nullptr;
         }
 
+        if (strcmp(name, "/") == 0) {
+                return parent;
+        }
+
         struct File parent_handler = {
                 .f_inode = parent,
                 .f_op = parent->i_fop,
@@ -62,13 +82,8 @@ static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
 
         size_t offset = 0;
         while (offset < parent->i_size) {
-                const size_t record_size = ((struct DirectoryEntry *) buf + offset)->rec_len;
-                if (!record_size) {
-                        break;
-                }
-
                 struct DirectoryEntry file_dentry;
-                for (size_t i = 0; i < record_size; ++i) {
+                for (size_t i = 0; i < sizeof(file_dentry); ++i) {
                         *((char *) (&file_dentry) + i) = buf[offset];
                         offset += 1;
                 }
@@ -95,11 +110,23 @@ static struct VFS_Inode *create_file(struct VFS_Inode *parent, const char *name,
 static int get_file_descriptor(struct VFS_Inode *inode, const char *name) {
         struct Process *current_process = scheduler_get_current_process();
 
+        for (size_t i = 0; i < current_process->files.count; ++i) {
+                if (current_process->files.fdtable[i]->f_inode == inode) {
+                        return i;
+                }
+        }
+
         struct File *found_file = kmalloc(sizeof(*found_file));
         found_file->f_op = inode->i_fop;
         found_file->f_inode = inode;
         found_file->f_pos = 0;
         found_file->f_path = name; //TODO: it's not a valid path
+
+        if (current_process->files.count > MAX_OPEN_FILE_DESCRIPTORS) {
+                ksys_write(1, "[!] Too much files opened.\n", 28);
+                __asm__("bkpt   #0");
+                return -1;
+        }
         current_process->files.fdtable[current_process->files.count] = found_file;
         current_process->files.count += 1;
 
@@ -120,8 +147,12 @@ static char *get_path(const char *name) {
 
                 i += 1;
         }
-        path[i] = 0;
 
+        if (i == 0) {
+                return nullptr;
+        }
+
+        path[i] = 0;
         return path;
 }
 
@@ -161,19 +192,6 @@ int sys_open(const char *name, int flags, int mode) {
 
 int sys_close(int file) { return -1; }
 
-int ksys_write(const int file, char *ptr, const int len) {
-        if (file != 1 && file != 2) {
-                ksys_write(1, "[!] There is no such file descriptor\n", 37);
-                __asm__("bkpt   #0");
-                return 0;
-        }
-
-        for (int i = 0; i < len; i++) {
-                write_byte(*ptr++);
-        }
-
-        return len;
-}
 
 int sys_read(int file, char *ptr, int len) {
         struct Process const *current_process = scheduler_get_current_process();
@@ -238,6 +256,60 @@ int sys_write(const int file, char *ptr, const int len) {
         }
 
         return -1;
+}
+
+int sys_lseek(const int file, off_t offset, int whence) {
+        struct Process const *current_process = scheduler_get_current_process();
+
+        if (file >= current_process->files.count || file < 0) {
+                ksys_write(1, "[!] There is no such file descriptor\n", 37);
+                __asm__("bkpt   #0");
+                return -1;
+        }
+
+        struct File *current_file = current_process->files.fdtable[file];
+        if (whence == SEEK_SET) {
+                current_file->f_pos = offset;
+        }
+        else if (whence == SEEK_CUR) {
+                current_file->f_pos += offset;
+        }
+        else if (whence == SEEK_END) {
+                current_file->f_pos = current_file->f_inode->i_size + offset;
+        }
+        // if (current_file->f_op->lseek) {
+        //         return current_file->f_op->lseek(current_file, offset, whence);
+        // }
+
+        return current_file->f_pos;
+}
+
+int sys_readdir(int dirfd, struct DirectoryEntry *directory_entry) {
+        struct Process *current_process = scheduler_get_current_process();
+
+        if (dirfd >= current_process->files.count || dirfd < 0) {
+                ksys_write(1, "[!] There is no such file descriptor\n", 37);
+                __asm__("bkpt   #0");
+                return -1;
+        }
+
+        struct File *parent_handler = current_process->files.fdtable[dirfd];
+        const struct VFS_Inode *parent_inode = parent_handler->f_inode;
+
+
+        size_t bytes_left = parent_inode->i_size - parent_handler->f_pos;
+        if (bytes_left < sizeof(struct DirectoryEntry)) {
+                return 0;
+        }
+
+        char *buf = kmalloc(sizeof(char) * bytes_left);
+        parent_handler->f_op->read(parent_handler, buf, bytes_left, parent_handler->f_pos);
+        parent_handler->f_pos += sizeof(struct DirectoryEntry);
+
+        *directory_entry = *(struct DirectoryEntry *) buf;
+
+        kfree(buf);
+        return 1;
 }
 
 int sys_chdir(const char *path) {

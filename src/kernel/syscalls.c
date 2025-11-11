@@ -134,7 +134,19 @@ int _unlink(char *name) {
 }
 
 int _lseek(int file, int ptr, int dir) {
-        return 0;
+        int ret;
+        SYSCALL(LSEEK_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
+}
+
+int readdir(int dirfd, struct DirectoryEntry *directory_entry) {
+        int ret;
+        SYSCALL(READDIR_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
 }
 
 int chdir(const char *path) {

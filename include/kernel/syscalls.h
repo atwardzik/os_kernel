@@ -7,6 +7,7 @@
 
 #include "proc.h"
 #include "types.h"
+#include "fs/file.h"
 
 pid_t spawn(
         void (*process_entry_ptr)(void),
@@ -19,6 +20,8 @@ pid_t spawn(
 [[noreturn]] void sigreturn(void);
 
 int kill(int pid, int sig);
+
+int readdir(int dirfd, struct DirectoryEntry *directory_entry);
 
 int chdir(const char *path);
 
