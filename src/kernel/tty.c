@@ -298,18 +298,6 @@ static int keyboard_buffer_current_position = 0;
 
 static bool signal_buffer_newline = false;
 
-void setup_keyboard_device_file() {
-        constexpr size_t buf_size = 1024;
-
-        keyboard_device_file_stream = kmalloc(
-                sizeof(*keyboard_device_file_stream)
-                + (buf_size - 1) * sizeof(char)
-        );
-
-        keyboard_device_file_stream->length = buf_size;
-        keyboard_device_file_stream->read_wait = nullptr;
-}
-
 void *get_current_keyboard_buffer_offset() {
         return keyboard_device_file_stream->buffer + keyboard_buffer_final_length;
 }
@@ -342,14 +330,6 @@ static void delete_and_shift(const int pos_delete, const int len) {
 void write_to_keyboard_buffer(const int c) {
         if (c == ETX) {
                 write_string("^C");
-
-#if 0
-                struct Process *process = scheduler_get_current_process();
-
-                if (process) {
-                        signal_notify(process, SIGINT);
-                }
-#endif
 
                 struct Process *process = nullptr;
                 if (keyboard_device_file_stream->read_wait) {
@@ -430,11 +410,11 @@ int newline_buffered_at() { //TODO: rename
         return false;
 }
 
-bool tty_is_ready() {
+static bool tty_is_ready() {
         return signal_buffer_newline;
 }
 
-ssize_t tty_read(struct File *, void *buf, const size_t count, off_t file_offset) {
+static ssize_t tty_read(struct File *, void *buf, const size_t count, off_t file_offset) {
         wait_event_interruptible(&keyboard_device_file_stream->read_wait, tty_is_ready);
 
         char *ptr = (char *) buf;
@@ -455,7 +435,7 @@ ssize_t tty_read(struct File *, void *buf, const size_t count, off_t file_offset
         return offset;
 }
 
-ssize_t tty_write(struct File *, void *buf, const size_t count, off_t file_offset) {
+static ssize_t tty_write(struct File *, void *buf, const size_t count, off_t file_offset) {
         const char *ptr = (const char *) buf;
 
         for (int i = 0; i < count; i++) {
@@ -465,34 +445,20 @@ ssize_t tty_write(struct File *, void *buf, const size_t count, off_t file_offse
         return count;
 }
 
-//TODO: manage or delete
-struct Files create_tty_file_mock() {
-        struct FileOperations *stdin_fop = kmalloc(sizeof(*stdin_fop));
-        stdin_fop->read = tty_read;
-        struct FileOperations *stdout_fop = kmalloc(sizeof(*stdout_fop));
-        stdout_fop->write = tty_write;
+void setup_tty_chrfile(struct VFS_Inode *mount_point) {
+        struct FileOperations *stdio_op = kmalloc(sizeof(*stdio_op));
+        stdio_op->read = tty_read;
+        stdio_op->write = tty_write;
+        kfree(mount_point->i_fop);
+        mount_point->i_fop = stdio_op;
 
-        struct File *f_stdin = kmalloc(sizeof(*f_stdin));
-        f_stdin->f_pos = 0;
-        f_stdin->f_op = stdin_fop;
-        f_stdin->f_owner = 0;
+        constexpr size_t buf_size = 1024;
 
-        struct File *f_stdout = kmalloc(sizeof(*f_stdout));
-        f_stdout->f_pos = 0;
-        f_stdout->f_op = stdout_fop;
-        f_stdout->f_owner = 0;
+        keyboard_device_file_stream = kmalloc(
+                sizeof(*keyboard_device_file_stream)
+                + (buf_size - 1) * sizeof(char)
+        );
 
-        struct File *f_stderr = kmalloc(sizeof(*f_stderr));
-        f_stderr->f_pos = 0;
-        f_stderr->f_op = stdout_fop;
-        f_stderr->f_owner = 0;
-
-        struct File **fdtable = kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
-        fdtable[0] = f_stdin;
-        fdtable[1] = f_stdout;
-        fdtable[2] = f_stderr;
-
-        const struct Files files = {3, fdtable};
-
-        return files;
+        keyboard_device_file_stream->length = buf_size;
+        keyboard_device_file_stream->read_wait = nullptr;
 }

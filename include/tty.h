@@ -30,19 +30,12 @@ void init_tty(void);
 
 void write_byte(const int c);
 
-void setup_keyboard_device_file(void);
+void setup_tty_chrfile(struct VFS_Inode *mount_point);
 
 void write_to_keyboard_buffer(int c);
 
 void *get_current_keyboard_buffer_offset(void);
 
 int newline_buffered_at(void);
-
-ssize_t tty_read(struct File *, void *buf, const size_t count, off_t file_offset);
-
-ssize_t tty_write(struct File *, void *buf, const size_t count, off_t file_offset);
-
-[[deprecated]]
-struct Files create_tty_file_mock(void);
 
 #endif //OS_STDIO_H

@@ -82,6 +82,7 @@ void PATER_ADAMVS(void) {
                                 "\t  (k)ill - kills proc1 (diode)\n"
                                 "\t(m)orcik - prints a colorful message\n"
                                 "\t  (o)pen - opens file file.txt\n"
+                                "\t      rb - runs raw-bytes written process (mock for userspace program)\n"
                                 "\t      ls - lists current directory\n\n");
                 }
                 else if (strcmp(buffer, "run") == 0 || strcmp(buffer, "r") == 0) {
@@ -124,12 +125,15 @@ void PATER_ADAMVS(void) {
                                 continue;
                         }
 
-                        char file_contents[100];
-                        read(fd, &file_contents, 100);
+                        char file_contents[128] = {};
+                        read(fd, &file_contents, 128);
                         printf("File contents pre-write: %s\n", file_contents);
-                        constexpr char new_file_contents[] = "HELLO WORLD [ANGRIER]!";
-                        write(fd, &new_file_contents, sizeof(new_file_contents));
-                        read(fd, &file_contents, 100);
+
+                        printf("New file contents: ");
+                        fgets(file_contents, 128, stdin);
+                        write(fd, &file_contents, strlen(file_contents));
+
+                        read(fd, &file_contents, 128);
                         printf("File contents post-write: %s\n", file_contents);
                 }
                 else if (strcmp(buffer, "rb") == 0) {
@@ -157,17 +161,9 @@ int main(void) {
         init_pin_output(25);
         init_pin_output(11);
 
-        init_tty();
-        setup_keyboard_device_file();
-
         void *msp;
         __asm__("mrs    %0, msp" : "=r"(msp));
         scheduler_init(msp);
-
-
-        printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"
-                "\x1b[92;40mSwitching to init process (temporary shell).\x1b[0m\n"
-        );
 
 
         struct Dentry *root = ramfs_mount(nullptr, nullptr, nullptr, 0);
@@ -179,6 +175,23 @@ int main(void) {
                 };
                 root->inode->i_op->create(root->inode, &file, S_IFDIR | 0666);
         }
+
+        struct Dentry dev_dentry = {
+                .name = "dev"
+        };
+        struct Dentry *dev = root->inode->i_op->lookup(root->inode, &dev_dentry, 0);
+        struct Dentry tty_dentry = {
+                .name = "tty0",
+        };
+        dev->inode->i_op->create(dev->inode, &tty_dentry, S_IFCHR | 0666);
+        struct Dentry *tty = dev->inode->i_op->lookup(dev->inode, &tty_dentry, 0);
+
+        init_tty();
+        setup_tty_chrfile(tty->inode);
+
+        printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"
+                "\x1b[92;40mSwitching to init process (temporary shell).\x1b[0m\n"
+        );
 #if 0
         // create root directory and two test files
 

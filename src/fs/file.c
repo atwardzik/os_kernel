@@ -58,8 +58,6 @@ static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
 
         char *buf = kmalloc(sizeof(char) * parent->i_size);
 
-        //this may return zero!!!! Then the while will return garbage!
-        //however normally a directory should have parent directory connected
         parent_handler.f_op->read(&parent_handler, buf, parent->i_size, 0);
 
         size_t offset = 0;

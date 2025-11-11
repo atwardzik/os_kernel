@@ -295,6 +295,50 @@ pid_t sys_spawn_process(
         return process->pid;
 }
 
+static struct Files setup_init_stdio(struct VFS_Inode *root) {
+        struct Dentry dev = {
+                .name = "dev",
+        };
+        struct Dentry *dev_result = root->i_op->lookup(root, &dev, 0);
+        struct Dentry tty = {
+                .name = "tty0",
+        };
+        const struct Dentry *tty_result = dev_result->inode->i_op->lookup(dev_result->inode, &tty, 0);
+
+
+        const struct FileOperations empty_fop = {};
+        struct FileOperations *stdin_fop = kmalloc(sizeof(*stdin_fop));
+        *stdin_fop = empty_fop;
+        stdin_fop->read = tty_result->inode->i_fop->read;
+
+        struct FileOperations *stdout_fop = kmalloc(sizeof(*stdin_fop));
+        *stdout_fop = empty_fop;
+        stdout_fop->write = tty_result->inode->i_fop->write;
+
+        struct File *f_stdin = kmalloc(sizeof(*f_stdin));
+        f_stdin->f_pos = 0;
+        f_stdin->f_op = stdin_fop;
+        f_stdin->f_owner = 0;
+
+        struct File *f_stdout = kmalloc(sizeof(*f_stdout));
+        f_stdout->f_pos = 0;
+        f_stdout->f_op = stdout_fop;
+        f_stdout->f_owner = 0;
+
+        struct File *f_stderr = kmalloc(sizeof(*f_stderr));
+        f_stderr->f_pos = 0;
+        f_stderr->f_op = stdout_fop;
+        f_stderr->f_owner = 0;
+
+        struct File **fdtable = kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
+        fdtable[0] = f_stdin;
+        fdtable[1] = f_stdout;
+        fdtable[2] = f_stderr;
+
+        const struct Files files = {3, fdtable};
+        return files;
+}
+
 
 pid_t create_process_init(void (*process_entry_ptr)(void), struct VFS_Inode *root) {
         if (scheduler.current_process || scheduler.processes[0].ptr) {
@@ -306,7 +350,7 @@ pid_t create_process_init(void (*process_entry_ptr)(void), struct VFS_Inode *roo
                 __asm__("bkpt   #0");
         }
 
-        process->files = create_tty_file_mock();
+        process->files = setup_init_stdio(root);
         process->root = root;
         process->pwd = root;
         process->max_children_count = INITIAL_PROCESS_COUNT - 1;
