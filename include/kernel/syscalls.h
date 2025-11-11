@@ -20,4 +20,6 @@ pid_t spawn(
 
 int kill(int pid, int sig);
 
+int chdir(const char *path);
+
 #endif //OS_SYSCALLS_H

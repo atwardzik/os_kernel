@@ -5,6 +5,7 @@
 #include "ramfs.h"
 
 #include "kernel/memory.h"
+#include "klibc/kstring.h"
 
 #include <string.h>
 
@@ -48,18 +49,10 @@ struct VFS_Inode *ramfs_alloc_inode(struct SuperBlock *sb) {
 
 
         struct RAMFS_Inode *inode = kmalloc(sizeof(*inode));
+        memset(inode, 0, sizeof(*inode));
         inode->vfs_inode.i_op = i_op;
         inode->vfs_inode.i_fop = i_fop;
         inode->vfs_inode.i_sb = sb;
-#if 0
-        inode->vfs_inode.i_uid = uid;
-        inode->vfs_inode.i_gid = gid;
-        inode->vfs_inode.i_mode = (file_type << 16) | permissions;
-        inode->vfs_inode.i_ctime = time(nullptr);
-        inode->vfs_inode.i_links_count = 0;
-        inode->vfs_inode.i_size = 0;
-#endif
-
         inode->file_begin = nullptr;
 
         sb->inode_table[sb->current_inode_count] = inode;
@@ -82,23 +75,20 @@ struct Dentry *ramfs_lookup(struct VFS_Inode *parent, struct Dentry *file, unsig
 
         size_t offset = 0;
         while (offset < parent->i_size) {
-                const size_t record_size = ((struct DirectoryEntry *) buf + offset)->rec_len;
-                struct DirectoryEntry file_dentry;
+                void *next_offset = buf + offset;
+                struct DirectoryEntry *file_dentry = next_offset;
 
-                for (size_t i = 0; i < record_size; ++i) {
-                        *((char *) (&file_dentry) + i) = buf[offset];
-                        offset += 1;
-                }
-
-                if (strcmp(file_dentry.name, file->name) == 0) {
+                if (strcmp(file_dentry->name, file->name) == 0) {
                         struct Dentry *dentry = kmalloc(sizeof(*dentry));
-                        dentry->name = file_dentry.name;
-                        dentry->inode = parent->i_sb->inode_table[file_dentry.inode_index];
+                        dentry->name = file_dentry->name;
+                        dentry->inode = parent->i_sb->inode_table[file_dentry->inode_index];
                         dentry->sb = parent->i_sb;
 
                         kfree(buf);
                         return dentry;
                 }
+
+                offset += file_dentry->rec_len;
         }
 
         kfree(buf);
@@ -107,7 +97,7 @@ struct Dentry *ramfs_lookup(struct VFS_Inode *parent, struct Dentry *file, unsig
 
 
 int ramfs_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_t mode) {
-        struct SuperBlock *fs = parent->i_sb;
+        struct SuperBlock *fs = parent->i_sb; //sb
 
         struct VFS_Inode *new_inode = fs->s_op->alloc_inode(parent->i_sb);
         if (!new_inode) {
@@ -119,7 +109,11 @@ int ramfs_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_
 
         //update parent contents
 
-        const uint16_t rec_len = sizeof(struct DirectoryEntry) + strlen(new_file->name) + 1;
+        uint16_t rec_len = offsetof(struct DirectoryEntry, name) + strlen(new_file->name) + 1;
+        if (rec_len % 4 != 0) {
+                rec_len = rec_len + 4 - rec_len % 4;
+        }
+
         struct DirectoryEntry *directory_entry = kmalloc(rec_len);
         directory_entry->rec_len = rec_len;
         directory_entry->inode_index = fs->current_inode_count - 1;

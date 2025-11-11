@@ -7,20 +7,24 @@
 #include "tty.h"
 #include "kernel/memory.h"
 #include "kernel/proc.h"
+#include "klibc/kstring.h"
 
+#include <fcntl.h>
 #include <string.h>
-#include <sys/_default_fcntl.h>
 
 static struct VFS_Inode *get_parent(const char *name) {
         const struct Process *current_process = scheduler_get_current_process();
-        struct VFS_Inode *inode = current_process->root;
+        struct VFS_Inode *inode = current_process->pwd;
+        if (name[0] == '/') {
+                inode = current_process->root;
+        }
         if (strcmp(name, "/") == 0) {
                 return inode;
         }
 
-        char *path = kmalloc(sizeof(name));
+        char *path = kmalloc(strlen(name) + 1);
         strcpy(path, name);
-        const char *token = strtok(path, "/");
+        const char *token = kstrtok(path, "/");
         while (token) {
                 struct Dentry dentry = {
                         .name = token,
@@ -34,7 +38,7 @@ static struct VFS_Inode *get_parent(const char *name) {
 
                 inode = result->inode;
                 kfree(result);
-                token = strtok(NULL, "/");
+                token = kstrtok(NULL, "/");
         }
         kfree(path);
 
@@ -43,6 +47,10 @@ static struct VFS_Inode *get_parent(const char *name) {
 }
 
 static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
+        if (!parent) {
+                return nullptr;
+        }
+
         struct File parent_handler = {
                 .f_inode = parent,
                 .f_op = parent->i_fop,
@@ -50,6 +58,8 @@ static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
 
         char *buf = kmalloc(sizeof(char) * parent->i_size);
 
+        //this may return zero!!!! Then the while will return garbage!
+        //however normally a directory should have parent directory connected
         parent_handler.f_op->read(&parent_handler, buf, parent->i_size, 0);
 
         size_t offset = 0;
@@ -104,7 +114,7 @@ static char *get_path(const char *name) {
                 return nullptr;
         }
 
-        char *path = kmalloc(sizeof(name));
+        char *path = kmalloc(strlen(name) + 1);
 
         size_t i = 0;
         while (name + i != last_file) {
@@ -119,17 +129,22 @@ static char *get_path(const char *name) {
 
 int sys_open(const char *name, int flags, int mode) {
         char *path = get_path(name);
-        struct VFS_Inode *parent = nullptr;
+
         const char *filename;
         if (path) {
-                parent = get_parent(path);
                 filename = strrchr(name, '/') + 1;
-                kfree(path);
         }
         else {
-                parent = scheduler_get_current_process()->root;
                 filename = name;
         }
+
+        struct VFS_Inode *parent = get_parent(path);
+        kfree(path);
+        if (!parent) {
+                return -1;
+        }
+
+
         struct VFS_Inode *file = get_file(parent, filename);
 
         if (!file && flags & O_CREAT) {
@@ -144,6 +159,7 @@ int sys_open(const char *name, int flags, int mode) {
 
         return -1;
 }
+
 
 int sys_close(int file) { return -1; }
 
@@ -223,5 +239,9 @@ int sys_write(const int file, char *ptr, const int len) {
                 return current_file->f_op->write(current_file, ptr, len, current_file->f_pos);
         }
 
+        return -1;
+}
+
+int sys_chdir(const char *path) {
         return -1;
 }

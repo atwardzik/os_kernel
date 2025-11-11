@@ -1,4 +1,3 @@
-#include "kstdio.h"
 #include "tty.h"
 #include "drivers/gpio.h"
 #include "drivers/keyboard.h"
@@ -11,6 +10,8 @@
 #include "kernel/proc.h"
 #include "kernel/resets.h"
 #include "kernel/syscalls.h"
+#include "klibc/kstdio.h"
+#include "klibc/kstring.h"
 
 #include <fcntl.h>
 #include <signal.h>
@@ -115,9 +116,13 @@ void PATER_ADAMVS(void) {
                         printf("\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
                 }
                 else if (strcmp(buffer, "open") == 0 || strcmp(buffer, "o") == 0) {
-                        int dirfd1 = open("dir1", O_DIRECTORY | O_CREAT);
+                        int dirfd1 = open("home/dir1", O_DIRECTORY | O_CREAT);
 
-                        int fd = open("dir1/test.txt", O_RDWR | O_CREAT);
+                        int fd = open("home/dir1/test.txt", O_RDWR | O_CREAT);
+
+                        if (fd < 0) {
+                                continue;
+                        }
 
                         char file_contents[100];
                         read(fd, &file_contents, 100);
@@ -165,9 +170,18 @@ int main(void) {
         );
 
 
-        // create root directory and two test files
-        const struct Dentry *root = ramfs_mount(nullptr, nullptr, nullptr, 0);
+        struct Dentry *root = ramfs_mount(nullptr, nullptr, nullptr, 0);
+        constexpr size_t root_dirs_count = 7;
+        const char *root_dirs[root_dirs_count] = {"bin", "boot", "dev", "etc", "home", "proc", "sbin"};
+        for (size_t i = 0; i < root_dirs_count; ++i) {
+                struct Dentry file = {
+                        .name = root_dirs[i],
+                };
+                root->inode->i_op->create(root->inode, &file, S_IFDIR | 0666);
+        }
 #if 0
+        // create root directory and two test files
+
         struct Dentry file1 = {
                 .name = "test.txt",
         };

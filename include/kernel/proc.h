@@ -46,6 +46,7 @@ struct Process {
         unsigned int priority_level;
         struct Files files;
         struct VFS_Inode *root;
+        struct VFS_Inode *pwd;
 
         struct Process *parent;
         size_t max_children_count;

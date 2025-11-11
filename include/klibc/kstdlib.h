@@ -5,7 +5,7 @@
 #ifndef OS_KSTDLIB_H
 #define OS_KSTDLIB_H
 
-#include "types.h"
+#include "../types.h"
 
 #include <stdint.h>
 

@@ -2,10 +2,11 @@
 // Created by Artur Twardzik on 26/08/2025.
 //
 
+#include "syscalls.h"
+
 #include "memory.h"
 #include "proc.h"
 #include "syscall_codes.h"
-#include "tty.h"
 #include "fs/file.h"
 
 #include <errno.h>
@@ -59,7 +60,7 @@ void sigreturn(void) {
 
 typedef typeof(void (int)) *sighandler_t;
 
-sighandler_t _signal(int signum, sighandler_t handler) {
+sighandler_t signal(int signum, sighandler_t handler) {
         SYSCALL(SIGNAL_SVC)
 }
 
@@ -134,4 +135,12 @@ int _unlink(char *name) {
 
 int _lseek(int file, int ptr, int dir) {
         return 0;
+}
+
+int chdir(const char *path) {
+        int ret;
+        SYSCALL(CHDIR_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
 }

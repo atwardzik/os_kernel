@@ -150,6 +150,9 @@ isr_svcall:
                 cmp     r4, SIGNAL_SVC
                 beq     .signal_svc
 
+                cmp     r4, CHDIR_SVC
+                beq     .chdir_svc
+
                 cmp     r4, SIGRETURN_SVC
                 beq     .sigreturn_svc
 
@@ -183,6 +186,10 @@ isr_svcall:
 
         .kill_svc:
                 bl      sys_kill
+                b       .svcall_exit
+
+        .chdir_svc:
+                bl      sys_chdir
                 b       .svcall_exit
 
         .sigreturn_svc:

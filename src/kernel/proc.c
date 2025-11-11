@@ -280,6 +280,7 @@ pid_t sys_spawn_process(
 
         process->files = files;
         process->root = current->root;
+        process->pwd = current->pwd;
         process->parent = current;
         process->max_children_count = current->max_children_count - 1;
         process->children = kmalloc(sizeof(struct Process *) * (current->max_children_count - 1));
@@ -307,6 +308,7 @@ pid_t create_process_init(void (*process_entry_ptr)(void), struct VFS_Inode *roo
 
         process->files = create_tty_file_mock();
         process->root = root;
+        process->pwd = root;
         process->max_children_count = INITIAL_PROCESS_COUNT - 1;
         process->children = kmalloc(sizeof(struct Process *) * (INITIAL_PROCESS_COUNT - 1));
         for (size_t i = 0; i < process->max_children_count; ++i) {

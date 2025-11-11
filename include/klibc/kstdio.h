@@ -5,7 +5,7 @@
 #ifndef OS_KSTDIO_H
 #define OS_KSTDIO_H
 
-#include "types.h"
+#include "../types.h"
 
 #include <stdarg.h>
 

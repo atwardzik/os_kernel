@@ -32,7 +32,7 @@ add_executable(os
         $<TARGET_OBJECTS:drivers>
         $<TARGET_OBJECTS:kernel>
         $<TARGET_OBJECTS:fs>
-        $<TARGET_OBJECTS:kstdlib>
+        $<TARGET_OBJECTS:klibc>
 )
 
 target_link_options(os PRIVATE

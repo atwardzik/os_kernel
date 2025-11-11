@@ -5,7 +5,7 @@
 #include "tty.h"
 
 #include "escape_codes.h"
-#include "kstdlib.h"
+#include "klibc/kstdlib.h"
 #include "signal.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
