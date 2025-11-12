@@ -1,4 +1,3 @@
-#include "tty.h"
 #include "drivers/gpio.h"
 #include "drivers/keyboard.h"
 #include "drivers/time.h"
@@ -12,6 +11,7 @@
 #include "kernel/syscalls.h"
 #include "klibc/kstdio.h"
 #include "klibc/kstring.h"
+#include "tty.h"
 
 #include <fcntl.h>
 #include <signal.h>
@@ -60,7 +60,14 @@ static uint16_t raw_bytes_function[] __attribute__((aligned(4))) = {
         0xdf01, 0x6548, 0x6c6c, 0x206f, 0x6f57, 0x6c72, 0x2164, 0x0000, 0xbf00,
 };
 
-void PATER_ADAMVS(void) {
+static uint16_t raw_ls[] __attribute__((aligned(4))) = {
+        0xb580, 0xb08e, 0xaf00, 0x6078, 0x6039, 0x683b, 0x685b, 0xf04f, 0x0100, 0x4618, 0xdf05, 0x6378,
+        0xe00f, 0xf107, 0x030c, 0x3308, 0xf04f, 0x0001, 0x4619, 0xf04f, 0x0203, 0xdf04, 0xf04f, 0x0001,
+        0xf20f, 0x0124, 0xf04f, 0x0201, 0xdf04, 0xf107, 0x030c, 0x4619, 0x6b78, 0xdf08, 0x4603, 0x2b00,
+        0xd1e7, 0x2300, 0x4618, 0x3738, 0x46bd, 0xf04f, 0x0000, 0xdf01, 0x000a, 0xbf00,
+};
+
+void PATER_ADAMVS(int argc, char *argv[]) {
         signal(SIGINT, PATER_ADAMVS_SIGINT);
         printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
 
@@ -79,17 +86,32 @@ void PATER_ADAMVS(void) {
                 if (strcmp(cmd, "help") == 0 || strcmp(cmd, "h") == 0) {
                         printf("Temporarily available commands:\n"
                                 "\t  (h)elp - prints this help screen\n"
-                                "\t   (r)un - runs proc2 (standard input test). Proc1 is already running (diode)\n"
+                                "\t   (r)un - runs specified app, if no argument is provided runs proc2\n"
+                                "\t           (standard input test). Proc1 is already running (diode)\n"
                                 "\t  (k)ill - kills proc1 (diode)\n"
                                 "\t(m)orcik - prints a colorful message\n"
-                                "\t  (o)pen - opens file file.txt\n"
-                                "\t      rb - runs raw-bytes written process (mock for userspace program)\n"
-                                "\t      ls - lists current directory\n\n");
+                                "\t     rls - runs raw-bytes written ls command (mock for userspace program)\n\t---\n"
+                                "\t      ls - lists current directory\n"
+                                "\t   mkdir - creates a directory under specified path\n"
+                                "\t   touch - creates a file under specified path\n"
+                                "\t     cat - reads file contents\n"
+                                "\t  (e)cho - writes to standard input or redirects to a file\n"
+                                "\t rawecho - writes converted hexadecimal bytes to specified file (max 128 bytes)\n\n");
                 }
                 else if (strcmp(cmd, "run") == 0 || strcmp(cmd, "r") == 0) {
+                        const char *path = kstrtok(NULL, " ");
                         printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m I will be waiting until my child is dead . . .\n");
 
-                        spawn((void *) &proc2_main, nullptr, nullptr, nullptr, nullptr);
+                        int fd = open(path, O_BINARY);
+                        if (fd > 0) {
+                                uint16_t raw_bytes_app[128];
+                                read(fd, raw_bytes_app, 128);
+                                spawn((void *) raw_bytes_app + 1, nullptr, nullptr, nullptr, nullptr);
+                        }
+                        else {
+                                spawn((void *) &proc2_main, nullptr, nullptr, nullptr, nullptr);
+                        }
+
                         int code;
                         const int returned_pid = wait(&code);
 
@@ -117,46 +139,136 @@ void PATER_ADAMVS(void) {
                 else if (strcmp(cmd, "morcik") == 0 || strcmp(cmd, "m") == 0) {
                         printf("\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
                 }
-                else if (strcmp(cmd, "open") == 0 || strcmp(cmd, "o") == 0) {
-                        int dirfd1 = open("home/dir1", O_DIRECTORY | O_CREAT);
+                else if (strcmp(cmd, "rls") == 0) {
+                        char *path = kstrtok(NULL, " ");
 
-                        int fd = open("home/dir1/test.txt", O_RDWR | O_CREAT);
-
-                        if (fd < 0) {
-                                continue;
-                        }
-
-                        char file_contents[128] = {};
-                        read(fd, &file_contents, 128);
-                        printf("File contents pre-write: %s\n", file_contents);
-
-                        printf("New file contents: ");
-                        fgets(file_contents, 128, stdin);
-                        write(fd, &file_contents, strlen(file_contents));
-
-                        read(fd, &file_contents, 128);
-                        printf("File contents post-write: %s\n", file_contents);
-                }
-                else if (strcmp(cmd, "rb") == 0) {
-                        spawn((void *) raw_bytes_function, nullptr, nullptr, nullptr, nullptr);
+                        char *const ls_argv[] = {"ls", path, nullptr};
+                        spawn((void *) raw_ls + 1, nullptr, nullptr, ls_argv, nullptr);
                         int code;
                         const int returned_pid = wait(&code);
 
                         printf("\n\x1b[96;40m[PATER ADAMVS]\x1b[0m Child raw-bytes process %i exited with code %i.\n",
                                returned_pid, code);
                 }
+                else if (strcmp(cmd, "echo") == 0 || strcmp(cmd, "e") == 0) {
+                        const char *text = kstrtok(NULL, ">");
+                        const char *path = kstrtok(NULL, "");
+                        if (!text) {
+                                continue;
+                        }
+
+                        if (!path) {
+                                printf("%s\n", text);
+                                continue;
+                        }
+
+                        int fd = open(path, O_WRONLY);
+                        if (fd < 0) {
+                                printf("No such file.\n");
+                                continue;
+                        }
+
+                        write(fd, text, strlen(text) + 1); // with EOF
+
+                        close(fd);
+                }
+                else if (strcmp(cmd, "rawecho") == 0) {
+                        const char *text = kstrtok(NULL, ">");
+                        const char *path = kstrtok(NULL, "");
+                        if (!text || !path) {
+                                continue;
+                        }
+
+                        int fd = open(path, O_BINARY);
+                        if (fd < 0) {
+                                printf("No such file.\n");
+                                continue;
+                        }
+
+                        uint8_t bytes[128] = {};
+                        memset(bytes, 0, 128);
+                        size_t index = 0;
+
+                        const char *ptr = text;
+                        char *endptr;
+                        while (*ptr) {
+                                while (*ptr == ' ') {
+                                        ptr += 1;
+                                }
+
+                                if (*ptr == '\0') {
+                                        break;
+                                }
+
+                                long value = strtol(ptr, &endptr, 16);
+
+                                if (ptr == endptr) {
+                                        // No valid number found
+                                        break;
+                                }
+
+                                // Clamp to uint8_t range
+                                if (value < 0 || value > 0xFF) {
+                                        printf("Warning: value out of range (0x%lX)\n", value);
+                                        break;
+                                }
+
+                                bytes[index++] = (uint8_t) value;
+
+                                // Move pointer to next potential number
+                                ptr = endptr;
+                        }
+
+                        write(fd, bytes, index);
+
+                        close(fd);
+                }
                 else if (strcmp(cmd, "ls") == 0) {
-                        const int dirfd = open("/", O_RDONLY);
+                        const char *path_tok = kstrtok(NULL, " ");
+                        const char *path = path_tok == nullptr ? "" : path_tok;
+                        const int dirfd = open(path, O_RDONLY);
 
                         struct DirectoryEntry dentry;
-                        while (readdir(dirfd, &dentry)) {
+                        while (readdir(dirfd, &dentry) == 1) {
                                 printf("%c %s\n", dentry.file_type, dentry.name);
                         }
 
                         lseek(dirfd, 0, SEEK_SET);
                 }
                 else if (strcmp(cmd, "mkdir") == 0) {
-                        //
+                        const char *path = kstrtok(NULL, " ");
+                        if (!path) {
+                                continue;
+                        }
+
+                        int dirfd = open(path, O_DIRECTORY | O_CREAT);
+                        close(dirfd);
+                }
+                else if (strcmp(cmd, "touch") == 0) {
+                        const char *path = kstrtok(NULL, " ");
+                        if (!path) {
+                                continue;
+                        }
+
+                        int fd = open(path, O_CREAT);
+                        close(fd);
+                }
+                else if (strcmp(cmd, "cat") == 0) {
+                        const char *path = kstrtok(NULL, " ");
+                        if (!path) {
+                                continue;
+                        }
+
+                        int fd = open(path, O_RDONLY);
+                        if (fd < 0) {
+                                printf("No such file.\n");
+                                continue;
+                        }
+
+                        char file_contents[128] = {};
+                        read(fd, &file_contents, 128);
+                        printf("File contents: %s\n", file_contents);
+                        close(fd);
                 }
                 else {
                         printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m command unknown, type (h)elp to get help.\n");
@@ -190,9 +302,7 @@ int main(void) {
                 root->inode->i_op->create(root->inode, &file, S_IFDIR | 0666);
         }
 
-        struct Dentry dev_dentry = {
-                .name = "dev"
-        };
+        struct Dentry dev_dentry = {.name = "dev"};
         struct Dentry *dev = root->inode->i_op->lookup(root->inode, &dev_dentry, 0);
         struct Dentry tty_dentry = {
                 .name = "tty0",
@@ -204,8 +314,7 @@ int main(void) {
         setup_tty_chrfile(tty->inode);
 
         printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"
-                "\x1b[92;40mSwitching to init process (temporary shell).\x1b[0m\n"
-        );
+                "\x1b[92;40mSwitching to init process (temporary shell).\x1b[0m\n");
 #if 0
         // create root directory and two test files
 
@@ -258,7 +367,7 @@ int main(void) {
                first_dentry->name);
 #endif
 
-        create_process_init(PATER_ADAMVS, root->inode);
+        create_process_init((void (*)(void)) PATER_ADAMVS, root->inode);
         run_process_init();
         return 0;
 }

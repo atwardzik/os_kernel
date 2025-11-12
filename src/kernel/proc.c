@@ -209,7 +209,33 @@ switch_to_kernelspace:
         RECALL_KERNELSPACE_STATE
 }
 
-static struct Process *create_blank_process(void (*process_entry_ptr)(void)) {
+/**
+ * Passes arguments to the process stack. TODO: check after implementing MPU if the process doesn't have to own all strings
+ * @param pstack initial stack pointer
+ * @param argv arguments array ending with nullptr
+ * @return bytes written
+ */
+static size_t process_stack_init_argv(void *pstack, char *const argv[]) {
+        if (argv == nullptr) {
+                return 0;
+        }
+        size_t count = 0;
+        while (argv[count]) {
+                count += 1;
+        }
+
+        size_t i = 0;
+        while (count) {
+                *(size_t *) (pstack - i * 4) = (size_t *) argv[count - 1];
+
+                count -= 1;
+                i += 1;
+        }
+
+        return i * sizeof(size_t);
+}
+
+static struct Process *create_blank_process(void (*process_entry_ptr)(void), char *const argv[]) {
         static pid_t pid = 0;
 
         if (pid >= scheduler.max_processes) {
@@ -218,11 +244,20 @@ static struct Process *create_blank_process(void (*process_entry_ptr)(void)) {
 
         void *process_page = kmalloc(DEFAULT_PROCESS_SIZE);
         void *kstack = process_page + DEFAULT_PROCESS_SIZE - sizeof(size_t);
-        void *pstack = process_page + DEFAULT_PROCESS_SP_OFFSET - sizeof(size_t);
+        void *pstack_begin = process_page + DEFAULT_PROCESS_SP_OFFSET - sizeof(size_t);
+        size_t offset = process_stack_init_argv(pstack_begin, argv);
+        void *pstack = pstack_begin - offset;
         create_process_stack_frame(&pstack,
                                    &exit,
                                    process_entry_ptr,
                                    EXC_RETURN_THREAD_PSP_CODE);
+        *(size_t *) (pstack_begin - offset - 28) = (size_t *) (pstack_begin - offset + sizeof(size_t));
+        *(size_t *) (pstack_begin - offset - 32) = offset / sizeof(size_t);
+        // void *pstack = process_page + DEFAULT_PROCESS_SP_OFFSET - sizeof(size_t);
+        // create_process_stack_frame(&pstack,
+        //                            &exit,
+        //                            process_entry_ptr,
+        //                            EXC_RETURN_THREAD_PSP_CODE);
 
         struct Process process = {
                 .ptr = process_page,
@@ -273,7 +308,7 @@ pid_t sys_spawn_process(
                 files.fdtable[i] = current->files.fdtable[i];
         }
 
-        struct Process *process = create_blank_process(process_entry_ptr);
+        struct Process *process = create_blank_process(process_entry_ptr, argv);
         if (!process->ptr) {
                 return -1;
         }
@@ -345,7 +380,8 @@ pid_t create_process_init(void (*process_entry_ptr)(void), struct VFS_Inode *roo
                 __asm__("bkpt   #0");
         }
 
-        struct Process *process = create_blank_process(process_entry_ptr);
+        char *argv[] = {"init", "test", nullptr};
+        struct Process *process = create_blank_process(process_entry_ptr, argv);
         if (!process->ptr) {
                 __asm__("bkpt   #0");
         }

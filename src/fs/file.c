@@ -31,11 +31,12 @@ int ksys_write(const int file, char *ptr, const int len) {
 static struct VFS_Inode *get_parent(const char *name) {
         const struct Process *current_process = scheduler_get_current_process();
         struct VFS_Inode *inode = current_process->pwd;
-        if (name[0] == '/') {
-                inode = current_process->root;
-        }
         if (strcmp(name, "/") == 0 || strlen(name) == 0) {
                 return inode;
+        }
+        if (name[0] == '/') {
+                inode = current_process->root;
+                name += 1;
         }
 
         char *path = kmalloc(strlen(name) + 1);
@@ -67,7 +68,7 @@ static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
                 return nullptr;
         }
 
-        if (strcmp(name, "/") == 0) {
+        if (strlen(name) == 0) {
                 return parent;
         }
 
@@ -149,7 +150,9 @@ static char *get_path(const char *name) {
         }
 
         if (i == 0) {
-                return nullptr;
+                path[0] = '/';
+                path[1] = 0;
+                return path;
         }
 
         path[i] = 0;
@@ -177,7 +180,7 @@ int sys_open(const char *name, int flags, int mode) {
         struct VFS_Inode *file = get_file(parent, filename);
 
         if (!file && flags & O_CREAT) {
-                const uint16_t file_mode = (flags & O_DIRECTORY) ? S_IFDIR | 0666 : 0777; //TODO: change permissions
+                const uint16_t file_mode = (flags & O_DIRECTORY) ? S_IFDIR | 0666 : S_IFREG | 0777;
                 file = create_file(parent, filename, file_mode);
         }
 
@@ -289,7 +292,6 @@ int sys_readdir(int dirfd, struct DirectoryEntry *directory_entry) {
 
         if (dirfd >= current_process->files.count || dirfd < 0) {
                 ksys_write(1, "[!] There is no such file descriptor\n", 37);
-                __asm__("bkpt   #0");
                 return -1;
         }
 
