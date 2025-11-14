@@ -118,11 +118,9 @@ isr_svcall:
                 bl      set_kernel_mode_flag
                 pop     {r0-r3}
 
-                push    {r5}
-                ldr     r5, =syscall_table
-                ldr     r4, [r5, r4, lsl #2]
-                pop     {r5}
-                blx     r4
+        .enter_trampoline:                              @ without this quirky trampoline the GDB stack frames are endless
+                cmp     r0, r0                          @ after entering any syscall function,
+                bl      syscall_trampoline              @ God knows why, but it should be fixed someday...
 
         .svcall_exit:
                 mrs     r1, psp
@@ -134,7 +132,15 @@ isr_svcall:
 
                 pop     {r4, pc}
 
-
+.thumb_func
+.align 4
+syscall_trampoline:
+        push    {lr, r5}
+        ldr     r5, =syscall_table
+        ldr     r4, [r5, r4, lsl #2]
+        blx     r4
+        pop     {lr, r5}
+        b       .svcall_exit
 /**
  *
  */
