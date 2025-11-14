@@ -51,14 +51,6 @@ _read:
                 bl      ksys_read       @ spinlocks
                 pop    {pc}
 
-.thumb_func
-.global _wait
-.align 4
-_wait:
-        push    {lr}
-        svc     WAIT_SVC
-        pop     {pc}
-
 /**
  * Syscall        (svc #<syscall_number>)
  *  r0-r3       - arguments specified by syscalls
@@ -126,89 +118,11 @@ isr_svcall:
                 bl      set_kernel_mode_flag
                 pop     {r0-r3}
 
-                cmp     r4, EXIT_SVC
-                beq     .exit_svc
-
-                cmp     r4, SPAWN_SVC
-                beq     .spawn_svc
-
-                cmp     r4, READ_SVC
-                beq     .read_svc
-
-                cmp     r4, WRITE_SVC
-                beq     .write_svc
-
-                cmp     r4, OPEN_SVC
-                beq     .open_svc
-
-                cmp     r4, WAIT_SVC
-                beq     .wait_svc
-
-                cmp     r4, KILL_SVC
-                beq     .kill_svc
-
-                cmp     r4, SIGNAL_SVC
-                beq     .signal_svc
-
-                cmp     r4, READDIR_SVC
-                beq     .readdir_svc
-
-                cmp     r4, CHDIR_SVC
-                beq     .chdir_svc
-
-                cmp     r4, SIGRETURN_SVC
-                beq     .sigreturn_svc
-
-                cmp     r4, LSEEK_SVC
-                beq     .lseek_svc
-
-        .exit_svc:
-                bl      sys_exit
-                b       .svcall_exit
-
-        .spawn_svc:
-                bl      sys_spawn_process
-                b       .svcall_exit
-
-        .read_svc:
-                bl      sys_read
-                b       .svcall_exit
-
-        .write_svc:
-                bl      sys_write
-                b       .svcall_exit
-
-        .open_svc:
-                bl      sys_open
-                b       .svcall_exit
-
-        .wait_svc:
-                bl      sys_wait
-                b       .svcall_exit
-
-        .readdir_svc:
-                bl      sys_readdir
-                b       .svcall_exit
-
-        .chdir_svc:
-                bl      sys_chdir
-                b       .svcall_exit
-
-        .signal_svc:
-                bl      sys_signal
-                b       .svcall_exit
-
-        .kill_svc:
-                bl      sys_kill
-                b       .svcall_exit
-
-        .sigreturn_svc:
-                bl      sys_sigreturn
-                b       .svcall_exit
-
-        .lseek_svc:
-                bl      sys_lseek
-                b       .svcall_exit
+                push    {r5}
+                ldr     r5, =syscall_table
+                ldr     r4, [r5, r4, lsl #2]
+                pop     {r5}
+                blx     r4
 
         .svcall_exit:
                 mrs     r1, psp

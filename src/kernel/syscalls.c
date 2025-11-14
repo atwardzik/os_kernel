@@ -64,6 +64,10 @@ sighandler_t signal(int signum, sighandler_t handler) {
         SYSCALL(SIGNAL_SVC)
 }
 
+pid_t _wait(int *stat_loc) {
+        SYSCALL(WAIT_SVC)
+}
+
 caddr_t _sbrk(int incr) {
         static uint8_t *current_bump_address = __heap_start__;
         uint8_t *prev_bump_addr;

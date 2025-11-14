@@ -172,4 +172,10 @@ int sys_read(int file, char *ptr, int len);
 
 int sys_write(int file, char *ptr, int len);
 
+int sys_readdir(int dirfd, struct DirectoryEntry *directory_entry);
+
+int sys_chdir(const char *path);
+
+int sys_lseek(const int file, off_t offset, int whence);
+
 #endif // OS_FILE_H
