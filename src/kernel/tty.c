@@ -328,6 +328,7 @@ static void delete_and_shift(const int pos_delete, const int len) {
 }
 
 void write_to_keyboard_buffer(const int c) {
+        // TODO: it would be wise to resize buffer if the contents do not fit
         if (c == ETX) {
                 write_string("^C");
 

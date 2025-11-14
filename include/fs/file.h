@@ -120,6 +120,8 @@ struct VFS_Inode {
         const struct FileOperations *i_fop;
         struct SuperBlock *i_sb;
 
+        struct VFS_Inode *parent;
+
         off_t i_size;
         time_t i_atime;
         time_t i_ctime;

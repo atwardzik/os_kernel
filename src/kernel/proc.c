@@ -253,11 +253,6 @@ static struct Process *create_blank_process(void (*process_entry_ptr)(void), cha
                                    EXC_RETURN_THREAD_PSP_CODE);
         *(size_t *) (pstack_begin - offset - 28) = (size_t *) (pstack_begin - offset + sizeof(size_t));
         *(size_t *) (pstack_begin - offset - 32) = offset / sizeof(size_t);
-        // void *pstack = process_page + DEFAULT_PROCESS_SP_OFFSET - sizeof(size_t);
-        // create_process_stack_frame(&pstack,
-        //                            &exit,
-        //                            process_entry_ptr,
-        //                            EXC_RETURN_THREAD_PSP_CODE);
 
         struct Process process = {
                 .ptr = process_page,

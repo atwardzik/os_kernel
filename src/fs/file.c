@@ -28,34 +28,45 @@ int ksys_write(const int file, char *ptr, const int len) {
         return len;
 }
 
-static struct VFS_Inode *get_parent(const char *name) {
+static struct VFS_Inode *get_parent_directory(const char *name) {
         const struct Process *current_process = scheduler_get_current_process();
         struct VFS_Inode *inode = current_process->pwd;
-        if (strcmp(name, "/") == 0 || strlen(name) == 0) {
+
+        if (!name) {
                 return inode;
         }
         if (name[0] == '/') {
                 inode = current_process->root;
                 name += 1;
         }
+        if (strlen(name) == 0) {
+                return inode;
+        }
+
 
         char *path = kmalloc(strlen(name) + 1);
         strcpy(path, name);
         const char *token = kstrtok(path, "/");
         while (token) {
+                if (strcmp(token, "..") == 0) {
+                        inode = inode->parent;
+                        token = kstrtok(nullptr, "/");
+                        continue;
+                }
+
                 struct Dentry dentry = {
                         .name = token,
                 };
 
                 struct Dentry *result = inode->i_op->lookup(inode, &dentry, 0);
-                if (!result) {
+                if (!result || !(result->inode->i_mode & S_IFDIR)) {
                         kfree(path);
                         return nullptr;
                 }
 
                 inode = result->inode;
                 kfree(result);
-                token = kstrtok(NULL, "/");
+                token = kstrtok(nullptr, "/");
         }
         kfree(path);
 
@@ -64,6 +75,14 @@ static struct VFS_Inode *get_parent(const char *name) {
 }
 
 static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
+        if (strcmp(name, "..") == 0 && !parent) {
+                const struct Process *current_process = scheduler_get_current_process();
+                return current_process->pwd->parent;
+        }
+        if (strcmp(name, "..") == 0 && parent) {
+                return parent->parent;
+        }
+
         if (!parent) {
                 return nullptr;
         }
@@ -108,8 +127,13 @@ static struct VFS_Inode *create_file(struct VFS_Inode *parent, const char *name,
         return parent->i_sb->inode_table[parent->i_sb->current_inode_count - 1];
 }
 
-static int get_file_descriptor(struct VFS_Inode *inode, const char *name) {
+static int get_file_descriptor(struct VFS_Inode *inode) {
         struct Process *current_process = scheduler_get_current_process();
+        if (current_process->files.count > MAX_OPEN_FILE_DESCRIPTORS) {
+                ksys_write(1, "[!] Too much files opened.\n", 28);
+                __asm__("bkpt   #0");
+                return -1;
+        }
 
         for (size_t i = 0; i < current_process->files.count; ++i) {
                 if (current_process->files.fdtable[i]->f_inode == inode) {
@@ -121,20 +145,14 @@ static int get_file_descriptor(struct VFS_Inode *inode, const char *name) {
         found_file->f_op = inode->i_fop;
         found_file->f_inode = inode;
         found_file->f_pos = 0;
-        found_file->f_path = name; //TODO: it's not a valid path
 
-        if (current_process->files.count > MAX_OPEN_FILE_DESCRIPTORS) {
-                ksys_write(1, "[!] Too much files opened.\n", 28);
-                __asm__("bkpt   #0");
-                return -1;
-        }
         current_process->files.fdtable[current_process->files.count] = found_file;
         current_process->files.count += 1;
 
         return current_process->files.count - 1;
 }
 
-static char *get_path(const char *name) {
+static char *get_file_path(const char *name) {
         const char *last_file = strrchr(name, '/');
         if (!last_file) {
                 return nullptr;
@@ -160,7 +178,7 @@ static char *get_path(const char *name) {
 }
 
 int sys_open(const char *name, int flags, int mode) {
-        char *path = get_path(name);
+        char *path = get_file_path(name);
 
         const char *filename;
         if (path) {
@@ -170,13 +188,8 @@ int sys_open(const char *name, int flags, int mode) {
                 filename = name;
         }
 
-        struct VFS_Inode *parent = get_parent(path);
+        struct VFS_Inode *parent = get_parent_directory(path);
         kfree(path);
-        if (!parent) {
-                return -1;
-        }
-
-
         struct VFS_Inode *file = get_file(parent, filename);
 
         if (!file && flags & O_CREAT) {
@@ -184,9 +197,11 @@ int sys_open(const char *name, int flags, int mode) {
                 file = create_file(parent, filename, file_mode);
         }
 
-
+        if (file && flags & O_DIRECTORY && !(file->i_mode & S_IFDIR)) {
+                return -1;
+        }
         if (file) {
-                return get_file_descriptor(file, filename);
+                return get_file_descriptor(file);
         }
 
         return -1;
@@ -315,5 +330,13 @@ int sys_readdir(int dirfd, struct DirectoryEntry *directory_entry) {
 }
 
 int sys_chdir(const char *path) {
+        struct VFS_Inode *parent = get_parent_directory(path);
+
+        if (parent) {
+                struct Process *current_process = scheduler_get_current_process();
+                current_process->pwd = parent;
+                return 0;
+        }
+
         return -1;
 }

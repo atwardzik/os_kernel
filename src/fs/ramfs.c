@@ -24,6 +24,7 @@ struct Dentry *ramfs_mount(
         fs->max_inode_count = 32;
 
         struct VFS_Inode *root_inode = fs->s_op->alloc_inode(fs);
+        root_inode->i_mode |= S_IFDIR;
         struct Dentry *root = kmalloc(sizeof(*root));
         root->name = "/";
         root->inode = root_inode;
@@ -104,6 +105,7 @@ int ramfs_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_
                 return -1;
         }
         new_inode->i_mode = mode;
+        new_inode->parent = parent;
 
         new_file->inode = new_inode;
 
@@ -140,7 +142,6 @@ int ramfs_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_
 }
 
 ssize_t ramfs_write(struct File *file, void *buf, size_t count, off_t file_offset) {
-        const size_t current_size = file->f_inode->i_size;
         struct RAMFS_Inode *inode_ptr = (struct RAMFS_Inode *) file->f_inode;
 
         if (!inode_ptr->bytes_allocated) {

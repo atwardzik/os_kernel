@@ -61,10 +61,11 @@ static uint16_t raw_bytes_function[] __attribute__((aligned(4))) = {
 };
 
 static uint16_t raw_ls[] __attribute__((aligned(4))) = {
-        0xb580, 0xb08e, 0xaf00, 0x6078, 0x6039, 0x683b, 0x685b, 0xf04f, 0x0100, 0x4618, 0xdf05, 0x6378,
-        0xe00f, 0xf107, 0x030c, 0x3308, 0xf04f, 0x0001, 0x4619, 0xf04f, 0x0203, 0xdf04, 0xf04f, 0x0001,
-        0xf20f, 0x0124, 0xf04f, 0x0201, 0xdf04, 0xf107, 0x030c, 0x4619, 0x6b78, 0xdf08, 0x4603, 0x2b00,
-        0xd1e7, 0x2300, 0x4618, 0x3738, 0x46bd, 0xf04f, 0x0000, 0xdf01, 0x000a, 0xbf00,
+        0xb580, 0xb08e, 0xaf00, 0x6078, 0x6039, 0x683b, 0x685b, 0xf04f, 0x0100, 0x4618, 0xdf05, 0x6378, 0xe012, 0xf107,
+        0x030c, 0x3308, 0xb408, 0x4618, 0xf000, 0xf824, 0x4602, 0xf04f, 0x0001, 0xbc02, 0xdf04, 0xf04f, 0x0001, 0xf20f,
+        0x014a, 0xf04f, 0x0201, 0xdf04, 0xf107, 0x030c, 0x4619, 0x6b78, 0xdf08, 0x4603, 0x2b00, 0xd1e4, 0x2300, 0x4618,
+        0x3738, 0x46bd, 0xf04f, 0x0000, 0xe8bd, 0x4080, 0xdf01, 0xbf00, 0xf3af, 0x8000, 0xf3af, 0x8000, 0xf3af, 0x8000,
+        0x2100, 0x6802, 0x2a00, 0xd002, 0x3101, 0x3001, 0xe7f9, 0x4608, 0x4770, 0x000a,
 };
 
 void PATER_ADAMVS(int argc, char *argv[]) {
@@ -99,7 +100,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                                 "\t rawecho - writes converted hexadecimal bytes to specified file (max 128 bytes)\n\n");
                 }
                 else if (strcmp(cmd, "run") == 0 || strcmp(cmd, "r") == 0) {
-                        const char *path = kstrtok(NULL, " ");
+                        const char *path = kstrtok(nullptr, " ");
                         printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m I will be waiting until my child is dead . . .\n");
 
                         int fd = open(path, O_BINARY);
@@ -140,7 +141,8 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                         printf("\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
                 }
                 else if (strcmp(cmd, "rls") == 0) {
-                        char *path = kstrtok(NULL, " ");
+                        char const *path_tok = kstrtok(nullptr, " ");
+                        const char *path = path_tok ? path_tok : "";
 
                         char *const ls_argv[] = {"ls", path, nullptr};
                         spawn((void *) raw_ls + 1, nullptr, nullptr, ls_argv, nullptr);
@@ -151,8 +153,8 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                                returned_pid, code);
                 }
                 else if (strcmp(cmd, "echo") == 0 || strcmp(cmd, "e") == 0) {
-                        const char *text = kstrtok(NULL, ">");
-                        const char *path = kstrtok(NULL, "");
+                        const char *text = kstrtok(nullptr, ">");
+                        const char *path = kstrtok(nullptr, "");
                         if (!text) {
                                 continue;
                         }
@@ -173,8 +175,8 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                         close(fd);
                 }
                 else if (strcmp(cmd, "rawecho") == 0) {
-                        const char *text = kstrtok(NULL, ">");
-                        const char *path = kstrtok(NULL, "");
+                        const char *text = kstrtok(nullptr, ">");
+                        const char *path = kstrtok(nullptr, "");
                         if (!text || !path) {
                                 continue;
                         }
@@ -224,9 +226,13 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                         close(fd);
                 }
                 else if (strcmp(cmd, "ls") == 0) {
-                        const char *path_tok = kstrtok(NULL, " ");
+                        const char *path_tok = kstrtok(nullptr, " ");
                         const char *path = path_tok == nullptr ? "" : path_tok;
-                        const int dirfd = open(path, O_RDONLY);
+                        const int dirfd = open(path, O_DIRECTORY | O_RDONLY);
+
+                        if (dirfd < 0) {
+                                continue;
+                        }
 
                         struct DirectoryEntry dentry;
                         while (readdir(dirfd, &dentry) == 1) {
@@ -236,7 +242,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                         lseek(dirfd, 0, SEEK_SET);
                 }
                 else if (strcmp(cmd, "mkdir") == 0) {
-                        const char *path = kstrtok(NULL, " ");
+                        const char *path = kstrtok(nullptr, " ");
                         if (!path) {
                                 continue;
                         }
@@ -245,7 +251,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                         close(dirfd);
                 }
                 else if (strcmp(cmd, "touch") == 0) {
-                        const char *path = kstrtok(NULL, " ");
+                        const char *path = kstrtok(nullptr, " ");
                         if (!path) {
                                 continue;
                         }
@@ -254,7 +260,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                         close(fd);
                 }
                 else if (strcmp(cmd, "cat") == 0) {
-                        const char *path = kstrtok(NULL, " ");
+                        const char *path = kstrtok(nullptr, " ");
                         if (!path) {
                                 continue;
                         }
@@ -270,6 +276,14 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                         printf("File contents: %s\n", file_contents);
                         close(fd);
                 }
+                else if (strcmp(cmd, "cd") == 0) {
+                        const char *path = kstrtok(nullptr, " ");
+
+                        const int code = chdir(path);
+                        if (code == -1) {
+                                printf("No such file.\n");
+                        }
+                }
                 else {
                         printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m command unknown, type (h)elp to get help.\n");
                 }
@@ -282,7 +296,6 @@ int main(void) {
         uart_init();
         uart_clr_screen();
         vga_init(8, 9, 2);
-        init_keyboard(14);
 
         init_pin_output(25);
         init_pin_output(11);
@@ -312,6 +325,7 @@ int main(void) {
 
         init_tty();
         setup_tty_chrfile(tty->inode);
+        init_keyboard(14);
 
         printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"
                 "\x1b[92;40mSwitching to init process (temporary shell).\x1b[0m\n");
