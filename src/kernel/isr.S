@@ -135,11 +135,11 @@ isr_svcall:
 .thumb_func
 .align 4
 syscall_trampoline:
-        push    {lr, r5}
+        push    {r5, lr}
         ldr     r5, =syscall_table
         ldr     r4, [r5, r4, lsl #2]
         blx     r4
-        pop     {lr, r5}
+        pop     {r5, lr}
         b       .svcall_exit
 /**
  *
@@ -210,14 +210,21 @@ set_isr:
 
         @@@@ enable appropriate interrupt at the CPU by turning off and on again @@@@
 
+        ldr     r2, NVIC_ICPR0_OFFSET           @ unset IRQ
+        ldr     r3, NVIC_ISER0_OFFSET           @ set IRQ
+
+        cmp     r0, #32
+        ittt    ge
+        subsge  r0, r0, #32
+        addsge  r2, r2, #4
+        addsge  r3, r3, #4
+
         movs    r1, #1
         lsls    r0, r1, r0
 
         ldr     r1, PPB_BASE
-        ldr     r2, NVIC_ICPR_OFFSET       @ unset IRQ
         str     r0, [r1, r2]
-        ldr     r2, NVIC_ISER_OFFSET       @ set IRQ
-        str     r0, [r1, r2]
+        str     r0, [r1, r3]
 
         bx      lr
 
@@ -228,8 +235,8 @@ SYST_RVR:               .word 0xe014
 ICSR:                   .word 0xed04
 SYST_CVR:               .word 0xe018
 VTOR_OFFSET:            .word 0xed08
-NVIC_ICPR_OFFSET:       .word 0xe280        @ interrupt clear-pending register
-NVIC_ISER_OFFSET:       .word 0xe100        @ interrupt set-enable register
-NVIC_IPR_PEND_SV:       .word 0xe438        @ 14
+NVIC_ICPR0_OFFSET:      .word 0xe280                    @ interrupt clear-pending register
+NVIC_ISER0_OFFSET:      .word 0xe100                    @ interrupt set-enable register
+NVIC_IPR_PEND_SV:       .word 0xe438                    @ 14
 
 no_init_message:        .asciz "No init method provided, aborting."
