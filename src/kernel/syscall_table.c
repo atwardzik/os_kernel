@@ -19,8 +19,12 @@ syscall_fn syscall_table[] = {
         [WAIT_SVC] = (syscall_fn) sys_wait,
         [READDIR_SVC] = (syscall_fn) sys_readdir,
         [CHDIR_SVC] = (syscall_fn) sys_chdir,
+        [LSEEK_SVC] = (syscall_fn) sys_lseek,
+        [FSTAT_SVC] = (syscall_fn) sys_fstat,
+        [GETCWD_SVC] = (syscall_fn) sys_getcwd,
+
+
         [KILL_SVC] = (syscall_fn) sys_kill,
         [SIGNAL_SVC] = (syscall_fn) sys_signal,
         [SIGRETURN_SVC] = (syscall_fn) sys_sigreturn,
-        [LSEEK_SVC] = (syscall_fn) sys_lseek,
 };

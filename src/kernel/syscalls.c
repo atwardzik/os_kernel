@@ -10,6 +10,7 @@
 #include "fs/file.h"
 
 #include <errno.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
@@ -97,9 +98,12 @@ int _close(int file) {
 }
 
 
-int _fstat(char *file, struct stat *st) {
-        st->st_mode = S_IFCHR;
-        return 0;
+int _fstat(int file, struct stat *st) {
+        int ret;
+        SYSCALL(FSTAT_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
 }
 
 int _stat(char *file, struct stat *st) {
@@ -156,6 +160,14 @@ int readdir(int dirfd, struct DirectoryEntry *directory_entry) {
 int chdir(const char *path) {
         int ret;
         SYSCALL(CHDIR_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
+}
+
+char *getcwd(char *buf, unsigned int len) {
+        char *ret;
+        SYSCALL(GETCWD_SVC)
         __asm__("mov    %0, r0\n\r" : "=r"(ret));
 
         return ret;

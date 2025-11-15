@@ -61,7 +61,7 @@ static uint16_t raw_bytes_function[] __attribute__((aligned(4))) = {
 };
 
 static uint16_t raw_ls[] __attribute__((aligned(4))) = {
-        0xb580, 0xb08e, 0xaf00, 0x6078, 0x6039, 0x683b, 0x685b, 0xf04f, 0x0100, 0x4618, 0xdf05, 0x6378, 0xe012, 0xf107,
+        0xb580, 0xb08e, 0xaf00, 0x6078, 0x6039, 0x683b, 0x685b, 0xf44f, 0x1100, 0x4618, 0xdf05, 0x6378, 0xe012, 0xf107,
         0x030c, 0x3308, 0xb408, 0x4618, 0xf000, 0xf824, 0x4602, 0xf04f, 0x0001, 0xbc02, 0xdf04, 0xf04f, 0x0001, 0xf20f,
         0x014a, 0xf04f, 0x0201, 0xdf04, 0xf107, 0x030c, 0x4619, 0x6b78, 0xdf08, 0x4603, 0x2b00, 0xd1e4, 0x2300, 0x4618,
         0x3738, 0x46bd, 0xf04f, 0x0000, 0xe8bd, 0x4080, 0xdf01, 0xbf00, 0xf3af, 0x8000, 0xf3af, 0x8000, 0xf3af, 0x8000,
@@ -231,6 +231,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                         const int dirfd = open(path, O_DIRECTORY | O_RDONLY);
 
                         if (dirfd < 0) {
+                                printf("No such file.");
                                 continue;
                         }
 
@@ -284,6 +285,13 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                                 printf("No such file.\n");
                         }
                 }
+                else if (strcmp(cmd, "pwd") == 0) {
+                        char buf[64];
+                        char *ptr = buf;
+                        char *ret = getcwd(ptr, 64);
+
+                        printf("%s\n", ret);
+                }
                 else {
                         printf("\x1b[96;40m[PATER ADAMVS]\x1b[0m command unknown, type (h)elp to get help.\n");
                 }
@@ -327,8 +335,9 @@ int main(void) {
         setup_tty_chrfile(tty->inode);
         init_keyboard(14);
 
-        printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"
-                "\x1b[92;40mSwitching to init process (temporary shell).\x1b[0m\n");
+        //TODO: REPLACE WITH PRINTK
+        // printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"
+        //         "\x1b[92;40mSwitching to init process (temporary shell).\x1b[0m\n");
 #if 0
         // create root directory and two test files
 

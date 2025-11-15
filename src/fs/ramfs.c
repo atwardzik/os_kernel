@@ -78,11 +78,12 @@ struct Dentry *ramfs_lookup(struct VFS_Inode *parent, struct Dentry *file, unsig
         while (offset < parent->i_size) {
                 const void *next_offset = buf + offset;
                 const struct DirectoryEntry *file_dentry = next_offset;
+                struct VFS_Inode *file_inode = parent->i_sb->inode_table[file_dentry->inode_index];
 
-                if (strcmp(file_dentry->name, file->name) == 0) {
+                if (strcmp(file_dentry->name, file->name) == 0 || file_inode == file->inode) {
                         struct Dentry *dentry = kmalloc(sizeof(*dentry));
                         dentry->name = file_dentry->name;
-                        dentry->inode = parent->i_sb->inode_table[file_dentry->inode_index];
+                        dentry->inode = file_inode;
                         dentry->sb = parent->i_sb;
 
                         kfree(buf);

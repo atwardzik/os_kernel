@@ -200,6 +200,9 @@ int sys_open(const char *name, int flags, int mode) {
         if (file && flags & O_DIRECTORY && !(file->i_mode & S_IFDIR)) {
                 return -1;
         }
+        if (file && !(flags & O_DIRECTORY) && file->i_mode & S_IFDIR) {
+                return -1;
+        }
         if (file) {
                 return get_file_descriptor(file);
         }
@@ -339,4 +342,53 @@ int sys_chdir(const char *path) {
         }
 
         return -1;
+}
+
+int sys_fstat(int fd, struct stat *st) {
+        struct Process *current_process = scheduler_get_current_process();
+
+        if (fd >= current_process->files.count || fd < 0) {
+                ksys_write(1, "[!] There is no such file descriptor\n", 37);
+                return -1;
+        }
+
+        const struct VFS_Inode *inode = current_process->files.fdtable[fd]->f_inode;
+
+        st->st_mode = inode->i_mode;
+        st->st_uid = inode->i_uid;
+        st->st_gid = inode->i_gid;
+        st->st_mtim.tv_sec = inode->i_mtime;
+
+        return 0;
+}
+
+char *sys_getcwd(char *buf, unsigned int len) {
+        struct Process *current_process = scheduler_get_current_process();
+        struct VFS_Inode *inode = current_process->pwd;
+        struct VFS_Inode *parent = inode->parent;
+
+        buf[len - 1] = 0;
+        buf[len - 2] = '/';
+        size_t i = len - 2; // last byte written
+        while (inode != current_process->root) {
+                struct Dentry dentry = {
+                        .inode = inode,
+                };
+
+                const struct Dentry *res = parent->i_op->lookup(parent, &dentry, 0);
+                if (strlen(res->name) > i) {
+                        return nullptr;
+                }
+                i -= strlen(res->name);
+                memcpy(buf + i, res->name, strlen(res->name));
+
+
+                i -= 1;
+                buf[i] = '/';
+
+                inode = parent;
+                parent = inode->parent;
+        }
+
+        return buf + i;
 }

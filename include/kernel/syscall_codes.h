@@ -15,14 +15,17 @@
 #define WAIT_SVC        7
 #define READDIR_SVC     8
 #define CHDIR_SVC       9
-#define GET_TIME_SVC    10
-#define GET_PID_SVC     11
-#define GET_PPID_SVC    12
-#define YIELD_SVC       13
-#define KILL_SVC        14
-#define SIGNAL_SVC      15
-#define SIGRETURN_SVC   16
-#define LSEEK_SVC       17
+#define LSEEK_SVC       10
+#define FSTAT_SVC       11
+#define GETCWD_SVC      12
+
+#define GET_TIME_SVC    20
+#define GET_PID_SVC     21
+#define GET_PPID_SVC    22
+#define YIELD_SVC       33
+#define KILL_SVC        34
+#define SIGNAL_SVC      35
+#define SIGRETURN_SVC   36
 
 #define OS_INIT_SVC     255
 

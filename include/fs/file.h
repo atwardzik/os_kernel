@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include <time.h>
+#include <sys/stat.h>
 
 /*
  * /home/user/foo.txt
@@ -35,15 +36,6 @@
 
 #define O_DIRECTORY 0x200000
 
-// Bits:   [15........12][11....9][8....6][5....3][2....0]
-//            file type   special   user    group   other
-#define	S_IFREG 0100000
-#define	S_IFDIR 0040000
-#define	S_IFCHR 0020000
-#define	S_IFBLK 0060000
-#define	S_IFLNK 0120000
-#define	S_IFSOCK 0140000
-#define	S_IFIFO 0010000
 
 constexpr int MAX_OPEN_FILE_DESCRIPTORS = 8;
 
@@ -111,6 +103,8 @@ struct InodeOperations {
 };
 
 struct VFS_Inode {
+        // Bits:   [15........12][11....9][8....6][5....3][2....0]
+        //            file type   special   user    group   other
         uint16_t i_mode; // File type and permissions
         uint16_t i_uid;
         uint16_t i_gid;
@@ -162,8 +156,6 @@ struct Files {
 };
 
 
-void init_file_descriptors(void);
-
 int sys_open(const char *name, int flags, int mode);
 
 int sys_close(int file);
@@ -177,5 +169,9 @@ int sys_readdir(int dirfd, struct DirectoryEntry *directory_entry);
 int sys_chdir(const char *path);
 
 int sys_lseek(const int file, off_t offset, int whence);
+
+int sys_fstat(int file, struct stat *st);
+
+char *sys_getcwd(char *buf, unsigned int len);
 
 #endif // OS_FILE_H
