@@ -113,9 +113,26 @@ static struct Chunk *find_chunk_by_ptr(void *ptr) {
         return temp;
 }
 
+void *kmemcpy(void *dest, const void *src, const unsigned int count) {
+        for (unsigned int i = 0; i < count; ++i) {
+                *((char *) dest + i) = *((const char *) src + i);
+        }
+
+        return dest;
+}
 
 void *krealloc(void *ptr, size_t new_size) {
-        return nullptr;
+        void *new_ptr = kmalloc(new_size);
+        if (!new_ptr) {
+                return nullptr;
+        }
+
+        struct Chunk *current = find_chunk_by_ptr(ptr);
+
+        kmemcpy(new_ptr, ptr, current->size);
+
+        kfree(ptr);
+        return new_ptr;
 }
 
 void kfree(void *ptr) {
@@ -139,11 +156,14 @@ void kfree(void *ptr) {
         }
 
         if (temp->next_node->ptr == ptr) {
-                struct Chunk *next = temp->next_node->next_node;
+                struct Chunk *found_chunk = temp->next_node;
+                const size_t found_chunk_size = found_chunk->size;
+
+                struct Chunk *next = found_chunk->next_node;
                 temp->next_node = next;
 
                 Allocator.count -= 1;
-                Allocator.size -= temp->size;
+                Allocator.size -= found_chunk_size;
         }
 }
 
@@ -153,12 +173,6 @@ size_t get_allocated_size(void) {
 
 size_t get_current_heap_size(void) {
         return Allocator.size + Allocator.count * sizeof(struct Chunk);
-}
-
-void kmemcpy(void *dst, const void *src, const size_t count) {
-        for (size_t i = 0; i < count; ++i) {
-                *((char *) dst + i) = *((const char *) src + i);
-        }
 }
 
 // void memset(void *dst, int value, size_t count) {

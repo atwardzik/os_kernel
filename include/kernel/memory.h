@@ -28,6 +28,6 @@ size_t get_current_heap_size(void);
 
 // void memset(void *dst, int value, size_t count);
 
-void kmemcpy(void *dst, const void *src, size_t count);
+void *kmemcpy(void *dst, const void *src, size_t count);
 
 #endif //MEMORY_H
