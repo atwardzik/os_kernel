@@ -14,7 +14,7 @@ AS := arm-none-eabi-as
 LINKER := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
 
-CC_ARGS = -Ilibc -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -Wno-unused-parameter -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fPIC -c -g -O0
+CC_ARGS = -Ilibc -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -Wno-unused-parameter -Wno-discarded-qualifiers -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fPIC -c -g -O0
 CXX_ARGS = -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -std=c++23 -c -g -O0
 AS_ARGS = --warn --fatal-warnings -mcpu=cortex-m33 -mthumb -g
 LINK_ARGS = -ffreestanding -nostdlib -nostartfiles -mthumb -fPIC
@@ -86,9 +86,4 @@ dirs:
 	@mkdir -p $(DIRS)
 
 libc.o:
-	$(CC) $(CC_ARGS) libc/libc.c -o $(OBJDIR)/libc.o
-#shell.o: shell.c
-#	$(CC) $(CC_ARGS) shell.c -o shell.o
-
-#shell: shell.o
-#	$(LINKER) $(LINK_ARGS) *.o -o shell
+	$(CC) $(CC_ARGS) -Wno-discarded-qualifiers -Wno-incompatible-pointer-types libc/libc.c -o $(OBJDIR)/libc.o

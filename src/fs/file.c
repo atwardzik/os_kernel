@@ -135,7 +135,7 @@ static int get_file_descriptor(struct VFS_Inode *inode) {
                 return -1;
         }
 
-        for (size_t i = 0; i < MAX_OPEN_FILE_DESCRIPTORS; ++i) {
+        for (size_t i = 3; i < MAX_OPEN_FILE_DESCRIPTORS; ++i) { //first three file descriptors are untouched (stdio)
                 const struct File *file = current_process->files.fdtable[i];
                 if (file && file->f_inode == inode) {
                         return i;

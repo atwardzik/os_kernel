@@ -26,54 +26,73 @@ int main(void) {
 
                 if (strcmp(cmd, "help") == 0 || strcmp(cmd, "h") == 0) {
                         puts("Temporarily available commands:\n"
-                             "\t  (h)elp - prints this help screen\n"
-                             "\t   (r)un - runs specified app, if no argument is provided runs proc2\n"
-                             "\t           (standard input test). Proc1 is already running (diode)\n"
-                             "\t  (k)ill - kills proc1 (diode)\n"
-                             "\t(m)orcik - prints a colorful message\n"
-                             "\t       -----\n"
-                             "\t      ls - lists current directory\n"
-                             "\t   mkdir - creates a directory under specified path\n"
-                             "\t   touch - creates a file under specified path\n"
-                             "\t     cat - reads file contents\n"
-                             "\t  (e)cho - writes to standard input or redirects to a file\n"
-                             "\t rawecho - writes converted hexadecimal bytes to specified file (max 128 bytes)\n\n");
+                                "\t  (h)elp - prints this help screen\n"
+                                "\t   (r)un - runs specified app with specified parameters\n"
+                                "\t           usage: run path/to/app (parameter)*\n"
+                                "\t  (k)ill - kills previously set up by kernel proc with pid=1 (diode)\n"
+                                "\t(m)orcik - prints a colorful message\n"
+                                "\t  (e)cho - writes to standard input or redirects to a file\n"
+                                "\t      cd - change current directory\n"
+                                "\t     pwd - print working directory\n\n"
+                        );
                 }
                 else if (strcmp(cmd, "run") == 0 || strcmp(cmd, "r") == 0) {
                         const char *path = strtok(nullptr, " ");
+                        char const *path_tok = strtok(nullptr, " ");
 
                         int fd = open(path, O_BINARY, 0);
                         if (fd < 0) {
-                                puts("Executable not found.\n");
-                                continue;
+                                char buf[64] = {"bin/"};
+                                memcpy(buf + 4, path, strlen(path));
+
+                                fd = open(buf, O_BINARY, 0);
+                                if (fd < 0) {
+                                        puts("Executable not found.\n");
+                                        continue;
+                                }
                         }
 
-                        short raw_bytes_app[128];
-                        read(fd, raw_bytes_app, 128);
-                        // spawn((void *) raw_bytes_app + 1, nullptr, nullptr, nullptr, nullptr);
+                        const char *path_arg = path_tok ? path_tok : "";
 
-                        int code = -1;
-                        const int returned_pid = -1;
-                        // const int returned_pid = wait(&code);
+                        char *const program_args[] = {path, path_arg, nullptr};
+                        spawn(fd, nullptr, nullptr, program_args, nullptr);
 
-                        puts("\n\x1b[96;40m[PATER ADAMVS]\x1b[0m Child process ");
+                        int code;
+                        const int returned_pid = wait(&code);
 
-                        char num[5];
-                        itoa(returned_pid, num, 10);
-                        puts(num);
-
-                        puts("exited with code: ");
-
-                        itoa(code, num, 10);
-                        puts(num);
-
-                        puts("\n");
+                        printf("\n\x1b[96;40m[PATER ADAMVS]\x1b[0m Child process %i exited with code: %i\n",
+                               returned_pid, code);
+                        close(fd);
                 }
                 else if (strcmp(cmd, "kill") == 0 || strcmp(cmd, "k") == 0) {
-                        puts("N/a");
+                        printf("You are willing to kill the process pid=1. Choose (1) SIGTERM or (2) SIGKILL: ");
+
+                        char line[80];
+                        read(0, &line, sizeof(line));
+                        const int choice = line[0] - 0x30;
+
+
+                        if (choice == 1) {
+                                kill(1, 15); //sigterm
+                        }
+                        else if (choice == 2) {
+                                kill(1, 9); //sigkill
+                        }
+                        else {
+                                printf("This is not a valid signal. I won't kill the process.\n");
+                        }
                 }
                 else if (strcmp(cmd, "morcik") == 0 || strcmp(cmd, "m") == 0) {
-                        puts("\x1b[95;40mMeine beliebte Olga ist die sch\xf6nste Frau auf der Welt\n\x1b[0m");
+                        const char *text = "Meine beliebte Olga ist die schoenste Frau auf der Welt";
+                        const int colors[] = {31, 91, 33, 32, 34, 94, 35};
+                        const int num_colors = sizeof(colors) / sizeof(colors[0]);
+
+                        for (int i = 0; i < strlen(text); ++i) {
+                                const int color = colors[i % num_colors];
+                                printf("\x1b[%i;40m%c\x1b[0m", color, text[i]);
+                        }
+
+                        puts("\n");
                 }
                 else if (strcmp(cmd, "echo") == 0 || strcmp(cmd, "e") == 0) {
                         const char *text = strtok(nullptr, ">");
@@ -96,26 +115,6 @@ int main(void) {
                         write(fd, text, strlen(text) + 1); // with EOF
 
                         close(fd);
-                }
-                else if (strcmp(cmd, "ls") == 0) {
-                        const char *path_tok = strtok(nullptr, " ");
-                        const char *path = path_tok == nullptr ? "" : path_tok;
-                        const int dirfd = open(path, O_DIRECTORY | O_RDONLY, 0);
-
-                        if (dirfd < 0) {
-                                puts("No such file.");
-                                continue;
-                        }
-
-                        struct DirectoryEntry dentry;
-                        while (readdir(dirfd, &dentry) == 1) {
-                                puts((const char *) &dentry.file_type);
-                                puts(" ");
-                                puts(dentry.name);
-                                puts("\n");
-                        }
-
-                        lseek(dirfd, 0, SEEK_SET);
                 }
                 else if (strcmp(cmd, "cd") == 0) {
                         const char *path = strtok(nullptr, " ");

@@ -146,12 +146,13 @@ ssize_t ramfs_write(struct File *file, void *buf, size_t count, off_t file_offse
         struct RAMFS_Inode *inode_ptr = (struct RAMFS_Inode *) file->f_inode;
 
         if (!inode_ptr->bytes_allocated) {
-                inode_ptr->file_begin = kmalloc(512);
-                inode_ptr->bytes_allocated = 512;
+                inode_ptr->file_begin = kmalloc(count + 512);
+                inode_ptr->bytes_allocated = count + 512;
         }
-        else if (file_offset + count > inode_ptr->bytes_allocated) {
-                // inode_ptr->file_begin = krealloc(inode_ptr->file_begin, current_size + 512); // +relocate!!!
-                __asm__("bkpt #0\n\r");
+
+        if (file_offset + count > inode_ptr->bytes_allocated) {
+                inode_ptr->file_begin = krealloc(inode_ptr->file_begin, file_offset + count + 512);
+                inode_ptr->bytes_allocated = file_offset + count + 512;
         }
 
         for (int i = 0; i < count; i++) {
