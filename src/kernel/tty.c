@@ -13,6 +13,7 @@
 #include "kernel/memory.h"
 #include "kernel/resources.h"
 
+#include <stdlib.h>
 #include <sys/errno.h>
 
 
@@ -327,7 +328,24 @@ static void delete_and_shift(const int pos_delete, const int len) {
         }
 }
 
-void write_to_keyboard_buffer(const int c) {
+void write_to_keyboard_buffer(int c) {
+        static char escape_sequence[4] = {};
+        static size_t escape_sequence_position = 0;
+
+        if (escape_sequence_position || c == ESC) {
+                escape_sequence[escape_sequence_position] = (char) c;
+
+                if (escape_sequence_position == 2) {
+                        c = (escape_sequence[0] << 16) | (escape_sequence[1] << 8) | escape_sequence[2];
+
+                        escape_sequence_position = 0;
+                }
+                else {
+                        escape_sequence_position += 1;
+                        return;
+                }
+        }
+
         // TODO: it would be wise to resize buffer if the contents do not fit
         if (c == ETX) {
                 write_string("^C");

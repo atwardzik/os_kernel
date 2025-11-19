@@ -200,6 +200,10 @@ uart_Rx:
         it      eq
         movseq  r0, #0x0a                       @ replace with newline
 
+        cmp     r0, #0x7f                       @ DEL
+        it      eq
+        movseq  r0, #0x08                       @ replace with \b
+
         bl      write_to_keyboard_buffer
 
         movs    r0, #1                          @ uart is 33 irq - 1 for first bank on rp2350
