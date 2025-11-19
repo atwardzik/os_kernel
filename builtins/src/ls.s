@@ -16,7 +16,7 @@ main:
 
         ldr     r1, =0x200000   @ O_DIRECTORY | O_RDONLY
         mov     r0, r3
-        svc     #5              @ syscall open
+        svc     #6              @ syscall open
         str     r0, [r7, #52]   @ store dirfd
 
         b       .L2
@@ -30,17 +30,17 @@ main:
         mov     r2, r0
         mov     r0, #1          @ stdout
         pop     {r1}            @ names
-        svc     #4              @ write svc
+        svc     #5              @ write svc
 
         mov     r0, #1
         adr     r1, endl
         mov     r2, #1
-        svc     #4
+        svc     #5
 .L2:
         add     r3, r7, #12
         mov     r1, r3
         ldr     r0, [r7, #52]
-        svc     #8              @ syscall readdir
+        svc     #9              @ syscall readdir
         mov     r3, r0
         cmp     r3, #0
         bne     .L3
@@ -58,7 +58,7 @@ main:
 strlen:
         movs    r1, #0
         .loop:
-                ldr     r2, [r0]
+                ldrb    r2, [r0]
                 cmp     r2, #0
                 beq     .end_loop
                 adds    r1, r1, #1

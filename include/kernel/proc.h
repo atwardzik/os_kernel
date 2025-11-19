@@ -106,6 +106,24 @@ pid_t create_process_init(void (*process_entry_ptr)(void), struct VFS_Inode *roo
 /**
  * Creates a new process, based on the current process.
  * @param process_entry_ptr execution start pointer
+ * @param file_actions
+ * @param file_actions settings for copying fdtable
+ * @param attrp priority and permissions for spawned process
+ * @param argv arguments passed
+ * @param envp is an array of pointers to strings, conventionally of the form key=value,
+ *             which are passed as the environment of the new program
+ * @return positive for successful child creation, negative for error
+ */
+pid_t sys_spawnp_process(
+        void (*process_entry_ptr)(void),
+        const spawn_file_actions_t *file_actions,
+        const spawnattr_t *attrp,
+        char *const argv[], char *const envp[]
+);
+
+/**
+ * Creates a new process, based on the current process.
+ * @param fd file descriptor of a file that holds code for the process to be spawned
  * @param file_actions settings for copying fdtable
  * @param attrp priority and permissions for spawned process
  * @param argv arguments passed
@@ -114,7 +132,7 @@ pid_t create_process_init(void (*process_entry_ptr)(void), struct VFS_Inode *roo
  * @return positive for successful child creation, negative for error
  */
 pid_t sys_spawn_process(
-        void (*process_entry_ptr)(void),
+        int fd,
         const spawn_file_actions_t *file_actions,
         const spawnattr_t *attrp,
         char *const argv[],

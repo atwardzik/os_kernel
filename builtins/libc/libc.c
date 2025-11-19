@@ -16,7 +16,7 @@ void __attribute__((naked)) _start() {
 int write(int file, const void *buf, int len) {
         int res;
 
-        __asm__("svc    #4\n\r");
+        __asm__("svc    #5\n\r");
         __asm__("mov    %0, r0\n\r" : "=r"(res));
 
         return res;
@@ -25,7 +25,7 @@ int write(int file, const void *buf, int len) {
 int read(int file, void *buf, int len) {
         int res;
 
-        __asm__("svc    #3\n\r");
+        __asm__("svc    #4\n\r");
         __asm__("mov    %0, r0\n\r" : "=r"(res));
 
         return res;
@@ -34,7 +34,7 @@ int read(int file, void *buf, int len) {
 int open(const char *name, int flags, int mode) {
         int res;
 
-        __asm__("svc    #5\n\r");
+        __asm__("svc    #6\n\r");
         __asm__("mov    %0, r0\n\r" : "=r"(res));
 
         return res;
@@ -43,7 +43,7 @@ int open(const char *name, int flags, int mode) {
 int close(int file) {
         int res;
 
-        __asm__("svc    #6\n\r");
+        __asm__("svc    #7\n\r");
         __asm__("mov    %0, r0\n\r" : "=r"(res));
 
         return res;
@@ -52,7 +52,7 @@ int close(int file) {
 int readdir(int dirfd, struct DirectoryEntry *directory_entry) {
         int res;
 
-        __asm__("svc    #8\n\r");
+        __asm__("svc    #9\n\r");
         __asm__("mov    %0, r0\n\r" : "=r"(res));
 
         return res;
@@ -61,7 +61,7 @@ int readdir(int dirfd, struct DirectoryEntry *directory_entry) {
 int chdir(const char *path) {
         int res;
 
-        __asm__("svc    #9\n\r");
+        __asm__("svc    #10\n\r");
         __asm__("mov    %0, r0\n\r" : "=r"(res));
 
         return res;
@@ -70,7 +70,7 @@ int chdir(const char *path) {
 int lseek(const int file, int offset, int whence) {
         int res;
 
-        __asm__("svc    #10\n\r");
+        __asm__("svc    #11\n\r");
         __asm__("mov    %0, r0\n\r" : "=r"(res));
 
         return res;
@@ -79,7 +79,7 @@ int lseek(const int file, int offset, int whence) {
 char *getcwd(char *buf, unsigned int len) {
         char *res;
 
-        __asm__("svc    #12\n\r");
+        __asm__("svc    #13\n\r");
         __asm__("mov    %0, r0\n\r" : "=r"(res));
 
         return res;

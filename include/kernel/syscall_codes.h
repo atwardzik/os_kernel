@@ -8,16 +8,17 @@
 #define RESTART_SVC     0
 #define EXIT_SVC        1
 #define SPAWN_SVC       2
-#define READ_SVC        3
-#define WRITE_SVC       4
-#define OPEN_SVC        5
-#define CLOSE_SVC       6
-#define WAIT_SVC        7
-#define READDIR_SVC     8
-#define CHDIR_SVC       9
-#define LSEEK_SVC       10
-#define FSTAT_SVC       11
-#define GETCWD_SVC      12
+#define SPAWNP_SVC      3
+#define READ_SVC        4
+#define WRITE_SVC       5
+#define OPEN_SVC        6
+#define CLOSE_SVC       7
+#define WAIT_SVC        8
+#define READDIR_SVC     9
+#define CHDIR_SVC       10
+#define LSEEK_SVC       11
+#define FSTAT_SVC       12
+#define GETCWD_SVC      13
 
 #define GET_TIME_SVC    20
 #define GET_PID_SVC     21

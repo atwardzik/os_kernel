@@ -41,8 +41,22 @@ int _fork(void) {
         return -1;
 }
 
-pid_t spawn(
+pid_t spawnp(
         void (*process_entry_ptr)(void),
+        const spawn_file_actions_t *file_actions,
+        const spawnattr_t *attrp,
+        char *const argv[],
+        char *const envp[]
+) {
+        int ret;
+        SYSCALL(SPAWNP_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
+}
+
+pid_t spawn(
+        int fd,
         const spawn_file_actions_t *file_actions,
         const spawnattr_t *attrp,
         char *const argv[],
@@ -94,7 +108,11 @@ int _open(const char *name, int flags, int mode) {
 }
 
 int _close(int file) {
-        return -1;
+        int ret;
+        SYSCALL(CLOSE_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
 }
 
 

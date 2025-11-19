@@ -7,8 +7,10 @@
 #include "memory.h"
 #include "signal.h"
 #include "tty.h"
+#include "fs/ramfs.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 //TODO: processes should be better organized than a static array with fixed-position for give pid.
 
@@ -285,12 +287,11 @@ static struct Process *create_blank_process(void (*process_entry_ptr)(void), cha
         return added_process;
 }
 
-pid_t sys_spawn_process(
+pid_t sys_spawnp_process(
         void (*process_entry_ptr)(void),
         const spawn_file_actions_t *file_actions,
         const spawnattr_t *attrp,
-        char *const argv[],
-        char *const envp[]
+        char *const argv[], char *const envp[]
 ) {
         if (!scheduler.processes[0].ptr) {
                 __asm__("bkpt   #0");
@@ -299,7 +300,7 @@ pid_t sys_spawn_process(
         struct Process *current = scheduler.current_process;
         struct File **fdtable = kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
         struct Files files = {current->files.count, fdtable};
-        for (size_t i = 0; i < current->files.count; ++i) {
+        for (size_t i = 0; i < MAX_OPEN_FILE_DESCRIPTORS; ++i) {
                 files.fdtable[i] = current->files.fdtable[i];
         }
 
@@ -323,6 +324,21 @@ pid_t sys_spawn_process(
 
         process->pstate = READY;
         return process->pid;
+}
+
+pid_t sys_spawn_process(
+        int fd,
+        const spawn_file_actions_t *file_actions,
+        const spawnattr_t *attrp,
+        char *const argv[],
+        char *const envp[]
+) {
+        const struct Process *current = scheduler.current_process;
+
+        // TODO: The file must be always mapped to RAM
+        const struct RAMFS_Inode *inode = (struct RAMFS_Inode *) current->files.fdtable[fd]->f_inode;
+
+        return sys_spawnp_process(inode->file_begin + 1, file_actions, attrp, argv, envp);
 }
 
 static struct Files setup_init_stdio(struct VFS_Inode *root) {
@@ -364,6 +380,7 @@ static struct Files setup_init_stdio(struct VFS_Inode *root) {
         f_stderr->f_inode = tty_result->inode;
 
         struct File **fdtable = kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
+        memset(fdtable, 0, sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
         fdtable[0] = f_stdin;
         fdtable[1] = f_stdout;
         fdtable[2] = f_stderr;

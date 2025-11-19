@@ -12,6 +12,7 @@ typedef uint32_t (*syscall_fn)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t)
 syscall_fn syscall_table[] = {
         [EXIT_SVC] = (syscall_fn) sys_exit,
         [SPAWN_SVC] = (syscall_fn) sys_spawn_process,
+        [SPAWNP_SVC] = (syscall_fn) sys_spawnp_process,
         [READ_SVC] = (syscall_fn) sys_read,
         [WRITE_SVC] = (syscall_fn) sys_write,
         [OPEN_SVC] = (syscall_fn) sys_open,
