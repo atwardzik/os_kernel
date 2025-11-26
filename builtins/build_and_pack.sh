@@ -1,4 +1,5 @@
 set -e
+make clean
 make dirs
 mkdir -p build
 make all

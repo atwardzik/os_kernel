@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
         }
 
         const char *file = nullptr;
-        file = argv[argc - 1];
+        file = argv[argc - 1]; //temporary solution until global variables
 
         if (!file) {
                 dprintf(2, "No file specified\n");
@@ -37,28 +37,40 @@ int main(int argc, char *argv[]) {
                 return -1;
         }
 
-// #ifdef DEBUG
+#ifdef DEBUG
         printf("Line numbering is %s\n", LINE_NUMBERING ? "on" : "off");
         printf("Printing newline chars is %s\n", NEWLINE_CHARS_PRINTING ? "on" : "off");
         printf("File is: %s\n", file);
-// #endif
+#endif
 
-        int fd = open(file, O_RDONLY, 0);
+        const int fd = open(file, O_RDONLY, 0);
+        if (fd < 0) {
+                dprintf(2, "No such file.\n");
 
-        unsigned long file_len = lseek(fd, 0, SEEK_END);
-        lseek(fd, 0, SEEK_SET);
+                return -1;
+        }
+
+        // unsigned long file_len = lseek(fd, 0, SEEK_END);
+        // lseek(fd, 0, SEEK_SET);
 
         int bytes_read = 0;
         int i = 1;
+        if (LINE_NUMBERING) {
+                puts("    1  ");
+                i += 1;
+        }
         do {
-                char buf[2] = {};
+                char buf[1] = {};
                 bytes_read = read(fd, buf, 1);
+
 
                 if (buf[0] == '\n' && NEWLINE_CHARS_PRINTING) {
                         write(1, "$", 1);
                 }
 
-                write(1, buf, 1);
+                if (bytes_read) {
+                        write(1, buf, 1);
+                }
 
                 if (buf[0] == '\n' && LINE_NUMBERING) {
                         // dummy solution until printf supports fixed positions
@@ -73,6 +85,10 @@ int main(int argc, char *argv[]) {
                         i += 1;
                 }
         } while (bytes_read);
+
+        if (NEWLINE_CHARS_PRINTING) {
+                puts("%");
+        }
 
         close(fd);
         return 0;

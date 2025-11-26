@@ -10,7 +10,10 @@
 #define O_BINARY 0x10000
 #define O_RDONLY 0
 #define O_WRONLY 1
+#define O_APPEND 0x0008
 #define O_CREAT 0x0200
+#define O_TRUNC 0x0400
+
 #define SEEK_SET 0
 #define O_DIRECTORY 0x200000
 

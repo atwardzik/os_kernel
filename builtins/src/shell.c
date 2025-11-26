@@ -72,24 +72,33 @@ int main(void) {
                         puts("\n");
                 }
                 else if (strcmp(cmd, "echo") == 0 || strcmp(cmd, "e") == 0) {
-                        const char *text = strtok(nullptr, ">");
-                        const char *path = strtok(nullptr, "");
+                        char *argument_line = strtok(nullptr, "");
+                        int flags = O_WRONLY | O_TRUNC;
+                        const int redirection_index = strcspn(argument_line, ">");
+                        if (redirection_index < strlen(argument_line)) {
+                                if (argument_line[redirection_index + 1] == '>') {
+                                        flags = O_APPEND;
+                                }
+                        }
+
+                        const char *text = strtok(argument_line, ">");
                         if (!text) {
                                 continue;
                         }
 
-                        if (!path) {
-                                puts(text);
-                                continue;
+                        const char *path = strtok(nullptr, "");
+                        int fd = 1;
+                        if (path) {
+                                fd = open(path, flags, 0);
+                                if (fd < 0) {
+                                        puts("No such file.\n");
+                                        continue;
+                                }
                         }
 
-                        int fd = open(path, O_WRONLY, 0);
-                        if (fd < 0) {
-                                puts("No such file.\n");
-                                continue;
-                        }
 
-                        write(fd, text, strlen(text) + 1); // with EOF
+                        write(fd, text, strlen(text));
+                        write(fd, "\n", 1);
 
                         close(fd);
                 }

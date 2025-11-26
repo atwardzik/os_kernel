@@ -211,7 +211,20 @@ int sys_open(const char *name, int flags, int mode) {
                 return -1;
         }
         if (file) {
-                return get_file_descriptor(file);
+                const int fd = get_file_descriptor(file);
+
+                if (fd < 0) {
+                        return fd;
+                }
+
+                if (flags & O_APPEND) {
+                        sys_lseek(fd, 0, SEEK_END);
+                }
+                else if (flags & O_TRUNC) {
+                        file->i_size = 0;
+                }
+
+                return fd;
         }
 
         return -1;
@@ -219,6 +232,9 @@ int sys_open(const char *name, int flags, int mode) {
 
 
 int sys_close(int file) {
+        if (file >= 0 && file <= 2) {
+                return -1;
+        }
         struct Process *current_process = scheduler_get_current_process();
 
         struct File *current_file = current_process->files.fdtable[file];
@@ -294,7 +310,11 @@ int sys_write(const int file, char *ptr, const int len) {
 
         struct File *current_file = current_process->files.fdtable[file];
         if (current_file->f_op->write) {
-                return current_file->f_op->write(current_file, ptr, len, current_file->f_pos);
+                int offset = current_file->f_op->write(current_file, ptr, len, current_file->f_pos);
+
+                current_file->f_pos += offset;
+
+                return offset;
         }
 
         return -1;

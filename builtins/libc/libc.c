@@ -340,14 +340,20 @@ int printf(const char *format, ...) {
         va_list args;
         va_start(args, format);
 
-        return vdprintf(1, format, args);
+        const int res = vdprintf(1, format, args);
+
+        va_end(args);
+        return res;
 }
 
 int dprintf(int fd, const char *format, ...) {
         va_list args;
         va_start(args, format);
 
-        return vdprintf(fd, format, args);
+        const int res = vdprintf(fd, format, args);
+
+        va_end(args);
+        return res;
 }
 
 
@@ -382,15 +388,17 @@ int getopt(int argc, char *const argv[], const char *optstring) {
 
         if (index == argc) {
                 // optind = index;
+                index = 1;
                 return -1;
         }
 
         if (argv[index][0] != '-') {
                 // optind = index;
+                index = 1;
                 return -1;
         }
 
-        char current_parameter = argv[index][1];
+        const char current_parameter = argv[index][1];
 
         enum { SINGLE, PARAM, NONE } option = NONE;
         for (int i = 0; i < strlen(optstring); ++i) {
