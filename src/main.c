@@ -144,7 +144,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                 }
 
                 char *const program_args[] = {"gsh", nullptr};
-                pid_t shell_pid = spawn(fd, nullptr, nullptr, program_args, nullptr);
+                [[maybe_unused]] pid_t shell_pid = spawn(fd, nullptr, nullptr, program_args, nullptr);
 
         process_wait:
                 int code;

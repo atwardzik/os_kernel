@@ -319,8 +319,14 @@ pid_t sys_spawnp_process(
                 process->children[i] = nullptr;
         }
 
-        current->children[current->children_count] = process;
-        current->children_count += 1;
+        for (size_t i = 0; i < current->max_children_count; ++i) {
+                if (current->children[i] == nullptr) {
+                        current->children[i] = process;
+                        current->children_count += 1;
+
+                        break;
+                }
+        }
 
         process->pstate = READY;
         return process->pid;
@@ -466,18 +472,32 @@ pid_t sys_wait(int *stat_loc) {
         struct Process *current = scheduler.current_process;
 
         current->pstate = WAITING_FOR_CHILD_EXIT;
-        if (current->children[current->children_count - 1]->pstate != TERMINATED) {
+        bool child_terminated = false;
+        for (size_t i = 0; i < current->max_children_count; ++i) {
+                if (current->children[i] && current->children[i]->pstate == TERMINATED) {
+                        child_terminated = true;
+                }
+        }
+        if (!child_terminated) {
                 save_kernelmode_and_context_switch();
         }
         current->pstate = RUNNING;
 
-        *stat_loc = current->children[current->children_count - 1]->exit_code;
-        const pid_t dead_process = current->children[current->children_count - 1]->pid;
+
+        pid_t terminated_child = -1;
+        for (size_t i = 0; i < current->max_children_count; ++i) {
+                if (current->children[i] && current->children[i]->pstate == TERMINATED) {
+                        terminated_child = i;
+                }
+        }
+        *stat_loc = current->children[terminated_child]->exit_code;
+        const pid_t dead_process = current->children[terminated_child]->pid;
 
         //evaporate zombie process
         const struct Process p = {};
-        *current->children[current->children_count - 1] = p;
+        *current->children[terminated_child] = p;
         current->children_count -= 1;
+        current->children[terminated_child] = nullptr;
 
         return dead_process;
 }
