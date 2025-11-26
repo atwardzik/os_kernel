@@ -41,10 +41,12 @@ int read(int file, void *buf, int len) {
 }
 
 
-void exit(int code){SYSCALL(EXIT_SVC)}
+void exit(int code) { SYSCALL(EXIT_SVC) }
 
-pid_t spawnp(void (*process_entry_ptr)(void), const spawn_file_actions_t *file_actions, const spawnattr_t *attrp,
-             char *const argv[], char *const envp[]) {
+pid_t spawnp(
+        void (*process_entry_ptr)(void), const spawn_file_actions_t *file_actions, const spawnattr_t *attrp,
+        char *const argv[], char *const envp[]
+) {
         int ret;
         SYSCALL(SPAWNP_SVC)
         __asm__("mov    %0, r0\n\r" : "=r"(ret));
@@ -52,8 +54,10 @@ pid_t spawnp(void (*process_entry_ptr)(void), const spawn_file_actions_t *file_a
         return ret;
 }
 
-pid_t spawn(int fd, const spawn_file_actions_t *file_actions, const spawnattr_t *attrp, char *const argv[],
-            char *const envp[]) {
+pid_t spawn(
+        int fd, const spawn_file_actions_t *file_actions, const spawnattr_t *attrp, char *const argv[],
+        char *const envp[]
+) {
         int ret;
         SYSCALL(SPAWN_SVC)
         __asm__("mov    %0, r0\n\r" : "=r"(ret));
@@ -61,7 +65,7 @@ pid_t spawn(int fd, const spawn_file_actions_t *file_actions, const spawnattr_t 
         return ret;
 }
 
-void sigreturn(void){SYSCALL(SIGRETURN_SVC)}
+void sigreturn(void) { SYSCALL(SIGRETURN_SVC) }
 
 sighandler_t signal(int signum, sighandler_t handler) {
         sighandler_t ret;
@@ -271,13 +275,55 @@ char *itoa(int value, char *const str, const int base) {
         return str;
 }
 
+static unsigned int pow(unsigned int base, unsigned int exp) {
+        if (exp == 0) {
+                return 1;
+        }
+
+        return base * pow(base, exp - 1);
+}
+
+unsigned long strtoul(const char *str, char **str_end, int base) {
+        const int len = strlen(str);
+        const char *ptr = str;
+
+        unsigned long value = 0;
+        int i = len - 1;
+        while (i >= 0) {
+                unsigned char digit = *ptr++;
+                if (digit >= '0' && digit <= '9') {
+                        digit -= 0x30;
+                }
+                else if (digit >= 'a' && digit <= 'f') {
+                        digit = digit - 'a' + 10;
+                }
+                else if (digit >= 'A' && digit <= 'F') {
+                        digit = digit - 'A' + 10;
+                }
+
+                if (digit < base) {
+                        value += pow(base, i) * digit;
+                        i -= 1;
+                }
+                else {
+                        break;
+                }
+        }
+
+        if (str_end) {
+                *str_end = (char *) ptr;
+        }
+
+        return value;
+}
+
 int vdprintf(int fd, const char *format, va_list vlist) {
         if (strcspn(format, "%") == strlen(format)) {
                 write(fd, format, strlen(format));
                 return 0;
         }
 
-        const char *const format_end = format + strlen(format) + 1;
+        const char *const format_end = format + strlen(format);
 
         const char *ptr_begin = format;
         const char *ptr_end = format;
@@ -295,7 +341,7 @@ int vdprintf(int fd, const char *format, va_list vlist) {
                         case 'c': {
                                 int c = va_arg(vlist, int);
                                 char buf[1] = {(char) c};
-                                write(fd, &buf, 1);
+                                write(fd, buf, 1);
                                 break;
                         }
                         case 's': {
@@ -305,13 +351,13 @@ int vdprintf(int fd, const char *format, va_list vlist) {
                         }
                         case 'i': {
                                 char buf[20] = {};
-                                itoa(va_arg(vlist, int), &buf, 10);
+                                itoa(va_arg(vlist, int), buf, 10);
                                 write(fd, &buf, strlen(buf));
                                 break;
                         }
                         case 'x': {
                                 char buf[20] = {};
-                                itoa(va_arg(vlist, int), &buf, 16);
+                                itoa(va_arg(vlist, int), buf, 16);
                                 write(fd, &buf, strlen(buf));
                                 break;
                         }
@@ -324,7 +370,6 @@ int vdprintf(int fd, const char *format, va_list vlist) {
                 ptr_begin = ptr_end;
         }
 
-        va_end(vlist);
         return 0;
 }
 

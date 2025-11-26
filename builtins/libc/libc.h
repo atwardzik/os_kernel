@@ -107,6 +107,8 @@ int strcmp(const char *s1, const char *s2);
 
 char *itoa(int value, char *str, int base);
 
+unsigned long strtoul(const char *str, char **str_end, int base);
+
 int vdprintf(int fd, const char *format, va_list vlist);
 
 int printf(const char *format, ...);
