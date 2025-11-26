@@ -15,6 +15,8 @@ SECTIONS
                 __text_start__ = .;
                 *(.reset*)
                 *(.text*)
+                __cpio_init_start__ = .;
+                *(.cpio_init*)          /* For debug purposes until proper unvolatile memory support exists */
                 __text_end__ = .;
         } > code
 

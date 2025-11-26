@@ -242,7 +242,11 @@ int sys_read(int file, char *ptr, int len) {
 
         struct File *current_file = current_process->files.fdtable[file];
         if (current_file->f_op->read) {
-                return current_file->f_op->read(current_file, ptr, len, current_file->f_pos);
+                int offset = current_file->f_op->read(current_file, ptr, len, current_file->f_pos);
+
+                current_file->f_pos += offset;
+
+                return offset;
         }
 
         return -1;

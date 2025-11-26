@@ -29,6 +29,7 @@ add_subdirectory(src/kstdlib)
 add_executable(os
         src/start.S
         src/main.c
+        src/archive_loader.S
         $<TARGET_OBJECTS:drivers>
         $<TARGET_OBJECTS:kernel>
         $<TARGET_OBJECTS:fs>

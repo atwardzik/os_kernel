@@ -5,11 +5,21 @@
 #ifndef LIBC_H
 #define LIBC_H
 
+#include <stdarg.h>
+
 #define O_BINARY 0x10000
 #define O_RDONLY 0
 #define O_WRONLY 1
+#define O_CREAT 0x0200
 #define SEEK_SET 0
 #define O_DIRECTORY 0x200000
+
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+
+extern int optind;
+extern const char *optargs;
 
 constexpr int MAX_FILENAME_LEN = 32;
 
@@ -94,10 +104,16 @@ int strcmp(const char *s1, const char *s2);
 
 char *itoa(int value, char *str, int base);
 
+int vdprintf(int fd, const char *format, va_list vlist);
+
 int printf(const char *format, ...);
+
+int dprintf(int fd, const char *format, ...);
 
 void *memset(void *dest, int ch, unsigned int count);
 
 void *memcpy(void *dest, const void *src, unsigned int count);
+
+int getopt(int argc, char *const argv[], const char *optstring);
 
 #endif // LIBC_H

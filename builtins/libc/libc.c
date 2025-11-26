@@ -41,17 +41,10 @@ int read(int file, void *buf, int len) {
 }
 
 
-void exit(int code) {
-        SYSCALL(EXIT_SVC)
-}
+void exit(int code){SYSCALL(EXIT_SVC)}
 
-pid_t spawnp(
-        void (*process_entry_ptr)(void),
-        const spawn_file_actions_t *file_actions,
-        const spawnattr_t *attrp,
-        char *const argv[],
-        char *const envp[]
-) {
+pid_t spawnp(void (*process_entry_ptr)(void), const spawn_file_actions_t *file_actions, const spawnattr_t *attrp,
+             char *const argv[], char *const envp[]) {
         int ret;
         SYSCALL(SPAWNP_SVC)
         __asm__("mov    %0, r0\n\r" : "=r"(ret));
@@ -59,13 +52,8 @@ pid_t spawnp(
         return ret;
 }
 
-pid_t spawn(
-        int fd,
-        const spawn_file_actions_t *file_actions,
-        const spawnattr_t *attrp,
-        char *const argv[],
-        char *const envp[]
-) {
+pid_t spawn(int fd, const spawn_file_actions_t *file_actions, const spawnattr_t *attrp, char *const argv[],
+            char *const envp[]) {
         int ret;
         SYSCALL(SPAWN_SVC)
         __asm__("mov    %0, r0\n\r" : "=r"(ret));
@@ -73,9 +61,7 @@ pid_t spawn(
         return ret;
 }
 
-void sigreturn(void) {
-        SYSCALL(SIGRETURN_SVC)
-}
+void sigreturn(void){SYSCALL(SIGRETURN_SVC)}
 
 sighandler_t signal(int signum, sighandler_t handler) {
         sighandler_t ret;
@@ -285,23 +271,13 @@ char *itoa(int value, char *const str, const int base) {
         return str;
 }
 
-/**
- * Simple printf allowing %c, %s and %i, %x parameters. Currently unsafe, as the behaviour
- * is undefined with not enough parameters supplied.
- *
- * @param format - formatting string
- * @param ... - parameters
- */
-int printf(const char *format, ...) {
+int vdprintf(int fd, const char *format, va_list vlist) {
         if (strcspn(format, "%") == strlen(format)) {
-                puts(format);
+                write(fd, format, strlen(format));
                 return 0;
         }
 
         const char *const format_end = format + strlen(format) + 1;
-
-        va_list args;
-        va_start(args);
 
         const char *ptr_begin = format;
         const char *ptr_end = format;
@@ -309,7 +285,7 @@ int printf(const char *format, ...) {
                 ptr_end += strcspn(ptr_begin, "%");
 
                 int len = ptr_end - ptr_begin;
-                write(1, ptr_begin, len);
+                write(fd, ptr_begin, len);
 
                 ptr_end += 1;
                 if (ptr_end == format_end) {
@@ -317,26 +293,26 @@ int printf(const char *format, ...) {
                 }
                 switch (*ptr_end) {
                         case 'c': {
-                                int c = va_arg(args, int);
+                                int c = va_arg(vlist, int);
                                 char buf[1] = {(char) c};
-                                write(1, &buf, 1);
+                                write(fd, &buf, 1);
                                 break;
                         }
                         case 's': {
-                                char *str = va_arg(args, const char *);
-                                write(1, str, strlen(str));
+                                const char *str = va_arg(vlist, const char *);
+                                write(fd, str, strlen(str));
                                 break;
                         }
                         case 'i': {
-                                char buf[20];
-                                itoa(va_arg(args, int), &buf, 10);
-                                write(1, &buf, strlen(buf));
+                                char buf[20] = {};
+                                itoa(va_arg(vlist, int), &buf, 10);
+                                write(fd, &buf, strlen(buf));
                                 break;
                         }
                         case 'x': {
-                                char buf[20];
-                                itoa(va_arg(args, int), &buf, 16);
-                                write(1, &buf, strlen(buf));
+                                char buf[20] = {};
+                                itoa(va_arg(vlist, int), &buf, 16);
+                                write(fd, &buf, strlen(buf));
                                 break;
                         }
                         default:
@@ -348,9 +324,32 @@ int printf(const char *format, ...) {
                 ptr_begin = ptr_end;
         }
 
-        va_end(args);
+        va_end(vlist);
         return 0;
 }
+
+
+/**
+ * Simple printf allowing %c, %s and %i, %x parameters. Currently unsafe, as the behaviour
+ * is undefined with not enough parameters supplied.
+ *
+ * @param format - formatting string
+ * @param ... - parameters
+ */
+int printf(const char *format, ...) {
+        va_list args;
+        va_start(args, format);
+
+        return vdprintf(1, format, args);
+}
+
+int dprintf(int fd, const char *format, ...) {
+        va_list args;
+        va_start(args, format);
+
+        return vdprintf(fd, format, args);
+}
+
 
 void *memcpy(void *dest, const void *src, const unsigned int count) {
         for (unsigned int i = 0; i < count; ++i) {
@@ -366,4 +365,60 @@ void *memset(void *dest, const int ch, const unsigned int count) {
         }
 
         return dest;
+}
+
+int optind = 1;
+const char *optargs = nullptr;
+
+/**
+ *
+ * The option string optstring may contain the following elements: individual characters,
+ * and characters followed by a colon to indicate an option argument is to follow.
+ *
+ * @returns parameter option if present in optstring or -1 if parameters ended
+ */
+int getopt(int argc, char *const argv[], const char *optstring) {
+        static int index = 1;
+
+        if (index == argc) {
+                // optind = index;
+                return -1;
+        }
+
+        if (argv[index][0] != '-') {
+                // optind = index;
+                return -1;
+        }
+
+        char current_parameter = argv[index][1];
+
+        enum { SINGLE, PARAM, NONE } option = NONE;
+        for (int i = 0; i < strlen(optstring); ++i) {
+                if (current_parameter == optstring[i] && optstring[i + 1] == ':') {
+                        option = PARAM;
+                        break;
+                }
+
+                if (current_parameter == optstring[i]) {
+                        option = SINGLE;
+                        break;
+                }
+        }
+
+        if (option == SINGLE) {
+                index += 1;
+        }
+        else if (option == PARAM && argv[index + 1]) {
+                // optargs = argv[index + 1];
+                index += 2;
+        }
+        else if (option == PARAM) {
+                // optargs = "?";
+                index += 1;
+        }
+        if (option == NONE) {
+                return '?';
+        }
+
+        return current_parameter;
 }

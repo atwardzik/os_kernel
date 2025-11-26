@@ -169,7 +169,9 @@ ssize_t ramfs_read(struct File *file, void *buf, size_t count, off_t file_offset
         void *ptr = inode_ptr->file_begin;
 
         int offset = 0;
-        while (offset < count && offset < inode_ptr->bytes_allocated) {
+        while (offset < count
+               && file_offset + offset < inode_ptr->vfs_inode.i_size
+               && file_offset + offset < inode_ptr->bytes_allocated) {
                 *(char *) (buf + offset) = *(char *) (ptr + file_offset + offset);
 
                 offset += 1;

@@ -76,11 +76,19 @@ void sigreturn(void) {
 typedef typeof(void (int)) *sighandler_t;
 
 sighandler_t signal(int signum, sighandler_t handler) {
+        sighandler_t ret;
         SYSCALL(SIGNAL_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
 }
 
 pid_t _wait(int *stat_loc) {
+        int ret;
         SYSCALL(WAIT_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
 }
 
 caddr_t _sbrk(int incr) {

@@ -46,9 +46,23 @@ LS_OBJS := $(LS_SRCS:$(SRCDIR)/%.s=$(OBJDIR)/%.o)
 LS_OUT := $(BINDIR)/ls.out
 LS_RAW := $(RAWDIR)/bin/ls
 
+MKDIR_SRCS := $(SRCDIR)/mkdir.c
+MKDIR_OBJS := $(MKDIR_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+MKDIR_OUT := $(BINDIR)/mkdir.out
+MKDIR_RAW := $(RAWDIR)/bin/mkdir
+
+TOUCH_SRCS := $(SRCDIR)/touch.c
+TOUCH_OBJS := $(TOUCH_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+TOUCH_OUT := $(BINDIR)/touch.out
+TOUCH_RAW := $(RAWDIR)/bin/touch
+
+CAT_SRCS := $(SRCDIR)/cat.c
+CAT_OBJS := $(CAT_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+CAT_OUT := $(BINDIR)/cat.out
+CAT_RAW := $(RAWDIR)/bin/cat
 
 ### Executables' rules
-all: libc.o dirs $(SHELL_RAW) $(LS_RAW)
+all: libc.o dirs $(SHELL_RAW) $(MKDIR_RAW) $(TOUCH_RAW) $(CAT_RAW) $(LS_RAW)
 
 
 # Link
@@ -68,6 +82,29 @@ $(SHELL_RAW): $(SHELL_OUT)
 	$(OBJCOPY) -O binary $< $@
 
 
+$(MKDIR_OUT): $(MKDIR_OBJS)
+	@mkdir -p $(dir $@)
+	$(LINKER) $(LINK_ARGS) $^ $(OBJDIR)/libc.o -o $@
+
+$(MKDIR_RAW): $(MKDIR_OUT)
+	$(OBJCOPY) -O binary $< $@
+
+
+$(TOUCH_OUT): $(TOUCH_OBJS)
+	@mkdir -p $(dir $@)
+	$(LINKER) $(LINK_ARGS) $^ $(OBJDIR)/libc.o -o $@
+
+$(TOUCH_RAW): $(TOUCH_OUT)
+	$(OBJCOPY) -O binary $< $@
+
+
+$(CAT_OUT): $(CAT_OBJS)
+	@mkdir -p $(dir $@)
+	$(LINKER) $(LINK_ARGS) $^ $(OBJDIR)/libc.o -o $@
+
+$(CAT_RAW): $(CAT_OUT)
+	$(OBJCOPY) -O binary $< $@
+
 # Generate object files from C and assembly sources
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(OBJDIR)
@@ -80,7 +117,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.s
 
 # Additional rules
 clean:
-	@rm -f *.o *.elf $(OBJDIR)/*
+	@rm -rf *.o *.elf $(OBJDIR)/* $(BINDIR)/* $(RAWDIR)/*
 
 dirs:
 	@mkdir -p $(DIRS)

@@ -98,8 +98,11 @@ struct InodeOperations {
 
         int (*create)(struct VFS_Inode *, struct Dentry *, uint16_t);
 
-        // create with specific flag
-        // struct Dentry *(*mkdir)(struct VFS_Inode *, struct Dentry *, mode_t);
+        // int (*rename)(
+        //         struct VFS_Inode *old_dir, struct Dentry *old_dentry,
+        //         struct VFS_Inode *new_dir, struct Dentry *new_dentry,
+        //         unsigned int flags
+        // );
 };
 
 struct VFS_Inode {
