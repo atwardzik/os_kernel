@@ -4,13 +4,11 @@
 
 #include "proc.h"
 
+#include "libc.h"
 #include "memory.h"
 #include "signal.h"
 #include "tty.h"
 #include "fs/ramfs.h"
-
-#include <stdlib.h>
-#include <string.h>
 
 //TODO: processes should be better organized than a static array with fixed-position for give pid.
 

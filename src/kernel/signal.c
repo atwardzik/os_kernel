@@ -4,10 +4,8 @@
 
 #include "signal.h"
 
+#include "libc.h"
 #include "memory.h"
-#include "syscalls.h"
-
-#include <stdlib.h>
 
 struct signal_queue_entry {
         int pending_signal;

@@ -16,6 +16,10 @@ void run_program(const char *cmd);
 
 void perform_kill(void);
 
+void echo(void);
+
+void rawecho(void);
+
 int main(void) {
         while (1) {
                 puts(" > ");
@@ -60,74 +64,10 @@ int main(void) {
                         puts("\n");
                 }
                 else if (strcmp(cmd, "echo") == 0 || strcmp(cmd, "e") == 0) {
-                        char *argument_line = strtok(nullptr, "");
-                        int flags = O_WRONLY | O_TRUNC;
-                        const int redirection_index = strcspn(argument_line, ">");
-                        if (redirection_index < strlen(argument_line)) {
-                                if (argument_line[redirection_index + 1] == '>') {
-                                        flags = O_APPEND;
-                                }
-                        }
-
-                        const char *text = strtok(argument_line, ">");
-                        if (!text) {
-                                continue;
-                        }
-
-                        const char *path = strtok(nullptr, "");
-                        int fd = 1;
-                        if (path) {
-                                fd = open(path, flags, 0);
-                                if (fd < 0) {
-                                        puts("No such file.\n");
-                                        continue;
-                                }
-                        }
-
-
-                        write(fd, text, strlen(text));
-                        write(fd, "\n", 1);
-
-                        close(fd);
+                        echo();
                 }
                 else if (strcmp(cmd, "rawecho") == 0) {
-                        const char *text = strtok(nullptr, ">");
-                        const char *path = strtok(nullptr, "");
-                        if (!text || !path) {
-                                continue;
-                        }
-
-                        int fd = open(path, O_BINARY, 0);
-                        if (fd < 0) {
-                                puts("No such file.\n");
-                                continue;
-                        }
-
-                        char bytes[512] = {};
-                        memset(bytes, 0, 512);
-                        int index = 0;
-
-                        const char *ptr = text;
-                        char *endptr;
-                        while (*ptr) {
-                                while (*ptr == ' ') {
-                                        ptr += 1;
-                                }
-
-                                if (*ptr == '\0') {
-                                        break;
-                                }
-
-                                const unsigned char value = 16 * (*ptr) + *(ptr + 1);
-
-                                bytes[index++] = value;
-
-                                ptr += 2;
-                        }
-
-                        write(fd, bytes, index);
-
-                        close(fd);
+                        rawecho();
                 }
                 else if (strcmp(cmd, "cd") == 0) {
                         const char *path = strtok(nullptr, " ");
@@ -151,6 +91,93 @@ int main(void) {
         }
 }
 
+void echo(void) {
+        // dummy solution for run parameters
+        char *argument_line = strtok(nullptr, "");
+        int flags = O_WRONLY | O_TRUNC;
+        const int redirection_index = strcspn(argument_line, ">");
+        if (redirection_index < strlen(argument_line)) {
+                if (argument_line[redirection_index + 1] == '>') {
+                        flags = O_APPEND;
+                }
+        }
+
+        const char *text = strtok(argument_line, ">");
+        if (!text) {
+                return;
+        }
+
+        const char *path = strtok(nullptr, "");
+        int fd = 1;
+        if (path) {
+                fd = open(path, flags, 0);
+                if (fd < 0) {
+                        dprintf(2, "No such file.\n");
+                        return;
+                }
+        }
+
+
+        write(fd, text, strlen(text));
+        write(fd, "\n", 1);
+
+        close(fd);
+}
+
+void rawecho() {
+        char *argument_line = strtok(nullptr, "");
+        int flags = O_WRONLY | O_TRUNC;
+        const int redirection_index = strcspn(argument_line, ">");
+        if (redirection_index < strlen(argument_line)) {
+                if (argument_line[redirection_index + 1] == '>') {
+                        flags = O_APPEND;
+                }
+        }
+
+        const char *text = strtok(argument_line, ">");
+        if (!text) {
+                return;
+        }
+
+        const char *path = strtok(nullptr, "");
+        if (!path) {
+                dprintf(2, "No file specified.\n");
+                return;
+        }
+        const int fd = open(path, flags, 0);
+        if (fd < 0) {
+                dprintf(2, "No such file.\n");
+                return;
+        }
+
+
+        char bytes[80] = {};
+        memset(bytes, 0, 80);
+        int index = 0;
+
+        const char *ptr = text;
+        char *endptr;
+        while (*ptr) {
+                while (*ptr == ' ') {
+                        ptr += 1;
+                }
+
+                if (*ptr == '\0') {
+                        break;
+                }
+
+                const char byte[3] = {*ptr, *(ptr + 1), 0};
+                const unsigned char value = (unsigned char) strtoul(byte, nullptr, 16);
+
+                bytes[index++] = value;
+
+                ptr += 2;
+        }
+
+        write(fd, bytes, index);
+        close(fd);
+}
+
 
 void run_program(const char *cmd) {
         // find if the program starts with dot slash
@@ -171,7 +198,7 @@ void run_program(const char *cmd) {
 
                 fd = open(buf, O_BINARY, 0);
                 if (fd < 0) {
-                        printf("gsh: command not found: %s\n", cmd);
+                        dprintf(2, "gsh: command not found: %s\n", cmd);
                         return;
                 }
         }

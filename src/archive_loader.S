@@ -7,7 +7,7 @@
 
 .syntax unified
 
-@.section .text
+.section .text
 
 .section .cpio_init, "wa"
 .incbin "builtins/initramfs.cpio"

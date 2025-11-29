@@ -4,19 +4,15 @@
 
 #include "fs/file.h"
 
+#include "libc.h"
 #include "tty.h"
 #include "kernel/memory.h"
 #include "kernel/proc.h"
-#include "klibc/kstring.h"
-
-#include <fcntl.h>
-#include <string.h>
-#include <sys/unistd.h>
 
 
-int ksys_write(const int file, char *ptr, const int len) {
+int printk(const int file, char *ptr, const int len) {
         if (file != 1 && file != 2) {
-                ksys_write(1, "[!] There is no such file descriptor\n", 37);
+                printk(1, "[!] There is no such file descriptor\n", 37);
                 __asm__("bkpt   #0");
                 return 0;
         }
@@ -46,11 +42,11 @@ static struct VFS_Inode *get_parent_directory(const char *name) {
 
         char *path = kmalloc(strlen(name) + 1);
         strcpy(path, name);
-        const char *token = kstrtok(path, "/");
+        const char *token = strtok(path, "/");
         while (token) {
                 if (strcmp(token, "..") == 0) {
                         inode = inode->parent;
-                        token = kstrtok(nullptr, "/");
+                        token = strtok(nullptr, "/");
                         continue;
                 }
 
@@ -66,7 +62,7 @@ static struct VFS_Inode *get_parent_directory(const char *name) {
 
                 inode = result->inode;
                 kfree(result);
-                token = kstrtok(nullptr, "/");
+                token = strtok(nullptr, "/");
         }
         kfree(path);
 
@@ -130,7 +126,7 @@ static struct VFS_Inode *create_file(struct VFS_Inode *parent, const char *name,
 static int get_file_descriptor(struct VFS_Inode *inode) {
         struct Process *current_process = scheduler_get_current_process();
         if (current_process->files.count >= MAX_OPEN_FILE_DESCRIPTORS) {
-                ksys_write(1, "[!] Too much files opened.\n", 28);
+                printk(1, "[!] Too much files opened.\n", 28);
                 __asm__("bkpt   #0");
                 return -1;
         }
@@ -251,7 +247,7 @@ int sys_read(int file, char *ptr, int len) {
         struct Process const *current_process = scheduler_get_current_process();
 
         if (file >= current_process->files.count || file < 0 || current_process->files.fdtable[file] == nullptr) {
-                ksys_write(1, "[!] There is no such file descriptor\n", 37);
+                printk(1, "[!] There is no such file descriptor\n", 37);
                 __asm__("bkpt   #0");
                 return 0;
         }
@@ -268,42 +264,11 @@ int sys_read(int file, char *ptr, int len) {
         return -1;
 }
 
-
-/**
- * Instead of blocking processes it spinlocks on keyboard
- */
-int ksys_read(int file, char *ptr, int len) {
-        if (file != 0) {
-                ksys_write(1, "[!] There is no such file descriptor\n", 37);
-                __asm__("bkpt   #0");
-                return 0;
-        }
-
-        void *stream_start = get_current_keyboard_buffer_offset();
-        int stream_offset = 0;
-        while (true) {
-                stream_offset = newline_buffered_at();
-
-                if (stream_offset) {
-                        break;
-                }
-        }
-
-        int offset = 0;
-        while (offset < len && offset < stream_offset) {
-                *(ptr + offset) = *(char *) (stream_start + offset);
-
-                offset += 1;
-        }
-
-        return offset;
-}
-
 int sys_write(const int file, char *ptr, const int len) {
         struct Process const *current_process = scheduler_get_current_process();
 
         if (file >= current_process->files.count || file < 0 || current_process->files.fdtable[file] == nullptr) {
-                ksys_write(1, "[!] There is no such file descriptor\n", 37);
+                printk(1, "[!] There is no such file descriptor\n", 37);
                 __asm__("bkpt   #0");
                 return 0;
         }
@@ -324,7 +289,7 @@ int sys_lseek(const int file, off_t offset, int whence) {
         struct Process const *current_process = scheduler_get_current_process();
 
         if (file >= current_process->files.count || file < 0 || current_process->files.fdtable[file] == nullptr) {
-                ksys_write(1, "[!] There is no such file descriptor\n", 37);
+                printk(1, "[!] There is no such file descriptor\n", 37);
                 __asm__("bkpt   #0");
                 return -1;
         }
@@ -350,7 +315,7 @@ int sys_readdir(int dirfd, struct DirectoryEntry *directory_entry) {
         struct Process *current_process = scheduler_get_current_process();
 
         if (dirfd >= current_process->files.count || dirfd < 0 || current_process->files.fdtable[dirfd] == nullptr) {
-                ksys_write(1, "[!] There is no such file descriptor\n", 37);
+                printk(1, "[!] There is no such file descriptor\n", 37);
                 return -1;
         }
 
@@ -389,7 +354,7 @@ int sys_fstat(int fd, struct stat *st) {
         struct Process *current_process = scheduler_get_current_process();
 
         if (fd >= current_process->files.count || fd < 0 || current_process->files.fdtable[fd] == nullptr) {
-                ksys_write(1, "[!] There is no such file descriptor\n", 37);
+                printk(1, "[!] There is no such file descriptor\n", 37);
                 return -1;
         }
 

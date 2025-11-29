@@ -4,10 +4,8 @@
 
 #include "ramfs.h"
 
+#include "libc.h"
 #include "kernel/memory.h"
-#include "klibc/kstring.h"
-
-#include <string.h>
 
 struct Dentry *ramfs_mount(
         const char *source, const char *target_dir, const char *filesystemtype, unsigned long mountflags

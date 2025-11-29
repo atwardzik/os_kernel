@@ -7,8 +7,6 @@
 
 #include "proc.h"
 
-#include <sys/signal.h>
-
 typedef typeof(void (int)) *sighandler_t;
 
 void init_default_sighandlers(struct Process *process);

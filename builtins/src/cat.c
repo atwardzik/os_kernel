@@ -12,14 +12,18 @@ int main(int argc, char *argv[]) {
 
         bool LINE_NUMBERING = false;
         bool NEWLINE_CHARS_PRINTING = false;
+        bool RAW_BYTES = false;
         char c;
-        while ((c = getopt(argc, argv, "ne")) != (char) -1) {
+        while ((c = getopt(argc, argv, "ner")) != (char) -1) {
                 switch (c) {
                         case 'n':
                                 LINE_NUMBERING = true;
                                 break;
                         case 'e':
                                 NEWLINE_CHARS_PRINTING = true;
+                                break;
+                        case 'r':
+                                RAW_BYTES = true;
                                 break;
                         case '?':
                         default:
@@ -60,7 +64,7 @@ int main(int argc, char *argv[]) {
                 i += 1;
         }
         do {
-                char buf[1] = {};
+                char buf[2] = {};
                 bytes_read = read(fd, buf, 1);
 
 
@@ -68,7 +72,14 @@ int main(int argc, char *argv[]) {
                         write(1, "$", 1);
                 }
 
-                if (bytes_read) {
+                if (bytes_read && RAW_BYTES) {
+                        unsigned char value = (unsigned char) strtoul(buf, nullptr, 10);
+
+                        char str[20] = {};
+                        itoa(value, str, 10);
+                        write(1, str, strlen(str));
+                }
+                else if (bytes_read) {
                         write(1, buf, 1);
                 }
 

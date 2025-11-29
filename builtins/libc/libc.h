@@ -97,7 +97,7 @@ int strlen(const char *str);
 
 int puts(const char *str);
 
-int strcspn(const char *str, const char *delims);
+unsigned int strcspn(const char *str, const char *delims);
 
 int strspn(const char *str, const char *src);
 
