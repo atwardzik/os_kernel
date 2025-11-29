@@ -4,7 +4,7 @@
 
 #include "libc.h"
 
-#include "kernel/syscall_codes.h"
+#include "syscall_codes.h"
 
 #include <stdarg.h>
 
@@ -490,7 +490,7 @@ int getopt(int argc, char *const argv[], const char *optstring) {
         const char current_parameter = argv[index][1];
 
         enum { SINGLE, PARAM, NONE } option = NONE;
-        for (int i = 0; i < strlen(optstring); ++i) {
+        for (size_t i = 0; i < strlen(optstring); ++i) {
                 if (current_parameter == optstring[i] && optstring[i + 1] == ':') {
                         option = PARAM;
                         break;

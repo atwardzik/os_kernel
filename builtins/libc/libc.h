@@ -5,32 +5,69 @@
 #ifndef LIBC_H
 #define LIBC_H
 
+#include "types.h"
+
 #include <stdarg.h>
 
-#define O_BINARY 0x10000
-#define O_RDONLY 0
-#define O_WRONLY 1
-#define O_APPEND 0x0008
-#define O_CREAT 0x0200
-#define O_TRUNC 0x0400
+#define O_RDONLY        0x0000
+#define O_WRONLY        0x0001
+#define O_APPEND        0x0008
+#define O_CREAT         0x0200
+#define O_TRUNC         0x0400
+#define O_BINARY        0x10000
+#define O_DIRECTORY     0x200000
 
-#define SEEK_SET 0
-#define O_DIRECTORY 0x200000
+#define	S_IFMT          0170000	 /* type of file */
+#define S_IFDIR	        0040000	 /* directory */
+#define	S_IFCHR	        0020000	 /* character special */
+#define	S_IFBLK	        0060000	 /* block special */
+#define	S_IFREG	        0100000	 /* regular */
+#define	S_IFLNK	        0120000	 /* symbolic link */
+#define	S_IFSOCK        0140000 /* socket */
+#define	S_IFIFO	        0010000	 /* fifo */
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
 
+#define	SIGHUP	1	/* hangup */
+#define	SIGINT	2	/* interrupt */
+#define	SIGQUIT	3	/* quit */
+#define	SIGILL	4	/* illegal instruction (not reset when caught) */
+#define	SIGTRAP	5	/* trace trap (not reset when caught) */
+#define	SIGIOT	6	/* IOT instruction */
+#define	SIGABRT 6	/* used by abort, replace SIGIOT in the future */
+#define	SIGEMT	7	/* EMT instruction */
+#define	SIGFPE	8	/* floating point exception */
+#define	SIGKILL	9	/* kill (cannot be caught or ignored) */
+#define	SIGBUS	10	/* bus error */
+#define	SIGSEGV	11	/* segmentation violation */
+#define	SIGSYS	12	/* bad argument to system call */
+#define	SIGPIPE	13	/* write on a pipe with no one to read it */
+#define	SIGALRM	14	/* alarm clock */
+#define	SIGTERM	15	/* software termination signal from kill */
+#define	SIGURG	16	/* urgent condition on IO channel */
+#define	SIGSTOP	17	/* sendable stop signal not from tty */
+#define	SIGTSTP	18	/* stop signal from tty */
+#define	SIGCONT	19	/* continue a stopped process */
+#define	SIGCHLD	20	/* to parent on child stop or exit */
+#define	SIGCLD	20	/* System V name for SIGCHLD */
+#define	SIGTTIN	21	/* to readers pgrp upon background tty read */
+#define	SIGTTOU	22	/* like TTIN for output if (tp->t_local&LTOSTOP) */
+#define	SIGIO	23	/* input/output possible signal */
+#define	SIGPOLL	SIGIO	/* System V name for SIGIO */
+#define	SIGXCPU	24	/* exceeded CPU time limit */
+#define	SIGXFSZ	25	/* exceeded file size limit */
+#define	SIGVTALRM 26	/* virtual time alarm */
+#define	SIGPROF	27	/* profiling time alarm */
+#define	SIGWINCH 28	/* window changed */
+#define	SIGLOST 29	/* resource lost (eg, record-lock lost) */
+#define	SIGUSR1 30	/* user defined signal 1 */
+#define	SIGUSR2 31	/* user defined signal 2 */
+#define NSIG	32      /* signal 0 implied */
+
 extern int optind;
 extern const char *optargs;
-
-constexpr int MAX_FILENAME_LEN = 32;
-
-struct DirectoryEntry {
-        unsigned char file_type;
-        int inode_index;
-        char name[MAX_FILENAME_LEN];
-};
 
 void __attribute__((naked)) _start();
 
@@ -38,10 +75,22 @@ void __attribute__((naked)) _start();
  * Syscalls
  */
 
-typedef int pid_t;
 typedef struct SpawnFileActions spawn_file_actions_t;
 typedef struct SpawnAttr spawnattr_t;
-struct stat;
+
+struct timespec {
+        time_t tv_sec;
+        long tv_nsec;
+};
+
+struct stat {
+        mode_t st_mode;
+        uid_t st_uid;
+        gid_t st_gid;
+        struct timespec st_mtim;
+};
+
+struct DirectoryEntry;
 typedef char *caddr_t;
 typedef typeof(void (int)) *sighandler_t;
 
@@ -93,17 +142,23 @@ pid_t wait(int *stat_loc);
  * string
  */
 
-int strlen(const char *str);
+unsigned int strlen(const char *str);
 
 int puts(const char *str);
 
 unsigned int strcspn(const char *str, const char *delims);
 
-int strspn(const char *str, const char *src);
+unsigned int strspn(const char *str, const char *src);
 
 char *strtok(char *str, const char *delim);
 
+char *strcpy(char *dst, const char *src);
+
 int strcmp(const char *s1, const char *s2);
+
+char *strchr(const char *str, int ch);
+
+char *strrchr(const char *str, int ch);
 
 char *itoa(int value, char *str, int base);
 
@@ -119,6 +174,20 @@ void *memset(void *dest, int ch, unsigned int count);
 
 void *memcpy(void *dest, const void *src, unsigned int count);
 
+int memcmp(const void *dest, const void *src, unsigned int count);
+
 int getopt(int argc, char *const argv[], const char *optstring);
+
+static inline bool isprint(const int c) {
+        if (c == '\r' || c == '\t' || c == '\n' || c == '\b') {
+                return true;
+        }
+
+        if (c >= 0x20 && c <= 0xff) {
+                return true;
+        }
+
+        return false;
+}
 
 #endif // LIBC_H

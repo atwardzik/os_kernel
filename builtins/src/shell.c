@@ -56,7 +56,7 @@ int main(void) {
                         const int colors[] = {31, 91, 33, 32, 34, 94, 35};
                         const int num_colors = sizeof(colors) / sizeof(colors[0]);
 
-                        for (int i = 0; i < strlen(text); ++i) {
+                        for (size_t i = 0; i < strlen(text); ++i) {
                                 const int color = colors[i % num_colors];
                                 printf("\x1b[%i;40m%c\x1b[0m", color, text[i]);
                         }
@@ -95,7 +95,7 @@ void echo(void) {
         // dummy solution for run parameters
         char *argument_line = strtok(nullptr, "");
         int flags = O_WRONLY | O_TRUNC;
-        const int redirection_index = strcspn(argument_line, ">");
+        const size_t redirection_index = strcspn(argument_line, ">");
         if (redirection_index < strlen(argument_line)) {
                 if (argument_line[redirection_index + 1] == '>') {
                         flags = O_APPEND;
@@ -127,7 +127,7 @@ void echo(void) {
 void rawecho() {
         char *argument_line = strtok(nullptr, "");
         int flags = O_WRONLY | O_TRUNC;
-        const int redirection_index = strcspn(argument_line, ">");
+        const size_t redirection_index = strcspn(argument_line, ">");
         if (redirection_index < strlen(argument_line)) {
                 if (argument_line[redirection_index + 1] == '>') {
                         flags = O_APPEND;

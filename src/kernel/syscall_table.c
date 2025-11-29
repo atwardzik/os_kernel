@@ -4,7 +4,7 @@
 
 #include "proc.h"
 #include "signal.h"
-#include "syscall_codes.h"
+#include "../../include/syscall_codes.h"
 #include "fs/file.h"
 
 typedef uint32_t (*syscall_fn)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);

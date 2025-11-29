@@ -154,7 +154,7 @@ char *getcwd(char *buf, unsigned int len) {
  * string
  */
 
-int strlen(const char *str) {
+unsigned int strlen(const char *str) {
         int len = 0;
 
         while (*(str + len)) {
@@ -170,7 +170,7 @@ int puts(const char *str) {
         return write(1, str, len);
 }
 
-int strcspn(const char *str, const char *delims) {
+unsigned int strcspn(const char *str, const char *delims) {
         const int delims_len = strlen(delims);
         int len = 0;
 
@@ -187,7 +187,7 @@ int strcspn(const char *str, const char *delims) {
         return len;
 }
 
-int strspn(const char *str, const char *src) {
+unsigned int strspn(const char *str, const char *src) {
         const int src_len = strlen(src);
         int len = 0;
 
@@ -232,27 +232,49 @@ char *strtok(char *str, const char *delim) {
         return token_start;
 }
 
-int strcmp(const char *s1, const char *s2) {
-        int offset = 0;
+char *strcpy(char *dst, const char *src) {
+        return memcpy(dst, src, strlen(src) + 1);
+}
 
-        while (s1[offset] && s2[offset]) {
-                if (s1[offset] == s2[offset]) {
-                        offset += 1;
-                }
-                else {
-                        return s1[offset] - s2[offset];
+int strcmp(const char *s1, const char *s2) {
+        while (*s1 && (*s1 == *s2)) {
+                s1++;
+                s2++;
+        }
+
+        return *(const unsigned char *) s1 - *(const unsigned char *) s2;
+}
+
+char *strchr(const char *str, const int ch) {
+        if (!str) {
+                return nullptr;
+        }
+
+        for (size_t i = 0; i < strlen(str) + 1; ++i) {
+                if (str[i] == (char) ch) {
+                        return str;
                 }
         }
 
-        return 0;
-}
-
-char *strchr(const char *str, int ch) {
-        //
+        return nullptr;
 }
 
 char *strrchr(const char *str, int ch) {
-        //
+        if (!str) {
+                return nullptr;
+        }
+
+        const char *end = str + strlen(str);
+
+        while (end >= str) {
+                if (*end == (char) ch) {
+                        return end;
+                }
+
+                end -= 1;
+        }
+
+        return nullptr;
 }
 
 char *itoa(int value, char *const str, const int base) {
@@ -419,16 +441,25 @@ void *memcpy(void *dest, const void *src, const unsigned int count) {
         return dest;
 }
 
-int memcmp(void *dest, const void *src, unsigned int count) {
-        //
-}
-
 void *memset(void *dest, const int ch, const unsigned int count) {
         for (unsigned int i = 0; i < count; ++i) {
                 *((char *) dest + i) = (unsigned char) ch;
         }
 
         return dest;
+}
+
+int memcmp(const void *dest, const void *src, const unsigned int count) {
+        for (size_t i = 0; i < count; ++i) {
+                const char left = *((const char *) dest + i);
+                const char right = *((const char *) src + i);
+
+                if (left != right) {
+                        return left - right;
+                }
+        }
+
+        return 0;
 }
 
 int optind = 1;
@@ -459,7 +490,7 @@ int getopt(int argc, char *const argv[], const char *optstring) {
         const char current_parameter = argv[index][1];
 
         enum { SINGLE, PARAM, NONE } option = NONE;
-        for (int i = 0; i < strlen(optstring); ++i) {
+        for (size_t i = 0; i < strlen(optstring); ++i) {
                 if (current_parameter == optstring[i] && optstring[i + 1] == ':') {
                         option = PARAM;
                         break;

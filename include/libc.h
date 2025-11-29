@@ -178,7 +178,7 @@ int memcmp(const void *dest, const void *src, unsigned int count);
 
 int getopt(int argc, char *const argv[], const char *optstring);
 
-static inline bool isprint(const char c) {
+static inline bool isprint(const int c) {
         if (c == '\r' || c == '\t' || c == '\n' || c == '\b') {
                 return true;
         }
