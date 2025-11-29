@@ -168,7 +168,7 @@ int sys_readdir(int dirfd, struct DirectoryEntry *directory_entry);
 
 int sys_chdir(const char *path);
 
-int sys_lseek(const int file, off_t offset, int whence);
+int sys_lseek(int file, off_t offset, int whence);
 
 int sys_fstat(int file, struct stat *st);
 

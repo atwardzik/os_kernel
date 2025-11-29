@@ -8,6 +8,9 @@
 #include "proc.h"
 
 // TODO: resource queue to be implemented...
+// TODO: sometime processes are killed before they get the resource
+//       in such a condition the waiting queue should remove this process
+//       as soon as possible
 
 struct wait_queue_entry {
         struct Process *waiting_process;

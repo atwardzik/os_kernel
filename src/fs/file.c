@@ -10,7 +10,7 @@
 #include "kernel/proc.h"
 
 
-int printk(const int file, char *ptr, const int len) {
+int printk(const int file, const char *ptr, const int len) {
         if (file != 1 && file != 2) {
                 printk(1, "[!] There is no such file descriptor\n", 37);
                 __asm__("bkpt   #0");

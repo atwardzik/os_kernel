@@ -55,7 +55,7 @@ static void *find_free_chunk_predecessor(size_t size) {
         while (chunk->next_node) {
                 void *chunk_end = chunk->ptr + chunk->size;
 
-                void *new_chunk_ptr = align_ptr(chunk_end);
+                const void *new_chunk_ptr = align_ptr(chunk_end);
                 size_t space_between_chunks = (void *) chunk->next_node - new_chunk_ptr;
 
                 if (space_between_chunks >= size + sizeof(struct Chunk)) {
@@ -96,12 +96,15 @@ void *kmalloc(size_t size) {
         return chunk.ptr;
 }
 
-static struct Chunk *find_chunk_by_ptr(void *ptr) {
+static struct Chunk *find_chunk_by_ptr(const void *ptr) {
         if (ptr == nullptr) {
                 return nullptr;
         }
 
         struct Chunk *temp = Allocator.head;
+        if (!temp || !temp->ptr) {
+                return nullptr;
+        }
 
         while (temp->ptr != ptr || temp->next_node != nullptr) {
                 temp = temp->next_node;
@@ -121,7 +124,7 @@ void *krealloc(void *ptr, size_t new_size) {
                 return nullptr;
         }
 
-        struct Chunk *current = find_chunk_by_ptr(ptr);
+        const struct Chunk *current = find_chunk_by_ptr(ptr);
 
         memcpy(new_ptr, ptr, current->size);
 

@@ -97,7 +97,7 @@ struct Dentry *ramfs_lookup(struct VFS_Inode *parent, struct Dentry *file, unsig
 
 
 int ramfs_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_t mode) {
-        struct SuperBlock *fs = parent->i_sb; //sb
+        struct SuperBlock *fs = parent->i_sb;
 
         struct VFS_Inode *new_inode = fs->s_op->alloc_inode(parent->i_sb);
         if (!new_inode) {

@@ -2,11 +2,11 @@
 // Created by Artur Twardzik on 19/10/2025.
 //
 
-#include <stdint.h>
 
 #ifndef OS_EXT2_FS_H
 #define OS_EXT2_FS_H
 
+#include <stdint.h>
 //[+]  - ext specific
 //[#]  - inherited from vfs_inode
 
@@ -24,7 +24,7 @@ struct Ext2Inode {
         uint32_t i_flags;       // [+] How ext2 implementation should behave when accessing the data for this inode
         uint32_t i_osd1;        // OS dependant value (for linux reserved)
 
-        // 15*32 bit numbers pointing to the blocks containing the data for this inode
+        // 15*32-bit numbers pointing to the blocks containing the data for this inode
         uint32_t i_block[12]; // [+] Direct pointers to data blocks
         uint32_t i_indirect;  // [+] Pointer to single indirect block
         uint32_t i_dindirect; // [+] Pointer to double indirect block

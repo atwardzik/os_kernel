@@ -43,7 +43,7 @@ void vga_put_pixel_map(const struct PixelMap *pixel_map, unsigned int row_pixel_
 
 void vga_setup_cursor(unsigned int row, unsigned int column, ByteColorCode color_code, uint32_t us);
 
-void vga_update_cursor_position(const unsigned int row, const unsigned int column);
+void vga_update_cursor_position(unsigned int row, unsigned int column);
 
 void vga_update_cursor_color(ByteColorCode color_code);
 

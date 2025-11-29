@@ -110,7 +110,7 @@ int readdir(int dirfd, struct DirectoryEntry *directory_entry);
 
 int chdir(const char *path);
 
-int lseek(const int file, int offset, int whence);
+int lseek(int file, int offset, int whence);
 
 char *getcwd(char *buf, unsigned int len);
 

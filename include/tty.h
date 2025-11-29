@@ -28,7 +28,7 @@ constexpr uint32_t ARROW_RIGHT = 0x1b5b43;
 
 void init_tty(void);
 
-void write_byte(const int c);
+void write_byte(int c);
 
 void setup_tty_chrfile(struct VFS_Inode *mount_point);
 

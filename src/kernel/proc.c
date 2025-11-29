@@ -144,7 +144,7 @@ static struct Process *scheduler_get_next_process() {
                         return &scheduler.process_idle;
                 }
 
-                struct Process *current_process = &scheduler.processes[current_index];
+                const struct Process *current_process = &scheduler.processes[current_index];
 
                 if (current_process->pending_signals) {
                         return &scheduler.processes[current_index];
