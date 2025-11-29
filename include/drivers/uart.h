@@ -6,7 +6,7 @@
 #define UART_H
 
 #include "escape_codes.h"
-#include "klibc/kstdlib.h"
+#include "libc.h"
 #include "types.h"
 
 void uart_init(void);

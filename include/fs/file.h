@@ -5,11 +5,8 @@
 #ifndef OS_FILE_H
 #define OS_FILE_H
 
+#include "libc.h"
 #include "types.h"
-
-#include <stdint.h>
-#include <time.h>
-#include <sys/stat.h>
 
 /*
  * /home/user/foo.txt

@@ -7,8 +7,6 @@
 .syntax unified
 
 
-#include "kernel/resources_codes.h"
-
 /**
  * +--------------+------------------+---------------------+
  * | Key          | (Set 2) Make Code| (Set 2) Break Code  |

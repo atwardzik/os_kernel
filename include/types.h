@@ -4,6 +4,7 @@
 
 #ifndef OS_TYPES_H
 #define OS_TYPES_H
+
 #include <stdint.h>
 
 
@@ -21,7 +22,7 @@
 
 // typedef fsfilcnt_t; // Used for file system file counts.
 
-// typedef gid_t; // Used for group IDs.
+typedef uint32_t gid_t; // Used for group IDs.
 
 // typedef id_t; // Used as a general identifier; can be used to contain at least a pid_t, uid_t, or gid_t.
 
@@ -29,7 +30,7 @@
 
 // typedef key_t; // Used for XSI interprocess communication.
 
-// typedef mode_t; // Used for some file attributes.
+typedef uint32_t mode_t; // Used for some file attributes.
 
 // typedef nlink_t; // Used for link counts.
 
@@ -69,7 +70,7 @@ typedef int ssize_t; // Used for a count of bytes or an error indication.
 
 // typedef suseconds_t; // Used for time in microseconds.
 
-// typedef uint32_t time_t; // Used for time in seconds.
+typedef uint64_t time_t; // Used for time in seconds.
 
 // typedef timer_t; // Used for timer ID returned by timer_create().
 
@@ -81,7 +82,7 @@ typedef int ssize_t; // Used for a count of bytes or an error indication.
 
 // typedef trace_id_t; // Used to identify a trace stream.
 
-// typedef uid_t; // Used for user IDs.
+typedef uint32_t uid_t; // Used for user IDs.
 
 
 #endif //OS_TYPES_H

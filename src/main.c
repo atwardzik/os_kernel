@@ -1,26 +1,15 @@
-#include "../include/drivers/gpio.h"
+#include "libc.h"
+#include "tty.h"
+#include "drivers/gpio.h"
 #include "drivers/keyboard.h"
 #include "drivers/time.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
 #include "fs/file.h"
 #include "fs/ramfs.h"
-#include "kernel/memory.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
-#include "kernel/syscalls.h"
-#include "klibc/kstdio.h"
-#include "klibc/kstring.h"
-#include "tty.h"
 
-#include <fcntl.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/errno.h>
-#include <sys/unistd.h>
-#include <sys/wait.h>
 
 struct cpio_newc_header {
         char c_magic[6];
@@ -103,7 +92,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                 memcpy(buf, ptr, c_namesize);
 
                 if ((c_mode & 0xf000) == 0x4000) {
-                        const int dirfd = open(buf, O_DIRECTORY | O_CREAT);
+                        const int dirfd = open(buf, O_DIRECTORY | O_CREAT, 0);
                         close(dirfd);
 
                         ptr += c_namesize;
@@ -112,7 +101,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                         ptr += padding % 4;
                 }
                 else {
-                        const int fd = open(buf, O_CREAT);
+                        const int fd = open(buf, O_CREAT, 0);
                         ptr += c_namesize;
                         unsigned int padding = 4 - ((unsigned int) ptr % 4);
                         ptr += padding % 4;
@@ -137,7 +126,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 
         while (1) {
                 printf("\x1b[96;40m[!] Running shell (gsh)\x1b[0m\n");
-                int fd = open("bin/gsh", O_BINARY);
+                int fd = open("bin/gsh", O_BINARY, 0);
                 if (fd < 0) {
                         printf("\x1b[91;40m[!] No shell found.\x1b[0m\n");
                         __asm__("bkpt   #0");

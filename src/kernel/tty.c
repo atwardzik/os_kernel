@@ -5,7 +5,7 @@
 #include "tty.h"
 
 #include "escape_codes.h"
-#include "klibc/kstdlib.h"
+#include "libc.h"
 #include "signal.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
@@ -13,7 +13,6 @@
 #include "kernel/memory.h"
 #include "kernel/resources.h"
 
-#include <stdlib.h>
 #include <sys/errno.h>
 
 
@@ -440,7 +439,7 @@ static ssize_t tty_read(struct File *, void *buf, const size_t count, off_t file
         const int stream_size = newline_buffered_at();
         const void *stream_start = keyboard_device_file_stream->buffer;
         if (stream_size == 0) {
-                errno = EINTR;
+                // errno = EINTR;
                 return -1;
         }
 

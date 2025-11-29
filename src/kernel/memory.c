@@ -4,8 +4,9 @@
 
 #include "memory.h"
 
+#include "libc.h"
+
 //TODO: implement krealloc
-//TODO: implement defragmentation that will join all the chunks
 
 /*
  * || ptr | size | next  | ---- | RETURNED CHUNK ||
@@ -23,7 +24,7 @@ static struct {
         size_t size;
         size_t count;
         void *heap_start;
-} Allocator __attribute__ ((section (".data"))) = {nullptr, 0, 0, user_space_heap_start_ptr};
+} Allocator __attribute__ ((section (".data"))) = {nullptr, 0, 0, heap_start_ptr};
 
 static size_t align_size(size_t size) {
         size_t proposed_size = 1;
@@ -113,13 +114,6 @@ static struct Chunk *find_chunk_by_ptr(void *ptr) {
         return temp;
 }
 
-void *kmemcpy(void *dest, const void *src, const unsigned int count) {
-        for (unsigned int i = 0; i < count; ++i) {
-                *((char *) dest + i) = *((const char *) src + i);
-        }
-
-        return dest;
-}
 
 void *krealloc(void *ptr, size_t new_size) {
         void *new_ptr = kmalloc(new_size);
@@ -129,7 +123,7 @@ void *krealloc(void *ptr, size_t new_size) {
 
         struct Chunk *current = find_chunk_by_ptr(ptr);
 
-        kmemcpy(new_ptr, ptr, current->size);
+        memcpy(new_ptr, ptr, current->size);
 
         kfree(ptr);
         return new_ptr;
@@ -174,26 +168,6 @@ size_t get_allocated_size(void) {
 size_t get_current_heap_size(void) {
         return Allocator.size + Allocator.count * sizeof(struct Chunk);
 }
-
-// void memset(void *dst, int value, size_t count) {
-//         for (size_t i = 0; i < count; ++i) {
-//                 *((size_t *) dst + i) = value;
-//         }
-// }
-
-// void *sbrk(int incr) {
-//         static char *heap_end = (char *) heap_start_ptr;
-//         char *prev_heap_end;
-//
-//         prev_heap_end = heap_end;
-//         if (heap_end + incr > stack_ptr) {
-//                 write (1, "Heap and stack collision\n", 25);
-//                 abort ();
-//         }
-//
-//         heap_end += incr;
-//         return (void *) prev_heap_end;
-// }
 
 #ifdef TESTS
 

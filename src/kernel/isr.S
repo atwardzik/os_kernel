@@ -15,42 +15,6 @@
 .extern __heap_start__
 .extern __heap_end__
 
-.thumb_func
-.global _write
-.align 4
-_write:
-        push    {lr}
-        mrs     r3, IPSR
-        tst     r3, #0xff               @ 0 = thread
-        bne     .system_write
-
-        mrs     r3, CONTROL
-        tst     r3, #1                  @ 1 = unprivileged
-        beq     .system_write
-
-        svc     WRITE_SVC               @ syscall write
-        pop     {pc}
-
-        .system_write:
-                bl      ksys_write
-                pop    {pc}
-
-.thumb_func
-.global _read
-.align 4
-_read:
-        push    {lr}
-        mrs     r3, CONTROL
-        tst     r3, #1                  @ 1 - unprivileged
-        beq     .system_read
-
-        svc     READ_SVC                @ syscall read
-        pop     {pc}
-
-        .system_read:
-                bl      ksys_read       @ spinlocks
-                pop    {pc}
-
 /**
  * Syscall        (svc #<syscall_number>)
  *  r0-r3       - arguments specified by syscalls

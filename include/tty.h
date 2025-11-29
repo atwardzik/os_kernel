@@ -5,9 +5,9 @@
 #ifndef OS_STDIO_H
 #define OS_STDIO_H
 
-#include "stdint.h"
-#include "types.h"
 #include "fs/file.h"
+
+#include <stdint.h>
 
 constexpr uint8_t EOL = 0x00;
 constexpr uint8_t ETX = 0x03;

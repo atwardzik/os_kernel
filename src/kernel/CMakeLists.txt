@@ -5,7 +5,6 @@ add_library(kernel OBJECT
         isr.S
         tty.c
 
-        syscalls.c
         syscall_table.c
         resources.c
         signal.c

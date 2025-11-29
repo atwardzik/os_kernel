@@ -1,6 +1,5 @@
 add_library(klibc OBJECT
-        kstdio.c
-        kstring.c
+        libc.c
 )
 
 target_include_directories(klibc PUBLIC ${CMAKE_SOURCE_DIR}/include/klibc)
