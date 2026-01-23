@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-void init_keyboard(uint32_t pin);
+void init_keyboard(uint32_t data_pin, uint32_t clock_pin);
 
 void clr_keyboard_buffer(void);
 

@@ -129,14 +129,16 @@ init_keyboard:
 
 /**
  * Initialize interrupts and data input for keyboard with PS-2 connector.
- *  r0 - keyboard DATA pin, the consecutive pin MUST be CLK pin
+ *  r0 - keyboard DATA pin
+ *  r1 - keyboard CLK pin (in range 0-32)
  */
 .thumb_func
 .global init_keyboard
 .align 4
 init_keyboard:
-        push    {r4, lr}
+        push    {r4, r5, lr}
         mov     r4, r0
+        mov     r5, r1
 
         @ 0) Disable State Machine!!!
         movs    r0, #1                  @ PIO BLOCK 1
@@ -150,10 +152,13 @@ init_keyboard:
         movs    r2, #1                  @ PIO1
         bl      load_pio_prog
 
-        @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
+        @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); 
+        @ (CLK pin << 24) | (WRAP_TARGET << 7) | (WRAP << 12)
         movs    r0, #1                  @ PIO BLOCK 1
         movs    r1, #0                  @ State Machine 0
         ldr     r2, =0xa000             @ bottom wrap at 0, top wrap at 10
+        lsls    r3, r5, #24             @ set JMPPIN
+        orrs    r2, r2, r3              @ execctrl = jmppin | wrap
         bl      setup_pio_execctrl
 
         @ 3) Set state machine pin ctrl
@@ -167,7 +172,7 @@ init_keyboard:
         @ 4) setup autopush
         movs    r0, #1
         movs    r1, #0
-        ldr     r2, =0x80850000           @ IN_SHIFTDIR (18 bit), AUTOPUSH (16 bit), PUSH_THRESH (24:20 bits)
+        ldr     r2, =0x80850000         @ IN_SHIFTDIR (18 bit), AUTOPUSH (16 bit), PUSH_THRESH (24:20 bits)
         bl      setup_pio_shiftctrl
 
         @ 5) setup interrupt
@@ -185,10 +190,13 @@ init_keyboard:
         @       it's not necessary to select the PIO GPIO function, because PIO input
         @       paths ignore the GPIO muxing. However, you must still configure the GPIO
         @       pad itself for input.
-        mov     r0, r4
-        movs    r1, #2                  @ two pins affected
-        movs    r3, #1                  @ pull up
-        bl      init_multiple_pin_inputs
+        mov     r0, r4                  @ data pin
+        movs    r1, #1                  @ pull up
+        bl      init_pin_input_with_pull
+
+        mov     r0, r5                  @ clk pin
+        movs    r1, #1                  @ pull up
+        bl      init_pin_input_with_pull
 
         @ 7) set clock divisor
         movs    r0, #1
@@ -211,22 +219,22 @@ init_keyboard:
         movs    r2, #1
         bl      set_sm_enabled
 
-        pop     {r4, pc}
+        pop     {r4, r5, pc}
 
 .align 4
 ps2_serial_rcv:
                         @       .wrap_target
-        .word 0x2021    @ 0:            wait    0 pin, 1
-        .word 0x20a1    @ 1:            wait    1 pin, 1
+        .word 0x2060    @ 0:            wait    0 jmppin, 0
+        .word 0x20e0    @ 1:            wait    1 jmppin, 0
         .word 0xe027    @ 2:            set     x, 7
-        .word 0x2021    @ 3:sample_data:wait    0 pin, 1
+        .word 0x2060    @ 3:sample_data:wait    0 jmppin, 0
         .word 0x4001    @ 4:            in      pins, 1
-        .word 0x20a1    @ 5:            wait    1 pin, 1
+        .word 0x20e0    @ 5:            wait    1 jmppin, 0
         .word 0x0043    @ 6:            jmp     x--, sample_data
-        .word 0x2021    @ 7:            wait    0 pin, 1
-        .word 0x20a1    @ 8:            wait    1 pin, 1
-        .word 0x2021    @ 9:            wait    0 pin, 1
-        .word 0x20a1    @ 10:           wait    1 pin, 1
+        .word 0x2060    @ 7:            wait    0 jmppin, 0
+        .word 0x20e0    @ 8:            wait    1 jmppin, 0
+        .word 0x2060    @ 9:            wait    0 jmppin, 0
+        .word 0x20e0    @ 10:           wait    1 jmppin, 0
                         @       .wrap
 
 #endif

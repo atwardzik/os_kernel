@@ -364,10 +364,10 @@ int vdprintf(int fd, const char *format, va_list vlist) {
                 int len = ptr_end - ptr_begin;
                 write(fd, ptr_begin, len);
 
-                ptr_end += 1;
                 if (ptr_end == format_end) {
                         break;
                 }
+                ptr_end += 1;
                 switch (*ptr_end) {
                         case 'c': {
                                 int c = va_arg(vlist, int);

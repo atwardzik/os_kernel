@@ -379,7 +379,7 @@ setup_pio_execctrl:
 .global setup_pio_shiftctrl
 .align 4
 setup_pio_shiftctrl:
-        push    {r4, lr}
+        push    {r4, r5, lr}
         mov     r4, r2
 
         movs    r2, SM0_SHIFTCTRL
@@ -392,11 +392,11 @@ setup_pio_shiftctrl:
         movs    r0, #0
 
         .exit_shiftctrl:
-                pop     {r4, pc}
+                pop     {r4, r5, pc}
 
         .exit_shiftctrl_failure:
                 movs    r0, #1
-                pop     {r4, pc}
+                pop     {r4, r5, pc}
 
 /**
  * Clear current fifo for specified state machine and clear PIO FDEBUG register

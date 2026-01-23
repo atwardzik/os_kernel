@@ -30,7 +30,7 @@ struct cpio_newc_header {
 
 void proc1_terminate_signal_handler(int signum) {
         if (signum == SIGTERM) {
-                printf("[SIGTERM DETECTED] I don't want to exit, but as you wish\n");
+                printf("[SIGTERM DETECTED] I don't want to exit, but as you wish.\n");
         }
 
         exit(-1);
@@ -153,7 +153,7 @@ int main(void) {
         setup_internal_clk();
         uart_init();
         uart_clr_screen();
-        vga_init(8, 9, 2);
+        vga_init(9, 10, 3);
 
         init_pin_output(25);
         init_pin_output(11);
@@ -183,7 +183,7 @@ int main(void) {
 
         init_tty();
         setup_tty_chrfile(tty->inode);
-        init_keyboard(14);
+        init_keyboard(27, 26);
 
         //TODO: REPLACE WITH PRINTK
         // printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"

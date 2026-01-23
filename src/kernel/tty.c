@@ -453,7 +453,7 @@ static ssize_t tty_read(struct File *, void *buf, const size_t count, off_t file
         return offset;
 }
 
-static ssize_t tty_write(struct File *, const void *buf, const size_t count, off_t file_offset) {
+static ssize_t tty_write(struct File *, void *buf, const size_t count, off_t file_offset) {
         const char *ptr = buf;
 
         for (int i = 0; i < count; i++) {
