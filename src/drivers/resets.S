@@ -13,6 +13,8 @@
 .equ BIT_PADS_BANK0, 8
 .equ BIT_PIO0, 10
 .equ BIT_PIO0, 11
+.equ BIT_SPI0, 16
+.equ BIT_SPI1, 17
 .equ BIT_PLL_SYS, 12
 .equ BIT_IO_UART0, 22
 #elifdef ARCH_RP2350
@@ -23,6 +25,8 @@
 .equ BIT_PIO1, 12
 .equ BIT_PIO2, 13
 .equ BIT_PLL_SYS, 14
+.equ BIT_SPI0, 18
+.equ BIT_SPI1, 19
 .equ BIT_IO_UART0, 26
 #endif
 
@@ -61,6 +65,12 @@ reset_subsys:
         movs    r0, BIT_DMA
         bl      hw_reset
 
+        @ 6) Reset SPI
+        movs    r0, BIT_SPI0
+        bl      hw_reset
+
+        movs    r0, BIT_SPI1
+        bl      hw_reset
 
         pop     {pc}
 
