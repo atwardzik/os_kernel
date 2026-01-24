@@ -200,8 +200,6 @@ int main(void) {
         set_pin(13);
         for (int i = 0; i < 10; ++i) { spi_tx(1, 0xff); }
 
-        delay_ms(1); //arbitrary delay for some SD cards
-
         clr_pin(13);
         spi_tx(1, 0xff);
         spi_tx(1, 0x40); // CMD0
@@ -212,7 +210,6 @@ int main(void) {
         spi_tx(1, 0x95); // valid CRC for CMD0
 
         while (spi_rx(1) != 0x1) {}
-        delay_ms(1); //arbitrary delay for some SD cards
 
         spi_tx(1, 0x7a); // CMD58 (0x40 + 58)
         spi_tx(1, 0x00);
@@ -222,13 +219,9 @@ int main(void) {
         spi_tx(1, 0x75); // dummy CRC
 
         while (spi_rx(1) != 0x1) {}
-        delay_ms(1);
         char identification_string[5] = {};
         for (int i = 0; i < 4; ++i) {
-                unsigned char c = spi_rx(1);
-                identification_string[i] = c;
-
-                delay_ms(1);
+                identification_string[i] = spi_rx(1);
         }
 
         set_pin(13);

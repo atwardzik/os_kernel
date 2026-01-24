@@ -140,6 +140,14 @@ spi_tx:
         push    {lr}
 
         bl      spi_determine_block
+
+        @ as the SSP device may still work (it works much slower than the cpu clock)
+        @ we must wait for the availability of the fifo
+        .tnf_tx_loop:
+                ldr     r2, [r0, SSPSR]
+                tst     r2, #2                  @ bit 2 (TNF): 0 full; 1 not full
+                beq     .tnf_tx_loop
+
         str     r1, [r0, SSPDR]
 
         pop     {pc}
@@ -159,8 +167,18 @@ spi_rx:
         push    {lr}
         bl      spi_determine_block
 
+        .tnf_rx_loop:
+                ldr     r2, [r0, SSPSR]
+                tst     r2, #2                  @ bit 2 (TNF): 0 full; 1 not full
+                beq     .tnf_rx_loop
+
         mov     r1, 0xff
         str     r1, [r0, SSPDR]
+
+        .rne_rx_loop:
+                ldr     r2, [r0, SSPSR]
+                tst     r2, #4                  @ bit 3 (RNE): 0 empty; 1 not empty
+                beq     .rne_rx_loop
 
         ldr     r0, [r0, SSPDR]
 
