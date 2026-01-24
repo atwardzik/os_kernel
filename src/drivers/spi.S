@@ -113,16 +113,59 @@ spi_disable:
 
         pop     {pc}
 
+/**
+ * Determines spi block pointed by r0. Doesn't affect other registers
+ */
 .thumb_func
 .global spi_determine_block
 .align 4
 spi_determine_block:
         cmp     r0, #0
         ite     eq
-        ldr     r0, SPI0_BASE
-        ldr     r0, SPI1_BASE
+        ldreq   r0, SPI0_BASE
+        ldrne   r0, SPI1_BASE
 
         bx      lr
+
+
+/**
+ * Transfers data through selected SPI block
+ *  - r0 - spi block (0, 1)
+ *  - r1 - data to be send
+ */
+.thumb_func
+.global spi_tx
+.align 4
+spi_tx:
+        push    {lr}
+
+        bl      spi_determine_block
+        str     r1, [r0, SSPDR]
+
+        pop     {pc}
+
+
+/**
+ * Transfers data through selected SPI block
+ *  - r0 - spi block (0, 1)
+ *
+ * Returns:
+ *  Received value in r0
+ */
+.thumb_func
+.global spi_rx
+.align 4
+spi_rx:
+        push    {lr}
+        bl      spi_determine_block
+
+        mov     r1, 0xff
+        str     r1, [r0, SSPDR]
+
+        ldr     r0, [r0, SSPDR]
+
+        pop     {pc}
+
 
 .align 4
 #ifdef ARCH_RP2040

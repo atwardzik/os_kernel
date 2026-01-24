@@ -15,4 +15,8 @@ void set_pin(uint32_t pin);
 
 void clr_pin(uint32_t pin);
 
+void output_enable_pin(uint32_t pin);
+
+void GPIO_function_select(uint32_t pin, uint32_t function);
+
 #endif //GPIO_H

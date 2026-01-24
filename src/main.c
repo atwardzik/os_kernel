@@ -9,6 +9,7 @@
 #include "fs/ramfs.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
+#include "drivers/spi.h"
 
 
 struct cpio_newc_header {
@@ -184,6 +185,53 @@ int main(void) {
         init_tty();
         setup_tty_chrfile(tty->inode);
         init_keyboard(27, 26);
+
+        GPIO_function_select(15, 1);
+        GPIO_function_select(14, 1);
+        init_pin_output(13); //manual CS
+        GPIO_function_select(12, 1);
+        output_enable_pin(15);
+        output_enable_pin(14);
+        output_enable_pin(12);
+
+        uint32_t block = spi_determine_block(1);
+        spi_init(block, 2, 15, 0);
+
+        set_pin(13);
+        for (int i = 0; i < 10; ++i) { spi_tx(1, 0xff); }
+
+        delay_ms(1); //arbitrary delay for some SD cards
+
+        clr_pin(13);
+        spi_tx(1, 0xff);
+        spi_tx(1, 0x40); // CMD0
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x95); // valid CRC for CMD0
+
+        while (spi_rx(1) != 0x1) {}
+        delay_ms(1); //arbitrary delay for some SD cards
+
+        spi_tx(1, 0x7a); // CMD58 (0x40 + 58)
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x75); // dummy CRC
+
+        while (spi_rx(1) != 0x1) {}
+        delay_ms(1);
+        char identification_string[5] = {};
+        for (int i = 0; i < 4; ++i) {
+                unsigned char c = spi_rx(1);
+                identification_string[i] = c;
+
+                delay_ms(1);
+        }
+
+        set_pin(13);
 
         //TODO: REPLACE WITH PRINTK
         // printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"

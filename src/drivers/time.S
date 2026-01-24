@@ -154,7 +154,7 @@ setup_internal_clk:
                 lsls    r1, r1, #11                                     @ ENABLE - Starts and stops the clock generator cleanly
 
                 movs    r2, #4
-                lsls    r2, r2, #5                                      @ Bits 7:5 - 0x4 -> xosc_clksrc
+                lsls    r2, r2, #5                                      @ Bits 7:5 - 0x4 -> xosc_clksrc = 12[MHz]
 
                 orrs    r1, r1, r2
                 str     r1, [r0, CLK_PERI_CTRL]
