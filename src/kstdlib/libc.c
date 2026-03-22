@@ -293,7 +293,7 @@ char *itoa(int value, char *const str, const int base) {
         while (value) {
                 const unsigned char digit = (value % base);
                 if (digit > 9) {
-                        *(str + i - 1) = 'A' + 10 - digit;
+                        *(str + i - 1) = 'A' + (digit - 10);
                 }
                 else {
                         *(str + i - 1) = digit + 0x30;

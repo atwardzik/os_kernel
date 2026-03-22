@@ -11,6 +11,127 @@
 #include "kernel/resets.h"
 #include "drivers/spi.h"
 
+void setup_ethernet(void) {
+        GPIO_function_select(16, 1);
+        GPIO_function_select(18, 1);
+        init_pin_output(17); //manual CS
+        GPIO_function_select(19, 1);
+        output_enable_pin(16);
+        output_enable_pin(18);
+        output_enable_pin(19);
+
+        uint32_t block = spi_determine_block(0);
+        spi_init(block, 2, 15, 0);
+
+        clr_pin(17); //reset
+        spi_tx(0, 0xf0);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x80);
+        set_pin(17);
+        delay_ms(1);
+
+        clr_pin(17);
+        spi_tx(0, 0x0f);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x80);
+        for (int i = 0; i < 30; ++i) {
+                char c = spi_rx(0);
+                if (c == 0x51) {
+                        printf("Hallo Welt!");
+                }
+        }
+        set_pin(17);
+        delay_ms(1);
+
+        clr_pin(17);
+        spi_tx(0, 0xf0);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x09);
+        spi_tx(0, 0x02);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x01);
+        set_pin(17);
+        delay_ms(1);
+
+        clr_pin(17);
+        spi_tx(0, 0xf0);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x0f);
+        spi_tx(0, 0xc0);
+        spi_tx(0, 0xa8);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x64);
+        set_pin(17);
+        delay_ms(1);
+
+        clr_pin(17);
+        spi_tx(0, 0x0f);
+        spi_tx(0, 0x00);
+        spi_tx(0, 0x3c);
+
+        for (int i = 0; i < 30; ++i) {
+                char c = spi_rx(0);
+                if (c == 0x51) {
+                        printf("Hallo Welt!");
+                }
+        }
+        set_pin(17);
+        delay_ms(1);
+}
+
+void read_sd_card(void) {
+        GPIO_function_select(15, 1);
+        GPIO_function_select(14, 1);
+        init_pin_output(13); //manual CS
+        GPIO_function_select(12, 1);
+        output_enable_pin(15);
+        output_enable_pin(14);
+        output_enable_pin(12);
+
+        uint32_t block = spi_determine_block(1);
+        spi_init(block, 2, 15, 0);
+
+        set_pin(13);
+        for (int i = 0; i < 10; ++i) { spi_tx(1, 0xff); }
+
+        clr_pin(13);
+        spi_tx(1, 0xff);
+        spi_tx(1, 0x40); // CMD0
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x00);
+        spi_tx(1, 0x95); // valid CRC for CMD0
+
+        for (int i = 0; i < 30; ++i) {
+                if (spi_rx(1) == 0x1) {
+                        printf("\x1b[96;40m[!] SD Card found!\x1b[0m\n");
+
+                        spi_tx(1, 0x7a); // CMD58 (0x40 + 58)
+                        spi_tx(1, 0x00);
+                        spi_tx(1, 0x00);
+                        spi_tx(1, 0x00);
+                        spi_tx(1, 0x00);
+                        spi_tx(1, 0x75); // dummy CRC
+
+                        while (spi_rx(1) != 0x1) {}
+                        printf("\x1b[96;40m[!] Reading SD's OCR: \x1b[0m");
+                        for (int j = 0; j < 4; ++j) {
+                                printf("\x1b[91;40m0x%x\x1b[0m ", spi_rx(1));
+                        }
+                        printf("\n");
+
+                        break;
+                }
+        }
+
+
+        set_pin(13);
+}
 
 struct cpio_newc_header {
         char c_magic[6];
@@ -55,6 +176,10 @@ extern uint8_t __cpio_init_start__[];
 void PATER_ADAMVS(int argc, char *argv[]) {
         signal(SIGINT, PATER_ADAMVS_SIGINT);
         printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
+
+        read_sd_card();
+
+        setup_ethernet();
 
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
         [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
@@ -186,45 +311,7 @@ int main(void) {
         setup_tty_chrfile(tty->inode);
         init_keyboard(27, 26);
 
-        GPIO_function_select(15, 1);
-        GPIO_function_select(14, 1);
-        init_pin_output(13); //manual CS
-        GPIO_function_select(12, 1);
-        output_enable_pin(15);
-        output_enable_pin(14);
-        output_enable_pin(12);
 
-        uint32_t block = spi_determine_block(1);
-        spi_init(block, 2, 15, 0);
-
-        set_pin(13);
-        for (int i = 0; i < 10; ++i) { spi_tx(1, 0xff); }
-
-        clr_pin(13);
-        spi_tx(1, 0xff);
-        spi_tx(1, 0x40); // CMD0
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x95); // valid CRC for CMD0
-
-        while (spi_rx(1) != 0x1) {}
-
-        spi_tx(1, 0x7a); // CMD58 (0x40 + 58)
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x75); // dummy CRC
-
-        while (spi_rx(1) != 0x1) {}
-        char identification_string[5] = {};
-        for (int i = 0; i < 4; ++i) {
-                identification_string[i] = spi_rx(1);
-        }
-
-        set_pin(13);
 
         //TODO: REPLACE WITH PRINTK
         // printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"

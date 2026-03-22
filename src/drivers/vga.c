@@ -351,6 +351,6 @@ void vga_clr_cursor() {
 
 void vga_clr_all() {
         vga_clr_cursor();
-        vga_set_cursor_off();
+        // vga_set_cursor_off();
         vga_clr_screen();
 }

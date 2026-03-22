@@ -107,7 +107,8 @@ static void scroll_vertical() {
                 for (size_t j = 0; j < BUFFER_WIDTH; ++j) {
                         ScreenWriter.buffer->chars[i - 1][j] = ScreenWriter.buffer->chars[i][j];
                         vga_put_byte_encoded_color_letter(ScreenWriter.buffer->chars[i - 1][j].ascii_code, i - 1, j,
-                                                          ScreenWriter.buffer->chars[i - 1][j].color_code);
+                                                          ScreenWriter.buffer->chars[i - 1][j].color_code
+                        );
                 }
         }
 
@@ -115,6 +116,12 @@ static void scroll_vertical() {
 
         for (size_t i = 0; i < BUFFER_WIDTH; ++i) {
                 ScreenWriter.buffer->chars[BUFFER_HEIGHT - 1][i] = empty_char;
+                vga_put_byte_encoded_color_letter(empty_char.ascii_code,
+                                                  BUFFER_HEIGHT - 1,
+                                                  i,
+                                                  ScreenWriter.buffer->chars[BUFFER_HEIGHT - 2][BUFFER_WIDTH - 1].
+                                                  color_code
+                );
         }
 }
 
