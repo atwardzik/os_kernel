@@ -150,6 +150,12 @@ spi_tx:
 
         str     r1, [r0, SSPDR]
 
+        .rne_tx_loop:
+                ldr     r2, [r0, SSPSR]
+                tst     r2, #4                  @ RNE: wait for rx fifo not empty
+                beq     .rne_tx_loop
+        ldr     r0, [r0, SSPDR]                 @ drain rx fifo, return value in r0
+
         pop     {pc}
 
 
@@ -165,22 +171,8 @@ spi_tx:
 .align 4
 spi_rx:
         push    {lr}
-        bl      spi_determine_block
-
-        .tnf_rx_loop:
-                ldr     r2, [r0, SSPSR]
-                tst     r2, #2                  @ bit 2 (TNF): 0 full; 1 not full
-                beq     .tnf_rx_loop
-
-        mov     r1, 0xff
-        str     r1, [r0, SSPDR]
-
-        .rne_rx_loop:
-                ldr     r2, [r0, SSPSR]
-                tst     r2, #4                  @ bit 3 (RNE): 0 empty; 1 not empty
-                beq     .rne_rx_loop
-
-        ldr     r0, [r0, SSPDR]
+        mov     r1, #0xff
+        bl      spi_tx
 
         pop     {pc}
 
