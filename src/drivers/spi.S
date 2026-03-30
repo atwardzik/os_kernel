@@ -13,10 +13,16 @@
 .equ SSPCPSR, 0x10
 .equ SSPDMACR, 0x24
 
+.macro spi_determine_address
+        cmp     r0, #0
+        ite     eq
+        ldreq   r0, SPI0_BASE
+        ldrne   r0, SPI1_BASE
+.endm
 
 /**
  * Setup the SPI_TX. Final frequency according to datasheet: cf. 12.3.4.6.1. Bit rate generation pp. 1051
- *   r0 - spi hw block address
+ *   r0 - spi hw block number
  *   r1 - prescaller in 2-254 (LSB=0!!!)
  *   r2 - post-divider  0-255
  *   r3 - SPI operating mode (0-3)
@@ -26,6 +32,8 @@
 .align 4
 spi_init:
         push    {r4-r7, lr}
+
+        spi_determine_address
         mov     r4, r0
         mov     r5, r1
         mov     r6, r2
@@ -86,7 +94,6 @@ spi_set_baudrate:
  *  - r0 - address of a block
  */
 .thumb_func
-.global spi_enable
 .align 4
 spi_enable:
         push    {lr}
@@ -102,7 +109,6 @@ spi_enable:
  *  - r0 - address of a block
  */
 .thumb_func
-.global spi_disable
 .align 4
 spi_disable:
         push    {lr}
@@ -113,24 +119,10 @@ spi_disable:
 
         pop     {pc}
 
-/**
- * Determines spi block pointed by r0. Doesn't affect other registers
- */
-.thumb_func
-.global spi_determine_block
-.align 4
-spi_determine_block:
-        cmp     r0, #0
-        ite     eq
-        ldreq   r0, SPI0_BASE
-        ldrne   r0, SPI1_BASE
-
-        bx      lr
-
 
 /**
  * Transfers data through selected SPI block
- *  - r0 - spi block (0, 1)
+ *  - r0 - spi block number (0, 1)
  *  - r1 - data to be send
  */
 .thumb_func
@@ -139,7 +131,7 @@ spi_determine_block:
 spi_tx:
         push    {lr}
 
-        bl      spi_determine_block
+        spi_determine_address
 
         @ as the SSP device may still work (it works much slower than the cpu clock)
         @ we must wait for the availability of the fifo
@@ -161,7 +153,7 @@ spi_tx:
 
 /**
  * Transfers data through selected SPI block
- *  - r0 - spi block (0, 1)
+ *  - r0 - spi block number (0, 1)
  *
  * Returns:
  *  Received value in r0
