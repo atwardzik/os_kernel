@@ -1,5 +1,6 @@
 #include "libc.h"
 #include "tty.h"
+#include "drivers/ethernet.h"
 #include "drivers/gpio.h"
 #include "drivers/keyboard.h"
 #include "drivers/time.h"
@@ -11,131 +12,6 @@
 #include "kernel/resets.h"
 #include "drivers/spi.h"
 
-enum EthOperation {
-        READ,
-        WRITE,
-};
-
-static constexpr int eth_cs = 17;
-static constexpr int eth_spi_block = 0;
-
-/**
- * Send command to specified hw register.
- * @param op READ or WRITE
- * @param offset specified hw register's offset
- * @param data array of n bytes to be sent
- * @param len length of the bytes buffer
- */
-void eth_send_command(const enum EthOperation op, uint16_t offset, char *data, const size_t len) {
-        for (size_t i = 0; i < len; i++) {
-                clr_pin(eth_cs);
-                switch (op) {
-                        case READ:
-                                spi_tx(eth_spi_block, 0x0f);
-                                break;
-                        case WRITE:
-                                spi_tx(eth_spi_block, 0xf0);
-                                break;
-                }
-
-                spi_tx(eth_spi_block, offset >> 8);
-                spi_tx(eth_spi_block, offset & 0x00ff);
-
-                if (op == WRITE) {
-                        spi_tx(eth_spi_block, data[i]);
-                }
-                else {
-                        data[i] = spi_rx(eth_spi_block);
-                }
-
-                offset += 1;
-                set_pin(eth_cs);
-                delay_ms(1);
-        }
-}
-
-void setup_ethernet(void) {
-        //setup peri
-        GPIO_function_select(16, 1);
-        GPIO_function_select(18, 1);
-        init_pin_output(eth_cs); //manual CS
-        GPIO_function_select(19, 1);
-        output_enable_pin(16);
-        output_enable_pin(18);
-        output_enable_pin(19);
-
-        const uint32_t spi_address = spi_determine_block(0);
-        spi_init(spi_address, 2, 15, 0);
-
-
-        //reset
-        constexpr char cmd_rst[] = {0x80};
-        eth_send_command(WRITE, 0x0000, cmd_rst, sizeof(cmd_rst));
-
-        //read VERR register
-        clr_pin(17);
-        spi_tx(0, 0x0f);
-        spi_tx(0, 0x00);
-        spi_tx(0, 0x80);
-        for (int i = 0; i < 30; ++i) {
-                char c = spi_rx(0);
-                if (c == 0x51) {
-                        printf("\x1b[96;40m[!] ETH Adapter found! Reset.\x1b[0m\n");
-                }
-        }
-        set_pin(17);
-        delay_ms(1);
-
-        //MR = 0
-        constexpr char cmd_set_mr[8] = {0x00};
-        eth_send_command(WRITE, 0x0000, cmd_set_mr, sizeof(cmd_set_mr));
-
-        //IMR = 0 - mask all interrupts, polling mode
-        constexpr char cmd_set_imr[8] = {0x00};
-        eth_send_command(WRITE, 0x0016, cmd_set_imr, sizeof(cmd_set_imr));
-
-        //RTR = 0 - 200ms retransmission timeout
-        constexpr char cmd_set_rtr[8] = {0x07, 0xd0};
-        eth_send_command(WRITE, 0x0017, cmd_set_rtr, sizeof(cmd_set_rtr));
-
-        //RCR = 0 - 8 retries before giving up
-        constexpr char cmd_set_rcr[8] = {0x08};
-        eth_send_command(WRITE, 0x0019, cmd_set_rcr, sizeof(cmd_set_rcr));
-
-        //Set MAC
-        char mac[] = {0xde, 0xad, 0xbe, 0xef, 0x00, 0x01};
-        eth_send_command(WRITE, 0x0009, mac, sizeof(mac));
-
-        //Gateway
-        constexpr char gw[] = {192, 168, 1, 1};
-        eth_send_command(WRITE, 0x0001, gw, sizeof(gw));
-
-        //Subnet
-        constexpr char sub[] = {255, 255, 255, 0};
-        eth_send_command(WRITE, 0x0005, sub, sizeof(sub));
-
-        //IP
-        constexpr char ip[] = {192, 168, 1, 100};
-        eth_send_command(WRITE, 0x000f, ip, sizeof(ip));
-
-        //sockets
-        // 4KB per socket (0x02 = 2KB, 0x04 = 4KB, 0x08 = 8KB)
-        for (int i = 0; i < 4; i++) {
-                constexpr char cmd[] = {0x04};
-                eth_send_command(WRITE, 0x001f + 0x0100 * (i + 4), cmd, sizeof(cmd)); // 4KB TX
-        }
-        for (int i = 0; i < 4; i++) {
-                constexpr char cmd[] = {0x04};
-                eth_send_command(WRITE, 0x001e + 0x0100 * (i + 4), cmd, sizeof(cmd)); // 4KB RX
-        }
-
-        // Open socket 0 in MACRAW mode
-        constexpr char mode[] = {0x04};           // MACRAW
-        eth_send_command(WRITE, 0x0400, mode, 1); // Sn_MR
-
-        constexpr char open[] = {0x01};           // OPEN command
-        eth_send_command(WRITE, 0x0401, open, 1); // Sn_CR
-}
 
 void read_sd_card(void) {
         GPIO_function_select(15, 1);
@@ -146,8 +22,7 @@ void read_sd_card(void) {
         output_enable_pin(14);
         output_enable_pin(12);
 
-        uint32_t block = spi_determine_block(1);
-        spi_init(block, 2, 15, 0);
+        spi_init(1, 2, 15, 0);
 
         set_pin(13);
         for (int i = 0; i < 10; ++i) { spi_tx(1, 0xff); }
@@ -233,7 +108,18 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 
         read_sd_card();
 
-        setup_ethernet();
+        setup_ethernet_chip();
+        setup_network_information("192.168.1.100",
+                                  "de:ad:01:10:be:ef",
+                                  "192.168.1.1",
+                                  24
+        );
+        open_socket(0, MACRAW);
+        send_raw_frame("de:da:be:ba:fe:fa",
+                       "de:ad:01:10:be:ef",
+                       0x88b5,
+                       "This will be a TCP stack with Modbus on top"
+        );
 
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
         [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
