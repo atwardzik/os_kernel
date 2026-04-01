@@ -331,12 +331,17 @@ unsigned long strtoul(const char *str, char **str_end, int base) {
                 else if (digit >= 'A' && digit <= 'F') {
                         digit = digit - 'A' + 10;
                 }
+                else {
+                        value = 0;
+                        break;
+                }
 
                 if (digit < base) {
                         value += pow(base, i) * digit;
                         i -= 1;
                 }
                 else {
+                        value = 0;
                         break;
                 }
         }
