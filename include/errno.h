@@ -63,4 +63,6 @@
 #define EISCONN 127		/* Socket is already connected */
 #define ENOTCONN 128		/* Socket is not connected */
 
+#define MAX_ERRNO 128
+
 #endif //OS_ERRNO_H

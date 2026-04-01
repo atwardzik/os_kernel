@@ -11,6 +11,7 @@
 #include "kernel/proc.h"
 #include "kernel/resets.h"
 #include "drivers/spi.h"
+#include "kernel/error.h"
 
 
 void read_sd_card(void) {
@@ -62,6 +63,42 @@ void read_sd_card(void) {
         set_pin(13);
 }
 
+void setup_ethernet(void) {
+        printf("\x1b[96;40m[!] Checking network adapter: \x1b[0m");
+        struct NetworkInterface *eth0 = setup_ethernet_chip();
+        if (IS_ERR(eth0)) {
+                printf("\x1b[91;40mNot found or adapter incompatible\x1b[0m\n");
+                return;
+        }
+
+        printf("Found\n");
+        printf("\x1b[96;40m[!] Setting up network adapter: \x1b[0m");
+        const char *mac = "de:ad:01:10:be:ef";
+        const char *ip = "192.168.1.100";
+        const char *gateway = "192.168.1.1";
+        const char *subnet_mask = "255.255.255.0";
+
+        setup_network_information(eth0,
+                                  ip,
+                                  mac,
+                                  gateway,
+                                  subnet_mask
+        );
+        eth0->i_op->open_socket(eth0, 0, MACRAW);
+
+        printf("\x1b[92;40m Ok\x1b[0m\n");
+        printf("\x1b[96;40m[!] Network adapter set up to:\x1b[0m %s %s\n", mac, ip);
+
+        //----
+        send_raw_frame(eth0,
+                       0,
+                       mac,
+                       "de:da:be:ba:fe:fa",
+                       0x88b5,
+                       "This will be a TCP stack with Modbus on top"
+        );
+}
+
 struct cpio_newc_header {
         char c_magic[6];
         char c_ino[8];
@@ -108,21 +145,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 
         read_sd_card();
 
-        struct NetworkInterface *eth0 = setup_ethernet_chip();
-        setup_network_information(eth0,
-                                  "192.168.1.100",
-                                  "de:ad:01:10:be:ef",
-                                  "192.168.1.1",
-                                  "255.255.255.0"
-        );
-        eth0->i_op->open_socket(eth0, 0, MACRAW);
-        send_raw_frame(eth0,
-                       0,
-                       "de:da:be:ba:fe:fa",
-                       "de:ad:01:10:be:ef",
-                       0x88b5,
-                       "This will be a TCP stack with Modbus on top"
-        );
+        setup_ethernet();
 
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
         [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
