@@ -169,13 +169,14 @@ void set_kernel_mode_flag() { scheduler.current_process->kernel_mode = true; }
 
 void reset_kernel_mode_flag() { scheduler.current_process->kernel_mode = false; }
 
-__attribute__((optimize("omit-frame-pointer")))
-void context_switch(void) {
-        // While it might be tempting to "refactor" this code and extract the forthcoming inline assembly
-        // it is not the best idea. The compiler CANNOT guarantee (unfortunately) that the current process
-        // pointer will be stored in a register. Therefore, the stack pointers must be restored
-        // just before context switching. Moreover, there is a hierarchy of handling:
-        //      handled signals -> pending signals -> kernel mode -> user mode
+__attribute__((optimize("omit-frame-pointer"))) void context_switch(void) {
+        // While it might be tempting to "refactor" this code and extract the
+        // forthcoming inline assembly it is not the best idea. The compiler
+        // CANNOT guarantee (unfortunately) that the current process pointer will
+        // be stored in a register. Therefore, the stack pointers must be restored
+        // just before context switching. Moreover, there is a hierarchy of
+        // handling: handled signals -> pending signals -> kernel mode -> user
+        // mode
         register struct Process *process = scheduler_get_next_process();
 
         scheduler.current_process = process;

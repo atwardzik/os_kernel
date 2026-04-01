@@ -9,13 +9,29 @@
 #include "libc.h"
 #include "spi.h"
 #include "time.h"
+#include "kernel/error.h"
 #include "kernel/memory.h"
-
 
 static constexpr int ETH_CS = 17;
 static constexpr int ETH_SPI_BLOCK = 0;
+static constexpr uint16_t S0_TX_BASE = 0x4000;
 
+static constexpr uint16_t MR = 0x0000;
+static constexpr uint16_t GAR = 0x0001;
+static constexpr uint16_t SUBR = 0x0005;
+static constexpr uint16_t SHAR = 0x0009;
+static constexpr uint16_t SIPR = 0x000f;
+static constexpr uint16_t IMR = 0x0016;
+static constexpr uint16_t RTR = 0x0017;
+static constexpr uint16_t RCR = 0x0019;
 static constexpr uint16_t VERR_REG = 0x0080;
+
+#define SN_MR(socket) (0x0000 + 0x0100 * ((uint16_t) socket + 4))
+#define SN_CR(socket) (0x0001 + 0x0100 * ((uint16_t) socket + 4))
+#define SN_TX_CR(socket) (0x0001 + 0x0100 * ((uint16_t) socket + 4))
+#define SN_TX_RD(socket) (0x0022 + 0x0100 * ((uint16_t) socket + 4))
+#define SN_TX_WR(socket) (0x0024 + 0x0100 * ((uint16_t) socket + 4))
+
 
 enum SocketCommand {
         OPEN      = 0x01,
@@ -96,47 +112,83 @@ static bool is_chip_compatible(void) {
 }
 
 static void setup_communication_details(void) {
-        //MR = 0
         constexpr char cmd_set_mr[8] = {0x00};
-        eth_write_reg(0x0000, cmd_set_mr, sizeof(cmd_set_mr));
+        eth_write_reg(MR, cmd_set_mr, sizeof(cmd_set_mr));
 
         //IMR = 0 - mask all interrupts, polling mode
         constexpr char cmd_set_imr[8] = {0x00};
-        eth_write_reg(0x0016, cmd_set_imr, sizeof(cmd_set_imr));
+        eth_write_reg(IMR, cmd_set_imr, sizeof(cmd_set_imr));
 
         //RTR = 0 - 200ms retransmission timeout
         constexpr char cmd_set_rtr[8] = {0x07, 0xd0};
-        eth_write_reg(0x0017, cmd_set_rtr, sizeof(cmd_set_rtr));
+        eth_write_reg(RTR, cmd_set_rtr, sizeof(cmd_set_rtr));
 
         //RCR = 0 - 8 retries before giving up
         constexpr char cmd_set_rcr[8] = {0x08};
-        eth_write_reg(0x0019, cmd_set_rcr, sizeof(cmd_set_rcr));
+        eth_write_reg(RCR, cmd_set_rcr, sizeof(cmd_set_rcr));
 }
 
-void setup_network_information(
-        const char *ip_address, const char *mac_address, const char *gateway, uint32_t subnet_mask
+static int setup_interface_information(struct NetworkInterface *interface) {
+        eth_write_reg(SHAR, interface->mac, sizeof(interface->mac));
+
+        eth_write_reg(GAR, interface->gateway, sizeof(interface->gateway));
+
+        eth_write_reg(SUBR, interface->subnet_mask, sizeof(interface->subnet_mask));
+
+        eth_write_reg(SIPR, interface->ip, sizeof(interface->ip));
+
+        // check if the values are set up properly?
+        return 0;
+}
+
+static int open_socket(struct NetworkInterface *interface, int socket_number, enum SocketMode mode) {
+        if (mode == MACRAW && socket_number != 0) {
+                return -ESOCKTNOSUPPORT;
+        }
+
+        const char socket_mode[] = {mode};
+        eth_write_reg(SN_MR(socket_number), socket_mode, 1);
+
+        constexpr char open[] = {OPEN};
+        eth_write_reg(SN_CR(socket_number), open, 1);
+
+        return 0;
+}
+
+static uint16_t determine_sn_tx_buffer(const int socket_number) {
+        if (socket_number != 0) {
+                UNIMPLEMENTED("WIZnet W5100s driver has implemented only socket 0.");
+        }
+
+        return S0_TX_BASE;
+}
+
+static int tx_raw_frame(
+        struct NetworkInterface *interface, const int socket_number, const char *frame, const size_t frame_size
 ) {
-        //Set MAC
-        char mac[] = {0xde, 0xad, 0xbe, 0xef, 0x00, 0x01};
-        eth_write_reg(0x0009, mac, sizeof(mac));
+        uint8_t offsets[3] = {};
+        eth_read_reg(SN_TX_RD(socket_number), offsets, 2);
+        const uint16_t current_offset = (offsets[0] << 8) | (offsets[1]);
 
-        //Gateway
-        constexpr char gw[] = {192, 168, 1, 1};
-        eth_write_reg(0x0001, gw, sizeof(gw));
+        // Write frame to TX buffer
+        eth_write_reg(determine_sn_tx_buffer(socket_number), frame, frame_size);
 
-        //Subnet
-        constexpr char sub[] = {255, 255, 255, 0};
-        eth_write_reg(0x0005, sub, sizeof(sub));
+        // Set TX write pointer
+        const uint16_t tx_wr = frame_size + current_offset;
+        const char ptr[] = {tx_wr >> 8, tx_wr & 0xff};
+        eth_write_reg(SN_TX_WR(socket_number), ptr, 2);
 
-        //IP
-        constexpr char ip[] = {192, 168, 1, 100};
-        eth_write_reg(0x000f, ip, sizeof(ip));
+        // Send command
+        char send[] = {0x20}; // SEND command
+        eth_write_reg(SN_TX_CR(socket_number), send, 1);
+
+        return 0;
 }
 
-int setup_ethernet_chip(void) {
+struct NetworkInterface *setup_ethernet_chip(void) {
         setup_eth_spi();
         if (!is_chip_compatible()) {
-                return -ENODEV;
+                return ERR_PTR(-ENODEV);
         }
 
         //reset
@@ -158,70 +210,16 @@ int setup_ethernet_chip(void) {
         }
 
 
-        return 0;
+        struct NetworkInterface *interface = (struct NetworkInterface *) kmalloc(sizeof(*interface));
+        struct NetworkInterfaceOperations *i_op = (struct NetworkInterfaceOperations *) kmalloc(sizeof(*i_op));
+        i_op->setup_interface_information = setup_interface_information;
+        i_op->open_socket = open_socket;
+        i_op->tx_raw_frame = tx_raw_frame;
+        interface->i_op = i_op;
+
+        struct Socket *sockets = (struct Socket *) kmalloc(4 * sizeof(struct Socket));
+        memset(sockets, 0, 4 * sizeof(struct Socket));
+        interface->sockets = sockets;
+
+        return interface;
 }
-
-int open_socket(int socket_number, enum SocketMode mode) {
-        if (mode == MACRAW && socket_number != 0) {
-                return -ESOCKTNOSUPPORT;
-        }
-
-        const uint16_t sn_mr = 0x0000 + 0x0100 * (socket_number + 4);
-        const char socket_mode[] = {mode};
-        eth_write_reg(sn_mr, socket_mode, 1);
-
-        const uint16_t sn_cr = 0x0001 + sn_mr;
-        constexpr char open[] = {OPEN};
-        eth_write_reg(sn_cr, open, 1);
-
-        return 0;
-}
-
-static int str2mac(const char *src_mac, char *buf) {
-        if (strlen(src_mac) != 17) {
-                return -EINVAL;
-        }
-
-        char mac[18];
-        strcpy(mac, src_mac);
-
-        char *byte = strtok(mac, ":");
-        int i = 0;
-        while (i < 6) {
-                buf[i] = strtoul(byte, nullptr, 16);
-                byte = strtok(nullptr, ":");
-
-                i += 1;
-        }
-
-        return 0;
-}
-
-int send_raw_frame(const char *src_mac, const char *dst_mac, uint16_t ether_type, const char *data) {
-        char offsets[3] = {}; //tx read pointer
-        eth_read_reg(0x0422, offsets, 2);
-
-        char src[6];
-        char dst[6];
-        str2mac(src_mac, src);
-        str2mac(dst_mac, dst);
-        const size_t frame_size = 18 + strlen(data) + 1;
-        char *frame = (char *) kmalloc(frame_size);
-        memcpy(frame, src, 6);
-        memcpy(frame + 6, dst, 6);
-        frame[12] = ether_type >> 8;
-        frame[13] = ether_type & 0xff;
-        strcpy(frame + 14, data);
-        frame[frame_size] = 0;
-
-        // Write frame to TX buffer
-        eth_write_reg(0x4000, frame, frame_size); // S0 TX buffer base
-
-        // Set TX write pointer
-        uint16_t tx_wr = frame_size;
-        char ptr[] = {tx_wr >> 8, tx_wr & 0xff};
-        eth_write_reg(0x0424, ptr, 2); // Sn_TX_WR
-
-        // Send command
-        char send[] = {0x20};           // SEND command
-        eth_write_reg(0x0401, send, 1); // Sn_CR}

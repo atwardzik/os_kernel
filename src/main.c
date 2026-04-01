@@ -108,14 +108,17 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 
         read_sd_card();
 
-        setup_ethernet_chip();
-        setup_network_information("192.168.1.100",
+        struct NetworkInterface *eth0 = setup_ethernet_chip();
+        setup_network_information(eth0,
+                                  "192.168.1.100",
                                   "de:ad:01:10:be:ef",
                                   "192.168.1.1",
-                                  24
+                                  "255.255.255.0"
         );
-        open_socket(0, MACRAW);
-        send_raw_frame("de:da:be:ba:fe:fa",
+        eth0->i_op->open_socket(eth0, 0, MACRAW);
+        send_raw_frame(eth0,
+                       0,
+                       "de:da:be:ba:fe:fa",
                        "de:ad:01:10:be:ef",
                        0x88b5,
                        "This will be a TCP stack with Modbus on top"

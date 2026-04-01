@@ -8,6 +8,8 @@ add_library(kernel OBJECT
         syscall_table.c
         resources.c
         signal.c
+        network.c
+        error.c
 )
 
 set_source_files_properties(memory.c PROPERTIES COMPILE_FLAGS -Wno-pointer-arith)
