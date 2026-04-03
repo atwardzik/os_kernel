@@ -63,7 +63,8 @@ int send_raw_frame(
         const char *src_mac,
         const char *dst_mac,
         uint16_t ether_type,
-        const char *data
+        const char *data,
+        size_t data_length
 );
 
 int str2mac(const char *src_mac, char *buf);

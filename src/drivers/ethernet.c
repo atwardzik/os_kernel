@@ -29,6 +29,8 @@ static constexpr uint16_t VERR_REG = 0x0080;
 #define SN_MR(socket) (0x0000 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_CR(socket) (0x0001 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_TX_CR(socket) (0x0001 + 0x0100 * ((uint16_t) socket + 4))
+#define SN_RXBUF_SIZE(socket) (0x001e + 0x0100 * ((uint16_t) socket + 4))
+#define SN_TXBUF_SIZE(socket) (0x001f + 0x0100 * ((uint16_t) socket + 4))
 #define SN_TX_RD(socket) (0x0022 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_TX_WR(socket) (0x0024 + 0x0100 * ((uint16_t) socket + 4))
 
@@ -44,6 +46,26 @@ enum SocketCommand {
         SEND_KEEP = 0x22,
         RECV      = 0x40,
 };
+
+
+static void setup_eth_spi(void) {
+        //spi0 rx
+        GPIO_function_select(16, 1);
+        output_enable_pin(16);
+
+        //spi0 sck
+        GPIO_function_select(18, 1);
+        output_enable_pin(18);
+
+        //spi0 tx
+        GPIO_function_select(19, 1);
+        output_enable_pin(19);
+
+        //manual CS
+        init_pin_output(ETH_CS);
+
+        spi_init(0, 2, 15, 0);
+}
 
 /**
  * Read from hw register
@@ -79,25 +101,6 @@ static void eth_read_reg(uint16_t reg_offset, char *buf, const size_t len) {
                 reg_offset += 1;
                 set_pin(ETH_CS);
         }
-}
-
-static void setup_eth_spi(void) {
-        //spi0 rx
-        GPIO_function_select(16, 1);
-        output_enable_pin(16);
-
-        //spi0 sck
-        GPIO_function_select(18, 1);
-        output_enable_pin(18);
-
-        //spi0 tx
-        GPIO_function_select(19, 1);
-        output_enable_pin(19);
-
-        //manual CS
-        init_pin_output(ETH_CS);
-
-        spi_init(0, 2, 15, 0);
 }
 
 static bool is_chip_compatible(void) {
@@ -171,10 +174,10 @@ static int tx_raw_frame(
         const uint16_t current_offset = (offsets[0] << 8) | (offsets[1]);
 
         // Write frame to TX buffer
-        eth_write_reg(determine_sn_tx_buffer(socket_number), frame, frame_size);
+        eth_write_reg(determine_sn_tx_buffer(socket_number) + current_offset, frame, frame_size);
 
         // Set TX write pointer
-        const uint16_t tx_wr = frame_size + current_offset;
+        const uint16_t tx_wr = current_offset + frame_size;
         const char ptr[] = {tx_wr >> 8, tx_wr & 0xff};
         eth_write_reg(SN_TX_WR(socket_number), ptr, 2);
 
@@ -193,7 +196,7 @@ struct NetworkInterface *setup_ethernet_chip(void) {
 
         //reset
         constexpr char cmd_rst[] = {0x80};
-        eth_write_reg(0x0000, cmd_rst, sizeof(cmd_rst));
+        eth_write_reg(MR, cmd_rst, sizeof(cmd_rst));
         delay_ms(64); //stable time from the datasheet
 
         setup_communication_details();
@@ -202,11 +205,8 @@ struct NetworkInterface *setup_ethernet_chip(void) {
         // 4KB per socket (0x02 = 2KB, 0x04 = 4KB, 0x08 = 8KB)
         for (int i = 0; i < 4; i++) {
                 constexpr char cmd[] = {0x04};
-                eth_write_reg(0x001f + 0x0100 * (i + 4), cmd, sizeof(cmd)); // 4KB TX
-        }
-        for (int i = 0; i < 4; i++) {
-                constexpr char cmd[] = {0x04};
-                eth_write_reg(0x001e + 0x0100 * (i + 4), cmd, sizeof(cmd)); // 4KB RX
+                eth_write_reg(SN_TXBUF_SIZE(i), cmd, sizeof(cmd)); // 4KB TX
+                eth_write_reg(SN_RXBUF_SIZE(i), cmd, sizeof(cmd)); // 4KB RX
         }
 
 

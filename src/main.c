@@ -116,12 +116,25 @@ void PATER_ADAMVS(int argc, char *argv[]) {
                                   "255.255.255.0"
         );
         eth0->i_op->open_socket(eth0, 0, MACRAW);
+        const char *test_data[] = {
+                "This will be a TCP stack with Modbus on top",
+                "This is another frame :)"
+        };
         send_raw_frame(eth0,
                        0,
                        "de:da:be:ba:fe:fa",
                        "de:ad:01:10:be:ef",
                        0x88b5,
-                       "This will be a TCP stack with Modbus on top"
+                       test_data[0],
+                       strlen(test_data[0])
+        );
+        send_raw_frame(eth0,
+                       0,
+                       "de:da:be:ba:fe:fa",
+                       "de:ad:01:10:be:ef",
+                       0x88b5,
+                       test_data[1],
+                       strlen(test_data[1])
         );
 
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
