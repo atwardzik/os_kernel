@@ -17,6 +17,8 @@ enum SocketMode {
 };
 
 struct Socket {
+        enum SocketMode mode;
+
         size_t socket_txbuf_size_max;
         unsigned int socket_txbuf_mask;
 };
@@ -29,7 +31,7 @@ struct NetworkInterface {
         char gateway[4];
         char subnet_mask[4];
 
-        struct Socket *sockets;
+        struct Socket **sockets;
         const struct NetworkInterfaceOperations *i_op;
 };
 
