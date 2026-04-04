@@ -236,6 +236,16 @@ char *strcpy(char *dst, const char *src) {
         return memcpy(dst, src, strlen(src) + 1);
 }
 
+char *strcat(char *dst, const char *src) {
+        char *ptr = dst + strlen(dst);
+
+        for (size_t i = 0; i < strlen(src) + 1; ++i) {
+                *(ptr + i) = src[i];
+        }
+
+        return dst;
+}
+
 int strcmp(const char *s1, const char *s2) {
         while (*s1 && (*s1 == *s2)) {
                 s1++;
@@ -289,6 +299,8 @@ char *itoa(int value, char *const str, const int base) {
                 i += 1;
                 temp_value /= base;
         }
+
+        *(str + i) = 0;
 
         while (value) {
                 const unsigned char digit = (value % base);

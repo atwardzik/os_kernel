@@ -17,7 +17,8 @@ enum SocketMode {
 };
 
 struct Socket {
-        char c[1];
+        size_t socket_txbuf_size_max;
+        unsigned int socket_txbuf_mask;
 };
 
 struct NetworkInterfaceOperations;
