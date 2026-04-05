@@ -63,12 +63,12 @@ void read_sd_card(void) {
         set_pin(13);
 }
 
-void setup_ethernet(void) {
+struct NetworkInterface *setup_ethernet(void) {
         printf("\x1b[96;40m[!] Checking network adapter: \x1b[0m");
         struct NetworkInterface *eth0 = setup_ethernet_chip();
         if (IS_ERR(eth0)) {
                 printf("\x1b[91;40mNot found or adapter incompatible\x1b[0m\n");
-                return;
+                return nullptr;
         }
 
         printf("Found\n");
@@ -80,22 +80,28 @@ void setup_ethernet(void) {
                                   "192.168.1.1",
                                   "255.255.255.0"
         );
-        eth0->i_op->open_socket(eth0, 0, MACRAW);
-
 
         printf("\x1b[92;40m Ok\x1b[0m\n");
         printf("\x1b[96;40m[!] Network adapter set up to:\x1b[0m %s %s\n", "192.168.1.100", "de:ad:01:10:be:ef");
 
-        //----
-        const char *test_data = "This will be a TCP stack with Modbus on top: ";
-        for (int i = 0; i < 256'512; ++i) { //67
+        return eth0;
+}
+
+void test_raw_ethernet_frames(struct NetworkInterface *interface) {
+        const int socket = interface->i_op->open_socket(interface, 0, MACRAW);
+        if (socket < 0) {
+                return;
+        }
+
+        for (int i = 0; i < 100; ++i) {
+                const char *test_data = "This will be a TCP stack with Modbus on top: ";
                 char msg[64];
                 strcpy(msg, test_data);
 
                 char num[10];
                 itoa(i, num, 10);
                 strcat(msg, num);
-                send_raw_frame(eth0,
+                send_raw_frame(interface,
                                0,
                                "de:da:be:ba:fe:fa",
                                "de:ad:01:10:be:ef",
@@ -104,23 +110,38 @@ void setup_ethernet(void) {
                                strlen(msg)
                 );
         }
-        send_raw_frame(eth0,
-                       0,
-                       "de:da:be:ba:fe:fa",
-                       "de:ad:01:10:be:ef",
-                       0x88b5,
-                       test_data,
-                       strlen(test_data)
-        );
-        const char *last = "This is the last data";
-        send_raw_frame(eth0,
-                       0,
-                       "de:da:be:ba:fe:fa",
-                       "de:ad:01:10:be:ef",
-                       0x88b5,
-                       last,
-                       strlen(last)
-        );
+}
+
+void test_tcp_server(struct NetworkInterface *interface) {
+        const int socket = interface->i_op->open_socket(interface, 1, TCP);
+        if (socket < 0) {
+                UNIMPLEMENTED("TCP Server Crashed");
+        }
+
+        interface->i_op->bind_socket(interface, socket, 8080);
+
+        int res = interface->i_op->listen_socket(interface, socket);
+
+        if (interface->i_op->accept_socket(interface, socket) == 0) {
+                for (int i = 1; i < 100; ++i) {
+                        const char *test_data = "This will be a TCP stack No: ";
+                        char msg[64];
+                        strcpy(msg, test_data);
+
+                        char num[10];
+                        itoa(i, num, 10);
+                        strcat(msg, num);
+                        strcat(msg, "\n");
+
+                        interface->i_op->tx_raw_frame(interface,
+                                       socket,
+                                       msg,
+                                       strlen(msg)
+                        );
+                }
+
+                printf("Connection accepted :)");
+        }
 }
 
 struct cpio_newc_header {
@@ -169,7 +190,12 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 
         read_sd_card();
 
-        setup_ethernet();
+        struct NetworkInterface *eth0 = setup_ethernet();
+        if (eth0) {
+                test_raw_ethernet_frames(eth0);
+                test_tcp_server(eth0);
+        }
+
 
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
         [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);

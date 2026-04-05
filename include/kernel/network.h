@@ -18,6 +18,7 @@ enum SocketMode {
 
 struct Socket {
         enum SocketMode mode;
+        uint16_t port;
 
         size_t socket_txbuf_size_max;
         unsigned int socket_txbuf_mask;
@@ -42,6 +43,29 @@ struct NetworkInterfaceOperations {
                 struct NetworkInterface *interface,
                 int socket_number,
                 enum SocketMode mode
+        );
+
+        int (*bind_socket)(
+                struct NetworkInterface *interface,
+                int socket_number,
+                uint16_t port
+        );
+
+        int (*listen_socket)(
+                struct NetworkInterface *interface,
+                int socket_number
+        );
+
+        int (*accept_socket)(
+                struct NetworkInterface *interface,
+                int socket_number
+        );
+
+        int (*rx_raw_frame)(
+                struct NetworkInterface *interface,
+                int socket_number,
+                char *buffer,
+                size_t length
         );
 
         int (*tx_raw_frame)(
