@@ -17,7 +17,14 @@ enum SocketMode {
 };
 
 struct Socket {
-        char c[1];
+        enum SocketMode mode;
+        uint16_t port;
+
+        size_t socket_txbuf_size_max;
+        unsigned int socket_txbuf_mask;
+
+        size_t socket_rxbuf_size_max;
+        unsigned int socket_rxbuf_mask;
 };
 
 struct NetworkInterfaceOperations;
@@ -28,7 +35,7 @@ struct NetworkInterface {
         char gateway[4];
         char subnet_mask[4];
 
-        struct Socket *sockets;
+        struct Socket **sockets;
         const struct NetworkInterfaceOperations *i_op;
 };
 
@@ -39,6 +46,29 @@ struct NetworkInterfaceOperations {
                 struct NetworkInterface *interface,
                 int socket_number,
                 enum SocketMode mode
+        );
+
+        int (*bind_socket)(
+                struct NetworkInterface *interface,
+                int socket_number,
+                uint16_t port
+        );
+
+        int (*listen_socket)(
+                struct NetworkInterface *interface,
+                int socket_number
+        );
+
+        int (*accept_socket)(
+                struct NetworkInterface *interface,
+                int socket_number
+        );
+
+        int (*rx_raw_frame)(
+                struct NetworkInterface *interface,
+                int socket_number,
+                char *buffer,
+                size_t length
         );
 
         int (*tx_raw_frame)(
@@ -63,7 +93,8 @@ int send_raw_frame(
         const char *src_mac,
         const char *dst_mac,
         uint16_t ether_type,
-        const char *data
+        const char *data,
+        size_t data_length
 );
 
 int str2mac(const char *src_mac, char *buf);

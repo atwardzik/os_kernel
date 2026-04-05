@@ -154,6 +154,8 @@ char *strtok(char *str, const char *delim);
 
 char *strcpy(char *dst, const char *src);
 
+char *strcat(char *dst, const char *src);
+
 int strcmp(const char *s1, const char *s2);
 
 char *strchr(const char *str, int ch);

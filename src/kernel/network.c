@@ -7,7 +7,7 @@
 #include "errno.h"
 #include "memory.h"
 
-static constexpr size_t ETHERNET_HEADER_LENGTH = 18;
+static constexpr size_t ETHERNET_HEADER_LENGTH = 14;
 
 int str2mac(const char *src_mac, char *buf) {
         if (!src_mac || !buf) {
@@ -97,22 +97,21 @@ void setup_network_information(
 
 int send_raw_frame(
         struct NetworkInterface *interface, int socket_number, const char *src_mac, const char *dst_mac,
-        const uint16_t ether_type, const char *data
+        const uint16_t ether_type, const char *data, const size_t data_length
 ) {
         char src[6];
         char dst[6];
         str2mac(src_mac, src);
         str2mac(dst_mac, dst);
 
-        const size_t frame_size = ETHERNET_HEADER_LENGTH + strlen(data) + 1;
+        const size_t frame_size = ETHERNET_HEADER_LENGTH + data_length;
         char *frame = (char *) kmalloc(frame_size);
 
         memcpy(frame, src, 6);
         memcpy(frame + 6, dst, 6);
         frame[12] = ether_type >> 8;
         frame[13] = ether_type & 0xff;
-        strcpy(frame + 14, data);
-        frame[frame_size] = 0;
+        memcpy(frame + 14, data, data_length);
 
         const int ret = interface->i_op->tx_raw_frame(interface, socket_number, frame, frame_size);
         kfree(frame);
