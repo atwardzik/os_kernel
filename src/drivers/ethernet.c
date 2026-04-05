@@ -418,7 +418,9 @@ static int read_rxbuf(struct WIZnetSocket *socket, uint8_t *buffer, const uint16
         return read_length;
 }
 
-static int rx_raw_frame(struct NetworkInterface *interface, const int socket_number, char *buffer, const size_t length) {
+static int rx_raw_frame(
+        struct NetworkInterface *interface, const int socket_number, char *buffer, const size_t length
+) {
         struct WIZnetSocket *socket = (struct WIZnetSocket *) interface->sockets[socket_number];
 
         uint8_t ir[1];
@@ -471,20 +473,20 @@ struct NetworkInterface *setup_ethernet_chip(void) {
         interface->i_op = i_op;
 
         struct Socket **sockets = (struct Socket **) kmalloc(4 * sizeof(struct Socket *));
-        //sockets memory - 4KB per socket (0x02 = 2KB, 0x04 = 4KB, 0x08 = 8KB)
         for (int i = 0; i < 4; i++) {
-                constexpr uint8_t cmd[] = {0x04};
-                eth_write_reg(SN_TXBUF_SIZE(i), cmd, sizeof(cmd)); // 4KB TX
-                eth_write_reg(SN_RXBUF_SIZE(i), cmd, sizeof(cmd)); // 4KB RX
+                constexpr unsigned int memory_per_socket = 0x02; //2KB for each socket for TX and RX
+                constexpr uint8_t cmd[] = {memory_per_socket};
+                eth_write_reg(SN_TXBUF_SIZE(i), cmd, sizeof(cmd));
+                eth_write_reg(SN_RXBUF_SIZE(i), cmd, sizeof(cmd));
 
                 struct WIZnetSocket *socket = (struct WIZnetSocket *) kmalloc(sizeof(struct WIZnetSocket));
                 socket->socket.mode = CLOSED;
-                socket->socket.socket_txbuf_mask = 0x0fff;
-                socket->socket.socket_txbuf_size_max = 4096;
-                socket->socket.socket_rxbuf_mask = 0x0fff;
-                socket->socket.socket_rxbuf_size_max = 4096;
-                socket->txbuf_start = S0_TX_BASE + (i * 4096);
-                socket->rxbuf_start = S0_RX_BASE + (i * 4096);
+                socket->socket.socket_txbuf_mask = memory_per_socket * 1024 - 1;
+                socket->socket.socket_txbuf_size_max = memory_per_socket * 1024;
+                socket->socket.socket_rxbuf_mask = memory_per_socket * 1024 - 1;
+                socket->socket.socket_rxbuf_size_max = memory_per_socket * 1024;
+                socket->txbuf_start = S0_TX_BASE + (i * memory_per_socket * 1024);
+                socket->rxbuf_start = S0_RX_BASE + (i * memory_per_socket * 1024);
                 socket->index = i;
                 sockets[i] = (struct Socket *) socket;
         }
