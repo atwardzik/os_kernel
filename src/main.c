@@ -75,9 +75,9 @@ struct NetworkInterface *setup_ethernet(void) {
         printf("\x1b[96;40m[!] Setting up network adapter: \x1b[0m");
 
         setup_network_information(eth0,
-                                  "192.168.1.100",
+                                  "192.168.2.1",
                                   "de:ad:01:10:be:ef",
-                                  "192.168.1.1",
+                                  "192.168.2.0",
                                   "255.255.255.0"
         );
 
@@ -123,6 +123,11 @@ void test_tcp_server(struct NetworkInterface *interface) {
         int res = interface->i_op->listen_socket(interface, socket);
 
         if (interface->i_op->accept_socket(interface, socket) == 0) {
+                char buf[64];
+                interface->i_op->rx_raw_frame(interface, socket, buf, 64);
+
+                buf[63] = 0;
+
                 for (int i = 1; i < 100; ++i) {
                         const char *test_data = "This will be a TCP stack No: ";
                         char msg[64];
@@ -192,7 +197,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 
         struct NetworkInterface *eth0 = setup_ethernet();
         if (eth0) {
-                test_raw_ethernet_frames(eth0);
+                // test_raw_ethernet_frames(eth0);
                 test_tcp_server(eth0);
         }
 

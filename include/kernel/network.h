@@ -22,6 +22,9 @@ struct Socket {
 
         size_t socket_txbuf_size_max;
         unsigned int socket_txbuf_mask;
+
+        size_t socket_rxbuf_size_max;
+        unsigned int socket_rxbuf_mask;
 };
 
 struct NetworkInterfaceOperations;

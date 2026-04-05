@@ -14,6 +14,7 @@
 static constexpr int ETH_CS = 17;
 static constexpr int ETH_SPI_BLOCK = 0;
 static constexpr uint16_t S0_TX_BASE = 0x4000;
+static constexpr uint16_t S0_RX_BASE = 0x6000;
 
 static constexpr uint16_t MR = 0x0000;
 static constexpr uint16_t GAR = 0x0001;
@@ -30,18 +31,22 @@ static constexpr uint16_t VERR_REG = 0x0080;
 #define SN_IR(socket) (0x0002 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_SR(socket) (0x0003 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_PORTR(socket) (0x0004 + 0x0100 * ((uint16_t) socket + 4))
-#define SN_TX_CR(socket) (0x0001 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_RXBUF_SIZE(socket) (0x001e + 0x0100 * ((uint16_t) socket + 4))
 #define SN_TXBUF_SIZE(socket) (0x001f + 0x0100 * ((uint16_t) socket + 4))
 #define SN_TX_FSR(socket) (0x0020 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_TX_RD(socket) (0x0022 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_TX_WR(socket) (0x0024 + 0x0100 * ((uint16_t) socket + 4))
+#define SN_RX_RSR(socket) (0x0026 + 0x0100 * ((uint16_t) socket + 4))
+#define SN_RX_RD(socket) (0x0028 + 0x0100 * ((uint16_t) socket + 4))
+#define SN_RX_WR(socket) (0x002a + 0x0100 * ((uint16_t) socket + 4))
 
-#define SENDOK 0x16
-#define TIMEOUT 0x08
-#define RECV 0x04
-#define DISCON 0x02
-#define CON 0x01
+enum SocketInterrupt {
+        INT_SENDOK  = 0x16,
+        INT_TIMEOUT = 0x08,
+        INT_RECV    = 0x04,
+        INT_DISCON  = 0x02,
+        INT_CON     = 0x01,
+};
 
 enum SocketStatus {
         SOCK_CLOSED      = 0x00,
@@ -68,7 +73,10 @@ enum SocketCommand {
 
 struct WIZnetSocket {
         struct Socket socket;
+
         uint16_t txbuf_start;
+
+        uint16_t rxbuf_start;
 
         unsigned int index;
 };
@@ -273,12 +281,23 @@ static int accept_socket(struct NetworkInterface *interface, const int socket_nu
 
 static void socket_send(const struct WIZnetSocket *socket) {
         constexpr uint8_t send[] = {CMD_SEND};
-        eth_write_reg(SN_TX_CR(socket->index), send, 1);
+        eth_write_reg(SN_CR(socket->index), send, 1);
 
         // Wait until SEND Command is cleared
         uint8_t cr[1];
         do {
-                eth_read_reg(SN_TX_CR(socket->index), cr, 1);
+                eth_read_reg(SN_CR(socket->index), cr, 1);
+        } while (cr[0] != 0x00);
+}
+
+static void socket_recv(const struct WIZnetSocket *socket) {
+        constexpr uint8_t send[] = {CMD_RECV};
+        eth_write_reg(SN_CR(socket->index), send, 1);
+
+        // Wait until RECV Command is cleared
+        uint8_t cr[1];
+        do {
+                eth_read_reg(SN_CR(socket->index), cr, 1);
         } while (cr[0] != 0x00);
 }
 
@@ -287,11 +306,11 @@ static int wait_send_complete(const struct WIZnetSocket *socket) {
         do {
                 eth_read_reg(SN_IR(socket->index), ir, 1);
 
-                ir[0] &= SENDOK | TIMEOUT;
+                ir[0] &= INT_SENDOK | INT_TIMEOUT;
         } while (!ir[0]);
 
-        if (ir[0] & SENDOK) {
-                constexpr uint8_t clear[] = {SENDOK};
+        if (ir[0] & INT_SENDOK) {
+                constexpr uint8_t clear[] = {INT_SENDOK};
                 eth_write_reg(SN_IR(socket->index), clear, 1);
         }
         else {
@@ -308,6 +327,15 @@ static void set_socket_tx_wr(struct WIZnetSocket *socket, const size_t frame_siz
 
         const uint8_t wr_ptr[] = {new_offset >> 8, new_offset & 0xff};
         eth_write_reg(SN_TX_WR(socket->index), wr_ptr, 2);
+}
+
+static void set_socket_rx_rd(struct WIZnetSocket *socket, const size_t read_size) {
+        uint8_t offsets[2];
+        eth_read_reg(SN_RX_RD(socket->index), offsets, 2);
+        uint16_t new_offset = ((offsets[0] << 8) | (offsets[1])) + read_size;
+
+        const uint8_t rd_ptr[] = {new_offset >> 8, new_offset & 0xff};
+        eth_write_reg(SN_RX_RD(socket->index), rd_ptr, 2);
 }
 
 
@@ -359,21 +387,59 @@ static int tx_raw_frame(
         return status;
 }
 
-static int rx_raw_frame(struct NetworkInterface *interface, int socket_number, char *buffer, size_t length) {
+static int read_rxbuf(struct WIZnetSocket *socket, uint8_t *buffer, const uint16_t length) {
+        uint8_t offsets[2];
+        eth_read_reg(SN_RX_RD(socket->index), offsets, 2);
+        const uint16_t current_offset = ((offsets[0] << 8) | (offsets[1])) & socket->socket.socket_rxbuf_mask;
+
+        uint8_t received[2];
+        eth_read_reg(SN_RX_RSR(socket->index), received, 2);
+        const uint16_t received_size = ((received[0] << 8) | (received[1]));
+
+        uint16_t read_length;
+        if (received_size > length) {
+                read_length = length;
+        }
+        else {
+                read_length = received_size;
+        }
+
+        if (current_offset + read_length > socket->socket.socket_rxbuf_size_max) {
+                const size_t rest_size = socket->socket.socket_rxbuf_size_max - current_offset;
+
+                eth_read_reg(socket->rxbuf_start + current_offset, buffer, rest_size);
+                eth_read_reg(socket->rxbuf_start, buffer + rest_size, read_length - rest_size);
+        }
+        else {
+                eth_read_reg(socket->rxbuf_start + current_offset, buffer, read_length);
+        }
+
+
+        return read_length;
+}
+
+static int rx_raw_frame(struct NetworkInterface *interface, const int socket_number, char *buffer, const size_t length) {
         struct WIZnetSocket *socket = (struct WIZnetSocket *) interface->sockets[socket_number];
 
         uint8_t ir[1];
         do {
                 eth_read_reg(SN_IR(socket->index), ir, 1);
 
-                ir[0] &= RECV;
+                ir[0] &= INT_RECV;
         } while (!ir[0]);
 
-        if (ir[0] & RECV) {
-                constexpr uint8_t clear[] = {RECV};
+        if (ir[0] & INT_RECV) {
+                constexpr uint8_t clear[] = {INT_RECV};
                 eth_write_reg(SN_IR(socket->index), clear, 1);
 
                 //receive process
+                const int res = read_rxbuf(socket, buffer, length);
+
+                set_socket_rx_rd(socket, res);
+
+                socket_recv(socket);
+
+                return res;
         }
 
         return -1;
@@ -415,7 +481,10 @@ struct NetworkInterface *setup_ethernet_chip(void) {
                 socket->socket.mode = CLOSED;
                 socket->socket.socket_txbuf_mask = 0x0fff;
                 socket->socket.socket_txbuf_size_max = 4096;
+                socket->socket.socket_rxbuf_mask = 0x0fff;
+                socket->socket.socket_rxbuf_size_max = 4096;
                 socket->txbuf_start = S0_TX_BASE + (i * 4096);
+                socket->rxbuf_start = S0_RX_BASE + (i * 4096);
                 socket->index = i;
                 sockets[i] = (struct Socket *) socket;
         }
