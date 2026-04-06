@@ -65,7 +65,7 @@ void read_sd_card(void) {
 
 struct NetworkInterface *setup_ethernet(void) {
         printf("\x1b[96;40m[!] Checking network adapter: \x1b[0m");
-        struct NetworkInterface *eth0 = setup_ethernet_chip();
+        struct NetworkInterface *eth0 = init_ethernet();
         if (IS_ERR(eth0)) {
                 printf("\x1b[91;40mNot found or adapter incompatible\x1b[0m\n");
                 return nullptr;
@@ -112,40 +112,63 @@ void test_raw_ethernet_frames(struct NetworkInterface *interface) {
         }
 }
 
-void test_tcp_server(struct NetworkInterface *interface) {
-        const int socket = interface->i_op->open_socket(interface, 1, TCP);
-        if (socket < 0) {
-                UNIMPLEMENTED("TCP Server Crashed");
+void test_tcp_server(void) {
+        struct NetworkInterface *interface = setup_ethernet();
+        if (!interface) {
+                return;
         }
 
-        interface->i_op->bind_socket(interface, socket, 8080);
 
-        int res = interface->i_op->listen_socket(interface, socket);
+        while (1) {
+                const int socket = interface->i_op->open_socket(interface, 1, TCP);
+                if (socket < 0) {
+                        UNIMPLEMENTED("TCP Server Crashed");
+                }
 
-        if (interface->i_op->accept_socket(interface, socket) == 0) {
-                char buf[64];
-                interface->i_op->rx_raw_frame(interface, socket, buf, 64);
+                interface->i_op->bind_socket(interface, socket, 8080);
 
-                buf[63] = 0;
+                int res = interface->i_op->listen_socket(interface, socket);
 
-                for (int i = 1; i < 100; ++i) {
-                        const char *test_data = "This will be a TCP stack No: ";
-                        char msg[64];
-                        strcpy(msg, test_data);
+                if (interface->i_op->accept_socket(interface, socket) == 0) {
+                        printf("Connection accepted :)");
+#if 0
+                        char buf[64];
+                        const int bytes_read = interface->i_op->rx_raw_frame(interface, socket, buf, 64);
 
-                        char num[10];
-                        itoa(i, num, 10);
-                        strcat(msg, num);
-                        strcat(msg, "\n");
+                        for (int i = 0; i < bytes_read; ++i) {
+                                char byte = buf[i];
 
-                        interface->i_op->tx_raw_frame(interface,
-                                       socket,
-                                       msg,
-                                       strlen(msg)
+                                if (byte >= 'a' && byte <= 'z') {
+                                        byte -= 32;
+                                }
+
+                                buf[i] = byte;
+                        }
+
+                        interface->i_op->tx_raw_frame(
+                                interface,
+                                socket,
+                                buf,
+                                bytes_read
+                        );
+
+#endif
+                        const char *static_website =
+                                "HTTP/1.1 200 OK\r\n"
+                                "Content-Type: text/html\r\n"
+                                "Content-Length: 76\r\n"
+                                "Connection: close\r\n\r\n"
+                                "<html><body><h1>Server on GeT Computer v0.1 responded :)</h1></body></html>\n";
+
+                        interface->i_op->tx_raw_frame(
+                                interface,
+                                socket,
+                                static_website,
+                                strlen(static_website)
                         );
                 }
 
-                printf("Connection accepted :)");
+                interface->i_op->conn_close(interface, socket);
         }
 }
 
@@ -195,15 +218,14 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 
         read_sd_card();
 
-        struct NetworkInterface *eth0 = setup_ethernet();
-        if (eth0) {
-                // test_raw_ethernet_frames(eth0);
-                test_tcp_server(eth0);
-        }
-
+        sys_socket(0, 0, 0);
 
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
         [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
+
+        // struct NetworkInterface *eth0 = setup_ethernet();
+        printf("\x1b[96;40m[!] Running simple www server\x1b[0m\n");
+        [[maybe_unused]] const int server_pid = spawnp(test_tcp_server, nullptr, nullptr, nullptr, nullptr);
 
         printf("\x1b[96;40m[!] Unpacking initramfs\x1b[0m\n");
         char *ptr = __cpio_init_start__;

@@ -312,6 +312,34 @@ static int accept_socket(struct NetworkInterface *interface, const int socket_nu
         return -ENOTCONN;
 }
 
+static int active_close(struct NetworkInterface *interface, const int socket_number) {
+        socket_command(socket_number, CMD_DISCON);
+
+        uint8_t ir[1];
+        do {
+                eth_read_mem(SN_IR(socket_number), ir, 1);
+
+                ir[0] &= INT_DISCON | INT_TIMEOUT;
+        } while (!ir[0]);
+
+        if (ir[0] & INT_DISCON) {
+                constexpr uint8_t clear[] = {INT_DISCON};
+                eth_write_mem(SN_IR(socket_number), clear, 1);
+        }
+        else {
+                return -ETIMEDOUT;
+        }
+
+        enum SocketStatus status;
+        do {
+                uint8_t sr[1];
+                eth_read_mem(SN_SR(socket_number), sr, 1);
+                status = sr[0];
+        } while (status != SOCK_CLOSED);
+
+        return 0;
+}
+
 
 static int wait_send_complete(const struct WIZnetSocket *socket) {
         uint8_t ir[1];
@@ -449,7 +477,7 @@ static int rx_raw_frame(
         return -1;
 }
 
-struct NetworkInterface *setup_ethernet_chip(void) {
+struct NetworkInterface *init_ethernet(void) {
         setup_eth_spi();
 
         //reset
@@ -472,6 +500,7 @@ struct NetworkInterface *setup_ethernet_chip(void) {
         i_op->accept_socket = accept_socket;
         i_op->tx_raw_frame = tx_raw_frame;
         i_op->rx_raw_frame = rx_raw_frame;
+        i_op->conn_close = active_close;
         interface->i_op = i_op;
 
         interface->sockets = setup_sockets();

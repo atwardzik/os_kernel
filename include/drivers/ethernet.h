@@ -7,6 +7,6 @@
 
 #include "kernel/network.h"
 
-struct NetworkInterface *setup_ethernet_chip(void);
+struct NetworkInterface *init_ethernet(void);
 
 #endif //OS_ETHERNET_H
