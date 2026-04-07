@@ -313,18 +313,110 @@ xor_pin:
 
         bx   lr
 
+/**
+ * Set IRQ enabled
+ *  r0 - pin for irq
+ * */
+.thumb_func
+.global set_irq_pin_enabled_edge_low
+.align 4
+set_irq_pin_enabled_edge_low:
+        push    {r4, r5}
+        mov     r4, r0
+
+        @ determine bit for edge low -> (pin % 8) * 4 + 2
+        movs    r2, #0x07
+        ands    r1, r0, r2                      @ equivalent to (pin % 8)
+
+        movs    r2, #0x04
+        muls    r1, r1, r2
+        adds    r1, r1, #0x02
+
+        movs    r2, #1
+        lsls    r2, r2, r1
+
+        mov     r5, r2
+
+        @ 3.1) acknowledge_irq - "clear stale events which might cause immediate spurious handler entry"
+        ldr     r1, IO_BANK0_BASE
+
+        lsrs    r0, r0, #3                      @ pin / 8 = INTR_n
+        movs    r2, #0x04
+        muls    r0, r0, r2
+        ldr     r3, INTR_OFFSET
+        add     r0, r0, r3
+        add     r0, r0, r1
+
+        str     r5, [r0]                        @ clear by setting INTR
+
+        @ 3.2) set irq enabled
+        ldr     r0, IO_BANK0_BASE
+
+        lsrs    r1, r4, #3                      @ pin / 8 = INTE_n
+        movs    r2, #0x04
+        muls    r1, r1, r2
+
+        ldr     r2, PROC0_INTE0_OFFSET
+        add     r1, r1, r2
+        add     r0, r0, r1
+
+        str     r5, [r0]                        @ set irq enabled - INTE
+
+
+        pop     {r4, r5}
+        bx      lr
+
+/**
+ * Clears interrupt on specified pin
+ *  r0 - pin to clear interrupt from
+ */
+.thumb_func
+.global clr_interrupt
+.align 4
+clr_interrupt:
+        mov     r3, r0
+        @ 1) determine INTR_n
+        ldr     r1, IO_BANK0_BASE
+        lsrs    r0, r0, #3                              @ pin / 8 = INTR_n
+        movs    r2, #0x04
+        muls    r0, r0, r2
+        ldr     r2, INTR_OFFSET
+        add     r0, r0, r2
+        add     r0, r0, r1
+
+        @ determine bit for edge low -> (pin % 8) * 4 + 2
+        movs    r2, #0x07
+        ands    r1, r3, r2                              @ equivalent to (pin % 8)
+
+        movs    r2, #0x04
+        muls    r1, r1, r2
+        adds    r1, r1, #0x02
+
+        movs    r2, #1
+        lsls    r2, r2, r1
+
+        @ 2) reset interrupt
+
+        str     r2, [r0]                                @ clear by setting INTR
+
+        bx      lr
+
 
 #ifdef ARCH_RP2040
 .align 4
-IO_BANK0_BASE:      .word 0x40014000
-PADS_BANK0_BASE:    .word 0x4001c000
-SIO_BASE:           .word 0xd0000000
+IO_BANK0_BASE:          .word 0x40014000
+PADS_BANK0_BASE:        .word 0x4001c000
+SIO_BASE:               .word 0xd0000000
+INTR_OFFSET:            .word 0x0f0
+PROC0_INTE0_OFFSET:     .word 0x100
 
 #elifdef ARCH_RP2350
 .align 4
-IO_BANK0_BASE:      .word 0x40028000
-PADS_BANK0_BASE:    .word 0x40038000
-SIO_BASE:           .word 0xd0000000
+IO_BANK0_BASE:          .word 0x40028000
+PADS_BANK0_BASE:        .word 0x40038000
+SIO_BASE:               .word 0xd0000000
+INTR_OFFSET:            .word 0x230
+PROC0_INTE0_OFFSET:     .word 0x248
 
 .section .data
 .align 4

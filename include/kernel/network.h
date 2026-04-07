@@ -51,8 +51,6 @@ struct SocketOperations {
 
         int (*accept)(struct Socket *socket, struct sockaddr *addr, size_t addrlen);
 
-        int (*close)(struct Socket *socket);
-
         int (*connect)(struct Socket *socket, const char *ipaddr, uint16_t port);
 };
 

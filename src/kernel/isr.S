@@ -165,12 +165,12 @@ isr_systick:
 set_isr:
         ldr     r2, PPB_BASE
         ldr     r3, VTOR_OFFSET
-        ldr     r2, [r2, r3]               @ read the address of IVT from VTOR hardware register
+        ldr     r2, [r2, r3]                    @ read the address of IVT from VTOR hardware register
 
         movs    r3, #4
         muls    r3, r0, r3
         adds    r3, r3, USER_DEFINED_IVT_OFFSET
-        str     r1, [r2, r3]               @ write interrupt handler
+        str     r1, [r2, r3]                    @ write interrupt handler
 
         @@@@ enable appropriate interrupt at the CPU by turning off and on again @@@@
 

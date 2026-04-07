@@ -112,7 +112,7 @@ void test_tcp_server(void) {
 
                 struct sockaddr destination = {};
                 if (accept(sockfd, &destination, 0) == 0) {
-                        printf("Connection accepted :)");
+                        printf("Connection accepted :)\n");
 
                         const char *static_website =
                                 "HTTP/1.1 200 OK\r\n"
@@ -173,7 +173,6 @@ void PATER_ADAMVS(int argc, char *argv[]) {
         printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
 
         read_sd_card();
-        init_network();
 
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
         [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
@@ -311,6 +310,8 @@ int main(void) {
         init_tty();
         setup_tty_chrfile(tty->inode);
         init_keyboard(27, 26);
+
+        init_network();
 
 
         //TODO: REPLACE WITH PRINTK

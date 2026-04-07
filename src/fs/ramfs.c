@@ -180,6 +180,7 @@ ssize_t ramfs_read(struct File *file, void *buf, size_t count, off_t file_offset
 
 struct File *ramfs_get_file_handler(struct Dentry *file, unsigned int flags) {
         struct FileOperations *std_fop = kmalloc(sizeof(*std_fop));
+        memset(std_fop, 0, sizeof(*std_fop));
         std_fop->read = &ramfs_read;
         std_fop->write = &ramfs_write;
 

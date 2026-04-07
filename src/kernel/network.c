@@ -112,6 +112,7 @@ static void setup_network_information(
         interface->setup_network_information(interface);
 }
 
+extern int printk(const char *ptr);
 
 int init_network(void) {
         struct NetworkInterface **interfaces = kmalloc(MAX_INTERFACES_COUNT * sizeof(*interfaces));
@@ -119,18 +120,18 @@ int init_network(void) {
                 return -ENOMEM;
         }
 
-        printf("\x1b[96;40m[!] Checking network adapter: \x1b[0m");
+        printk("\x1b[96;40m[!] Checking network adapter: \x1b[0m");
         struct NetworkInterface *eth0 = init_ethernet();
         if (IS_ERR(eth0)) {
                 printf("\x1b[91;40mNot found or adapter incompatible\x1b[0m\n");
                 return -ENETDOWN;
         }
         else {
-                printf("\x1b[92;40m Ok\x1b[0m\n");
+                printk("\x1b[92;40m Ok\x1b[0m\n");
                 interfaces[0] = eth0;
         }
 
-        printf("\x1b[96;40m[!] Setting up network adapter: \x1b[0m");
+        printk("\x1b[96;40m[!] Setting up network adapter: \x1b[0m");
 
         // TODO: dhcp protocol
         const char *ip_addr = "192.168.2.1";
@@ -142,8 +143,8 @@ int init_network(void) {
                                   "255.255.255.0"
         );
 
-        printf("\x1b[92;40m Ok\x1b[0m\n");
-        printf("\x1b[96;40m[!] Network adapter set up to:\x1b[0m %s %s\n", ip_addr, mac_addr);
+        printk("\x1b[92;40m Ok\x1b[0m\n");
+        printk("\x1b[96;40m[!] Network adapter set up to:\x1b[0m 192.168.2.1 de:ad:01:10:be:ef\n");
 
         network_manager.interfaces = interfaces;
 

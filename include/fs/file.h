@@ -146,6 +146,8 @@ struct FileOperations {
 
         int (*open)(struct VFS_Inode *, struct File *);
 
+        int (*close)(struct File *file);
+
         int (*flush)(struct File *);
 };
 

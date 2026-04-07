@@ -12,9 +12,11 @@
 #include "time.h"
 #include "fs/file.h"
 #include "kernel/error.h"
+#include "kernel/isr.h"
 #include "kernel/memory.h"
 
-static constexpr int ETH_CS = 17;
+static constexpr int ETH_CS_PIN = 17;
+static constexpr int ETH_INT_PIN = 21;
 static constexpr int ETH_SPI_BLOCK = 0;
 static constexpr uint16_t WIZNET_SOCKET_COUNT = 4;
 static constexpr uint16_t S0_TX_BASE = 0x4000;
@@ -97,13 +99,17 @@ struct WIZnetSocket {
 static struct {
         struct NetworkInterface interface;
 
+        struct Process *socket_waiting_processes[4];
+
         struct WIZnetSocket *sockets[WIZNET_SOCKET_COUNT];
 } wiznet_network_interface;
+
+void eth_irq(void);
 
 /**
  * Sets up SPI interface for communication with WIZnet W5100S
  */
-static void setup_eth_spi(void) {
+static void setup_eth_gpio(void) {
         //spi0 rx
         GPIO_function_select(16, 1);
         output_enable_pin(16);
@@ -117,9 +123,13 @@ static void setup_eth_spi(void) {
         output_enable_pin(19);
 
         //manual CS
-        init_pin_output(ETH_CS);
+        init_pin_output(ETH_CS_PIN);
 
         spi_init(0, 2, 15, 0);
+
+        init_pin_input_with_pull(ETH_INT_PIN, true);
+        set_irq_pin_enabled_edge_low(ETH_INT_PIN);
+        set_isr(IO_IRQ_BANK0, eth_irq); //FIXME: implement global pin interrupt handler and determine pin inside
 }
 
 
@@ -137,7 +147,7 @@ static void eth_write_mem(uint16_t reg_offset, const uint8_t *data, const size_t
         mutex_lock(&eth_spi_mutex);
 
         for (size_t i = 0; i < len; i++) {
-                clr_pin(ETH_CS);
+                clr_pin(ETH_CS_PIN);
 
                 spi_tx(ETH_SPI_BLOCK, 0xf0);
                 spi_tx(ETH_SPI_BLOCK, reg_offset >> 8);
@@ -146,7 +156,7 @@ static void eth_write_mem(uint16_t reg_offset, const uint8_t *data, const size_t
                 spi_tx(ETH_SPI_BLOCK, data[i]);
 
                 reg_offset += 1;
-                set_pin(ETH_CS);
+                set_pin(ETH_CS_PIN);
         }
 
         mutex_unlock(&eth_spi_mutex);
@@ -162,7 +172,7 @@ static void eth_read_mem(uint16_t reg_offset, uint8_t *buf, const size_t len) {
         mutex_lock(&eth_spi_mutex);
 
         for (size_t i = 0; i < len; i++) {
-                clr_pin(ETH_CS);
+                clr_pin(ETH_CS_PIN);
                 spi_tx(ETH_SPI_BLOCK, 0x0f);
 
                 spi_tx(ETH_SPI_BLOCK, reg_offset >> 8);
@@ -171,10 +181,38 @@ static void eth_read_mem(uint16_t reg_offset, uint8_t *buf, const size_t len) {
                 buf[i] = spi_rx(ETH_SPI_BLOCK);
 
                 reg_offset += 1;
-                set_pin(ETH_CS);
+                set_pin(ETH_CS_PIN);
         }
 
         mutex_unlock(&eth_spi_mutex);
+}
+
+void eth_irq() {
+        clr_interrupt(ETH_INT_PIN);
+
+        uint8_t con[4];
+        eth_read_mem(SN_IR(0), con, 1);
+        eth_read_mem(SN_IR(1), con + 1, 1);
+        eth_read_mem(SN_IR(2), con + 2, 1);
+        eth_read_mem(SN_IR(3), con + 3, 1);
+
+        int ready_socket = -1;
+        for (size_t i = 0; i < 4; ++i) {
+                if (con[i] & INT_CON) {
+                        ready_socket = i;
+                        break;
+                }
+        }
+
+        for (size_t i = 0; i < 4; ++i) {
+                con[0] = 0x1f; //clear all interrupts, FIXME: should it be like that?
+                eth_write_mem(SN_IR(i), con, 1);
+        }
+
+
+        if (ready_socket >= 0) {
+                wiznet_network_interface.socket_waiting_processes[ready_socket]->pstate = READY;
+        }
 }
 
 
@@ -253,26 +291,25 @@ static int listen_socket(struct Socket *sock) {
 static int accept_socket(struct Socket *sock, struct sockaddr *addr, size_t addrlen) {
         const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
 
-        enum SocketStatus status = SOCK_LISTEN;
-        do {
-                uint8_t sr[1];
-                eth_read_mem(SN_SR(socket->index), sr, 1);
-                status = sr[0];
-        } while (status != SOCK_ESTABLISHED && status != SOCK_CLOSED);
-
-        if (status == SOCK_ESTABLISHED) {
-                eth_read_mem(SN_DIPR(socket->index), addr->sa_data + 2, 4);
-                eth_read_mem(SN_DPORTR(socket->index), addr->sa_data, 2);
-
-                return 0;
+        uint8_t con[1];
+        eth_read_mem(SN_IR(socket->index), con, 1);
+        if ((con[0] & INT_CON) == 0) {
+                struct Process *current_process = scheduler_get_current_process();
+                current_process->pstate = WAITING_FOR_RESOURCE;
+                wiznet_network_interface.socket_waiting_processes[socket->index] = current_process;
+                save_kernelmode_and_context_switch();
         }
 
-        return -ENOTCONN;
+
+        eth_read_mem(SN_DIPR(socket->index), addr->sa_data + 2, 4);
+        eth_read_mem(SN_DPORTR(socket->index), addr->sa_data, 2);
+
+        return 0;
 }
 
-static int active_close(struct Socket *sock) {
+static int active_close(struct File *socket_file) {
         mutex_lock(&eth_transaction_mutex);
-        const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
+        struct WIZnetSocket *socket = (struct WIZnetSocket *) socket_file;
 
         socket_command(socket->index, CMD_DISCON);
 
@@ -288,6 +325,7 @@ static int active_close(struct Socket *sock) {
                 eth_write_mem(SN_IR(socket->index), clear, 1);
         }
         else {
+                socket->taken = false;
                 mutex_unlock(&eth_transaction_mutex);
                 return -ETIMEDOUT;
         }
@@ -299,6 +337,7 @@ static int active_close(struct Socket *sock) {
                 status = sr[0];
         } while (status != SOCK_CLOSED);
 
+        socket->taken = false;
         mutex_unlock(&eth_transaction_mutex);
         return 0;
 }
@@ -482,8 +521,8 @@ static void setup_communication_details(void) {
         constexpr uint8_t cmd_set_mr[8] = {0x00};
         eth_write_mem(MR, cmd_set_mr, sizeof(cmd_set_mr));
 
-        //IMR = 0 - mask all interrupts, polling mode
-        constexpr uint8_t cmd_set_imr[8] = {0x00};
+        //IMR = 0 - enable sockets interrupts
+        constexpr uint8_t cmd_set_imr[8] = {0x0f};
         eth_write_mem(IMR, cmd_set_imr, sizeof(cmd_set_imr));
 
         //RTR = 0 - 200ms retransmission timeout
@@ -520,7 +559,6 @@ static int setup_interface_information(struct NetworkInterface *interface) {
 static int init_sockets(void) {
         const struct SocketOperations wiznet_socket_operations = {
                 .open = open_socket,
-                .close = active_close,
                 .bind = bind_socket,
                 .listen = listen_socket,
                 .accept = accept_socket,
@@ -553,6 +591,7 @@ static int init_sockets(void) {
                 memset(f_op, 0, sizeof(*f_op));
                 f_op->read = rx_frame;
                 f_op->write = tx_frame;
+                f_op->close = active_close;
 
                 socket->socket.file.f_op = f_op;
 
@@ -563,7 +602,7 @@ static int init_sockets(void) {
 }
 
 struct NetworkInterface *init_ethernet(void) {
-        setup_eth_spi();
+        setup_eth_gpio();
 
         //reset
         constexpr uint8_t cmd_rst[] = {0x80};
@@ -582,6 +621,10 @@ struct NetworkInterface *init_ethernet(void) {
         wiznet_network_interface.interface.create_socket = create_socket;
         wiznet_network_interface.interface.create_raw_socket = create_raw_socket;
         wiznet_network_interface.interface.destroy_socket = destroy_socket;
+        memset(wiznet_network_interface.socket_waiting_processes,
+               0,
+               sizeof(wiznet_network_interface.socket_waiting_processes)
+        );
 
         return (struct NetworkInterface *) &wiznet_network_interface;
 }
