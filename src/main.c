@@ -77,21 +77,23 @@ struct NetworkInterface *setup_ethernet(void) {
         setup_network_information(eth0,
                                   "192.168.2.1",
                                   "de:ad:01:10:be:ef",
-                                  "192.168.2.0",
+                                  "192.168.2.1",
                                   "255.255.255.0"
         );
 
         printf("\x1b[92;40m Ok\x1b[0m\n");
-        printf("\x1b[96;40m[!] Network adapter set up to:\x1b[0m %s %s\n", "192.168.1.100", "de:ad:01:10:be:ef");
+        printf("\x1b[96;40m[!] Network adapter set up to:\x1b[0m %s %s\n", "192.168.2.1", "de:ad:01:10:be:ef");
 
         return eth0;
 }
 
 void test_raw_ethernet_frames(struct NetworkInterface *interface) {
-        const int socket = interface->i_op->open_socket(interface, 0, MACRAW);
-        if (socket < 0) {
+        // const int socket = interface->i_op->open_socket(interface, 0, MACRAW);
+        struct Socket *socket = interface->create_socket();
+        if (IS_ERR(socket)) {
                 return;
         }
+        int socket_num = socket->s_op->open(socket, MACRAW);
 
         for (int i = 0; i < 100; ++i) {
                 const char *test_data = "This will be a TCP stack with Modbus on top: ";
@@ -101,8 +103,7 @@ void test_raw_ethernet_frames(struct NetworkInterface *interface) {
                 char num[10];
                 itoa(i, num, 10);
                 strcat(msg, num);
-                send_raw_frame(interface,
-                               0,
+                send_raw_frame(socket,
                                "de:da:be:ba:fe:fa",
                                "de:ad:01:10:be:ef",
                                0x88b5,
@@ -113,12 +114,13 @@ void test_raw_ethernet_frames(struct NetworkInterface *interface) {
 }
 
 void test_tcp_server(void) {
+#if 0
         struct NetworkInterface *interface = setup_ethernet();
         if (!interface) {
                 return;
         }
 
-
+#if 0
         while (1) {
                 const int socket = interface->i_op->open_socket(interface, 1, TCP);
                 if (socket < 0) {
@@ -131,7 +133,6 @@ void test_tcp_server(void) {
 
                 if (interface->i_op->accept_socket(interface, socket) == 0) {
                         printf("Connection accepted :)");
-#if 0
                         char buf[64];
                         const int bytes_read = interface->i_op->rx_raw_frame(interface, socket, buf, 64);
 
@@ -151,25 +152,25 @@ void test_tcp_server(void) {
                                 buf,
                                 bytes_read
                         );
-
 #endif
-                        const char *static_website =
-                                "HTTP/1.1 200 OK\r\n"
-                                "Content-Type: text/html\r\n"
-                                "Content-Length: 76\r\n"
-                                "Connection: close\r\n\r\n"
-                                "<html><body><h1>Server on GeT Computer v0.1 responded :)</h1></body></html>\n";
+        const char *static_website =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/html\r\n"
+                "Content-Length: 76\r\n"
+                "Connection: close\r\n\r\n"
+                "<html><body><h1>Server on GeT Computer v0.1 responded :)</h1></body></html>\n";
 
-                        interface->i_op->tx_raw_frame(
-                                interface,
-                                socket,
-                                static_website,
-                                strlen(static_website)
-                        );
+        interface->i_op->tx_raw_frame(
+                interface,
+                socket,
+                static_website,
+                strlen(static_website)
+        );
                 }
 
-                interface->i_op->conn_close(interface, socket);
+        interface->i_op->conn_close(interface, socket);
         }
+#endif
 }
 
 struct cpio_newc_header {
@@ -218,12 +219,12 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 
         read_sd_card();
 
-        sys_socket(0, 0, 0);
-
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
         [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
 
-        // struct NetworkInterface *eth0 = setup_ethernet();
+        struct NetworkInterface *eth0 = setup_ethernet();
+        test_raw_ethernet_frames(eth0);
+        // test_tcp_server();
         printf("\x1b[96;40m[!] Running simple www server\x1b[0m\n");
         [[maybe_unused]] const int server_pid = spawnp(test_tcp_server, nullptr, nullptr, nullptr, nullptr);
 

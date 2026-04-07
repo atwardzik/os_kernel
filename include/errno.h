@@ -62,6 +62,7 @@
 #define ENETRESET 126		/* Connection aborted by network */
 #define EISCONN 127		/* Socket is already connected */
 #define ENOTCONN 128		/* Socket is not connected */
+#define ENOSOCKFREE 129         /* No sockets are free */
 
 #define MAX_ERRNO 128
 

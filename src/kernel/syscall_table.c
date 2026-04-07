@@ -6,6 +6,7 @@
 #include "signal.h"
 #include "syscall_codes.h"
 #include "fs/file.h"
+#include "kernel/network.h"
 
 typedef uint32_t (*syscall_fn)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 
@@ -28,4 +29,10 @@ syscall_fn syscall_table[] = {
         [KILL_SVC] = (syscall_fn) sys_kill,
         [SIGNAL_SVC] = (syscall_fn) sys_signal,
         [SIGRETURN_SVC] = (syscall_fn) sys_sigreturn,
+
+        [SOCKET_SVC] = (syscall_fn) sys_socket,
+        [BIND_SVC] = (syscall_fn) sys_bind,
+        [LISTEN_SVC] = (syscall_fn) sys_bind,
+        [ACCEPT_SVC] = (syscall_fn) sys_accept,
+        [CONNECT_SVC] = (syscall_fn) sys_connect,
 };

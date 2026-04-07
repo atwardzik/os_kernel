@@ -2,17 +2,20 @@
 // Created by Artur Twardzik on 30/03/2026.
 //
 
+// This is a "local" driver, meaning the interface is connected exactly to SPI0 pins 16-19
 #include "ethernet.h"
 
 #include "errno.h"
 #include "gpio.h"
 #include "spi.h"
 #include "time.h"
+#include "fs/file.h"
 #include "kernel/error.h"
 #include "kernel/memory.h"
 
 static constexpr int ETH_CS = 17;
 static constexpr int ETH_SPI_BLOCK = 0;
+static constexpr uint16_t WIZNET_SOCKET_COUNT = 4;
 static constexpr uint16_t S0_TX_BASE = 0x4000;
 static constexpr uint16_t S0_RX_BASE = 0x6000;
 
@@ -79,7 +82,15 @@ struct WIZnetSocket {
         uint16_t rxbuf_start;
 
         unsigned int index;
+
+        bool taken;
 };
+
+static struct {
+        struct NetworkInterface interface;
+
+        struct WIZnetSocket *sockets[WIZNET_SOCKET_COUNT];
+} wiznet_network_interface;
 
 /**
  * Sets up SPI interface for communication with WIZnet W5100S
@@ -102,7 +113,6 @@ static void setup_eth_spi(void) {
 
         spi_init(0, 2, 15, 0);
 }
-
 
 /**
  * Writes to wiznet register / memory
@@ -147,84 +157,6 @@ static void eth_read_mem(uint16_t reg_offset, uint8_t *buf, const size_t len) {
 }
 
 
-static bool is_chip_compatible(void) {
-        uint8_t reg[1];
-        eth_read_mem(VERR_REG, reg, 1);
-
-        if (reg[0] == 0x51) {
-                return true;
-        }
-
-        return false;
-}
-
-/**
- * Sets up interrupt mode, retransmission timeout and retries count
- */
-static void setup_communication_details(void) {
-        constexpr uint8_t cmd_set_mr[8] = {0x00};
-        eth_write_mem(MR, cmd_set_mr, sizeof(cmd_set_mr));
-
-        //IMR = 0 - mask all interrupts, polling mode
-        constexpr uint8_t cmd_set_imr[8] = {0x00};
-        eth_write_mem(IMR, cmd_set_imr, sizeof(cmd_set_imr));
-
-        //RTR = 0 - 200ms retransmission timeout
-        constexpr uint8_t cmd_set_rtr[8] = {0x07, 0xd0};
-        eth_write_mem(RTR, cmd_set_rtr, sizeof(cmd_set_rtr));
-
-        //RCR = 0 - 8 retries before giving up
-        constexpr uint8_t cmd_set_rcr[8] = {0x08};
-        eth_write_mem(RCR, cmd_set_rcr, sizeof(cmd_set_rcr));
-}
-
-/**
- * Copies network interface information from kernel struct to W5100S register
- * @param interface kernel struct with interface info
- * @return 0 on success
- */
-static int setup_interface_information(struct NetworkInterface *interface) {
-        eth_write_mem(SHAR, interface->mac, sizeof(interface->mac));
-
-        eth_write_mem(GAR, interface->gateway, sizeof(interface->gateway));
-
-        eth_write_mem(SUBR, interface->subnet_mask, sizeof(interface->subnet_mask));
-
-        eth_write_mem(SIPR, interface->ip, sizeof(interface->ip));
-
-        // check if the values are set up properly?
-        return 0;
-}
-
-/**
- * Sets up hardware sockets on W5100S registers.
- * @return Array of socket pointers containing buffers' base offsets
- */
-static struct Socket **setup_sockets(void) {
-        struct Socket **sockets = (struct Socket **) kmalloc(4 * sizeof(struct Socket *));
-
-        for (int i = 0; i < 4; i++) {
-                constexpr unsigned int memory_per_socket = 0x02; //2KB for each socket for TX and RX
-                constexpr uint8_t cmd[] = {memory_per_socket};
-                eth_write_mem(SN_TXBUF_SIZE(i), cmd, sizeof(cmd));
-                eth_write_mem(SN_RXBUF_SIZE(i), cmd, sizeof(cmd));
-
-                struct WIZnetSocket *socket = (struct WIZnetSocket *) kmalloc(sizeof(struct WIZnetSocket));
-                socket->socket.mode = CLOSED;
-                socket->socket.socket_txbuf_mask = memory_per_socket * 1024 - 1;
-                socket->socket.socket_txbuf_size_max = memory_per_socket * 1024;
-                socket->socket.socket_rxbuf_mask = memory_per_socket * 1024 - 1;
-                socket->socket.socket_rxbuf_size_max = memory_per_socket * 1024;
-                socket->txbuf_start = S0_TX_BASE + (i * memory_per_socket * 1024);
-                socket->rxbuf_start = S0_RX_BASE + (i * memory_per_socket * 1024);
-                socket->index = i;
-                sockets[i] = (struct Socket *) socket;
-        }
-
-        return sockets;
-}
-
-
 static void socket_command(const int socket_number, const enum SocketCommand command) {
         const uint8_t send[] = {command};
         eth_write_mem(SN_CR(socket_number), send, 1);
@@ -238,46 +170,45 @@ static void socket_command(const int socket_number, const enum SocketCommand com
 
 /**
  * Tries to open socket in specified mode
- * @param interface kernel struct with interface info
- * @param socket_number selected socket number
+ * @param sock socket to be opened
  * @param mode specified socket mode
  * @return socket number on success; -ESOCKTNOSUPPORT on failure to open socket in specified mode
  */
-static int open_socket(struct NetworkInterface *interface, const int socket_number, const enum SocketMode mode) {
-        if (mode == MACRAW && socket_number != 0) {
+static int open_socket(struct Socket *sock, const enum SocketMode mode) {
+        const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
+
+        if (mode == MACRAW && socket->index != 0) {
                 return -ESOCKTNOSUPPORT;
         }
 
 open:
         const uint8_t socket_mode[] = {mode};
-        eth_write_mem(SN_MR(socket_number), socket_mode, 1);
+        eth_write_mem(SN_MR(socket->index), socket_mode, 1);
 
-        socket_command(socket_number, CMD_OPEN);
+        socket_command(socket->index, CMD_OPEN);
 
         uint8_t sr[1];
-        eth_read_mem(SN_SR(socket_number), sr, 1);
+        eth_read_mem(SN_SR(socket->index), sr, 1);
         const enum SocketStatus status = sr[0];
         if (!((status == SOCK_INIT && mode == TCP) || (status == SOCK_MACRAW && mode == MACRAW))) {
                 goto open;
         }
 
-        interface->sockets[socket_number]->mode = mode;
-
-        return socket_number;
+        return socket->index;
 }
 
-static int bind_socket(struct NetworkInterface *interface, const int socket_number, const uint16_t port) {
-        struct WIZnetSocket *socket = (struct WIZnetSocket *) interface->sockets[socket_number];
+static int bind_socket(struct Socket *sock, const uint16_t port) {
+        struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
 
-        uint8_t portr[] = {port >> 8, port & 0xff};
+        const uint8_t portr[] = {port >> 8, port & 0xff};
         eth_write_mem(SN_PORTR(socket->index), portr, 2);
 
         socket->socket.port = port;
         return 0;
 }
 
-static int listen_socket(struct NetworkInterface *interface, const int socket_number) {
-        struct WIZnetSocket *socket = (struct WIZnetSocket *) interface->sockets[socket_number];
+static int listen_socket(struct Socket *sock) {
+        const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
 
         constexpr uint8_t listen[] = {CMD_LISTEN};
         eth_write_mem(SN_CR(socket->index), listen, 1);
@@ -297,11 +228,13 @@ static int listen_socket(struct NetworkInterface *interface, const int socket_nu
         return 0;
 }
 
-static int accept_socket(struct NetworkInterface *interface, const int socket_number) {
+static int accept_socket(struct Socket *sock) {
+        const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
+
         enum SocketStatus status = SOCK_LISTEN;
         do {
                 uint8_t sr[1];
-                eth_read_mem(SN_SR(socket_number), sr, 1);
+                eth_read_mem(SN_SR(socket->index), sr, 1);
                 status = sr[0];
         } while (status != SOCK_ESTABLISHED && status != SOCK_CLOSED);
 
@@ -312,19 +245,21 @@ static int accept_socket(struct NetworkInterface *interface, const int socket_nu
         return -ENOTCONN;
 }
 
-static int active_close(struct NetworkInterface *interface, const int socket_number) {
-        socket_command(socket_number, CMD_DISCON);
+static int active_close(struct Socket *sock) {
+        const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
+
+        socket_command(socket->index, CMD_DISCON);
 
         uint8_t ir[1];
         do {
-                eth_read_mem(SN_IR(socket_number), ir, 1);
+                eth_read_mem(SN_IR(socket->index), ir, 1);
 
                 ir[0] &= INT_DISCON | INT_TIMEOUT;
         } while (!ir[0]);
 
         if (ir[0] & INT_DISCON) {
                 constexpr uint8_t clear[] = {INT_DISCON};
-                eth_write_mem(SN_IR(socket_number), clear, 1);
+                eth_write_mem(SN_IR(socket->index), clear, 1);
         }
         else {
                 return -ETIMEDOUT;
@@ -333,7 +268,7 @@ static int active_close(struct NetworkInterface *interface, const int socket_num
         enum SocketStatus status;
         do {
                 uint8_t sr[1];
-                eth_read_mem(SN_SR(socket_number), sr, 1);
+                eth_read_mem(SN_SR(socket->index), sr, 1);
                 status = sr[0];
         } while (status != SOCK_CLOSED);
 
@@ -428,13 +363,8 @@ static int read_rxbuf(struct WIZnetSocket *socket, uint8_t *buffer, const uint16
 }
 
 
-static int tx_raw_frame(
-        struct NetworkInterface *interface, const int socket_number, const char *frame, const size_t frame_size
-) {
-        struct WIZnetSocket *socket = (struct WIZnetSocket *) interface->sockets[socket_number];
-        //TODO: socket validation
-
-
+static int tx_frame(struct Socket *sock, const char *frame, const size_t frame_size) {
+        struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
         if (!fits_socket_txbuf(socket, frame_size)) {
                 return -EMSGSIZE;
         }
@@ -448,10 +378,8 @@ static int tx_raw_frame(
         return status;
 }
 
-static int rx_raw_frame(
-        struct NetworkInterface *interface, const int socket_number, char *buffer, const size_t length
-) {
-        struct WIZnetSocket *socket = (struct WIZnetSocket *) interface->sockets[socket_number];
+static int rx_frame(struct Socket *sock, char *buffer, const size_t length) {
+        const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
 
         uint8_t ir[1];
         do {
@@ -477,6 +405,124 @@ static int rx_raw_frame(
         return -1;
 }
 
+
+static struct Socket *create_socket(void) {
+        for (size_t i = 0; i < WIZNET_SOCKET_COUNT; ++i) {
+                if (wiznet_network_interface.sockets[i]->taken == false) {
+                        return (struct Socket *) wiznet_network_interface.sockets[i];
+                }
+        }
+
+        return ERR_PTR(ENOSOCKFREE);
+}
+
+static struct Socket *create_raw_socket(void) {
+        if (wiznet_network_interface.sockets[0]->taken) {
+                return ERR_PTR(ENOSOCKFREE);
+        }
+
+        return (struct Socket *) wiznet_network_interface.sockets[0];
+}
+
+static void setup_socket_file_operations(struct VFS_Inode *mount_point) {
+        struct FileOperations *stdio_op = kmalloc(sizeof(*stdio_op));
+        stdio_op->read = nullptr;
+        stdio_op->write = nullptr;
+        mount_point->i_fop = stdio_op;
+}
+
+
+static bool is_chip_compatible(void) {
+        uint8_t reg[1];
+        eth_read_mem(VERR_REG, reg, 1);
+
+        if (reg[0] == 0x51) {
+                return true;
+        }
+
+        return false;
+}
+
+/**
+ * Sets up interrupt mode, retransmission timeout and retries count
+ */
+static void setup_communication_details(void) {
+        constexpr uint8_t cmd_set_mr[8] = {0x00};
+        eth_write_mem(MR, cmd_set_mr, sizeof(cmd_set_mr));
+
+        //IMR = 0 - mask all interrupts, polling mode
+        constexpr uint8_t cmd_set_imr[8] = {0x00};
+        eth_write_mem(IMR, cmd_set_imr, sizeof(cmd_set_imr));
+
+        //RTR = 0 - 200ms retransmission timeout
+        constexpr uint8_t cmd_set_rtr[8] = {0x07, 0xd0};
+        eth_write_mem(RTR, cmd_set_rtr, sizeof(cmd_set_rtr));
+
+        //RCR = 0 - 8 retries before giving up
+        constexpr uint8_t cmd_set_rcr[8] = {0x08};
+        eth_write_mem(RCR, cmd_set_rcr, sizeof(cmd_set_rcr));
+}
+
+/**
+ * Copies network interface information from kernel struct to W5100S register
+ * @param interface kernel struct with interface info
+ * @return 0 on success
+ */
+static int setup_interface_information(struct NetworkInterface *interface) {
+        eth_write_mem(SHAR, interface->mac, sizeof(interface->mac));
+
+        eth_write_mem(GAR, interface->gateway, sizeof(interface->gateway));
+
+        eth_write_mem(SUBR, interface->subnet_mask, sizeof(interface->subnet_mask));
+
+        eth_write_mem(SIPR, interface->ip, sizeof(interface->ip));
+
+        // check if the values are set up properly?
+        return 0;
+}
+
+/**
+ * Sets up hardware sockets on W5100S registers.
+ * @return 0 on success
+ */
+static int init_sockets(void) {
+        const struct SocketOperations wiznet_socket_operations = {
+                .open = open_socket,
+                .close = active_close,
+                .send = tx_frame,
+                .recv = rx_frame,
+                .bind = bind_socket,
+                .listen = listen_socket,
+                .accept = accept_socket,
+                .connect = nullptr
+        };
+
+        for (int i = 0; i < 4; i++) {
+                constexpr unsigned int memory_per_socket = 0x02; //2KB for each socket for TX and RX
+                constexpr uint8_t cmd[] = {memory_per_socket};
+                eth_write_mem(SN_TXBUF_SIZE(i), cmd, sizeof(cmd));
+                eth_write_mem(SN_RXBUF_SIZE(i), cmd, sizeof(cmd));
+
+                struct WIZnetSocket *socket = (struct WIZnetSocket *) kmalloc(sizeof(*socket));
+                socket->socket.mode = CLOSED;
+                socket->socket.socket_txbuf_mask = memory_per_socket * 1024 - 1;
+                socket->socket.socket_txbuf_size_max = memory_per_socket * 1024;
+                socket->socket.socket_rxbuf_mask = memory_per_socket * 1024 - 1;
+                socket->socket.socket_rxbuf_size_max = memory_per_socket * 1024;
+                socket->txbuf_start = S0_TX_BASE + (i * memory_per_socket * 1024);
+                socket->rxbuf_start = S0_RX_BASE + (i * memory_per_socket * 1024);
+                socket->index = i;
+                socket->taken = false;
+
+                struct SocketOperations *s_op = (struct SocketOperations *) kmalloc(sizeof(*s_op));
+                *s_op = wiznet_socket_operations;
+                socket->socket.s_op = s_op;
+                wiznet_network_interface.sockets[i] = socket;
+        }
+
+        return 0;
+}
+
 struct NetworkInterface *init_ethernet(void) {
         setup_eth_spi();
 
@@ -491,19 +537,11 @@ struct NetworkInterface *init_ethernet(void) {
 
         setup_communication_details();
 
-        struct NetworkInterface *interface = (struct NetworkInterface *) kmalloc(sizeof(*interface));
-        struct NetworkInterfaceOperations *i_op = (struct NetworkInterfaceOperations *) kmalloc(sizeof(*i_op));
-        i_op->setup_interface_information = setup_interface_information;
-        i_op->open_socket = open_socket;
-        i_op->bind_socket = bind_socket;
-        i_op->listen_socket = listen_socket;
-        i_op->accept_socket = accept_socket;
-        i_op->tx_raw_frame = tx_raw_frame;
-        i_op->rx_raw_frame = rx_raw_frame;
-        i_op->conn_close = active_close;
-        interface->i_op = i_op;
+        init_sockets();
 
-        interface->sockets = setup_sockets();
+        wiznet_network_interface.interface.setup_network_information = setup_interface_information;
+        wiznet_network_interface.interface.create_socket = create_socket;
+        wiznet_network_interface.interface.create_raw_socket = create_raw_socket;
 
-        return interface;
+        return (struct NetworkInterface *) &wiznet_network_interface;
 }

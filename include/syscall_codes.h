@@ -23,10 +23,16 @@
 #define GET_TIME_SVC    20
 #define GET_PID_SVC     21
 #define GET_PPID_SVC    22
-#define YIELD_SVC       33
-#define KILL_SVC        34
-#define SIGNAL_SVC      35
-#define SIGRETURN_SVC   36
+#define YIELD_SVC       23
+#define KILL_SVC        24
+#define SIGNAL_SVC      25
+#define SIGRETURN_SVC   26
+
+#define SOCKET_SVC      30
+#define BIND_SVC        31
+#define LISTEN_SVC      32
+#define ACCEPT_SVC      33
+#define CONNECT_SVC     34
 
 #define OS_INIT_SVC     255
 

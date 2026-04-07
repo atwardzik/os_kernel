@@ -3,11 +3,24 @@
 //
 
 #include "network.h"
-#include "libc.h"
 #include "errno.h"
+#include "libc.h"
 #include "memory.h"
+#include "proc.h"
 
 static constexpr size_t ETHERNET_HEADER_LENGTH = 14;
+
+struct Sockfs_Inode {
+        struct VFS_Inode vfs_inode;
+
+        struct Socket *socket;
+};
+
+static struct {
+        struct NetworkInterface **interfaces;
+
+        struct Sockfs_Inode *sockfs_root;
+} network_manager __attribute__((section(".data")));
 
 int str2mac(const char *src_mac, char *buf) {
         if (!src_mac || !buf) {
@@ -67,7 +80,6 @@ int str2ip(const char *src_ip, char *buf) {
         return 0;
 }
 
-
 void setup_network_information(
         struct NetworkInterface *interface, const char *ip_address, const char *mac_address, const char *gateway,
         const char *subnet_mask
@@ -92,11 +104,11 @@ void setup_network_information(
                 memcpy(interface->ip, ip, sizeof(ip));
         }
 
-        interface->i_op->setup_interface_information(interface);
+        interface->setup_network_information(interface);
 }
 
 int send_raw_frame(
-        struct NetworkInterface *interface, int socket_number, const char *src_mac, const char *dst_mac,
+        struct Socket *socket, const char *src_mac, const char *dst_mac,
         const uint16_t ether_type, const char *data, const size_t data_length
 ) {
         char src[6];
@@ -113,7 +125,72 @@ int send_raw_frame(
         frame[13] = ether_type & 0xff;
         memcpy(frame + 14, data, data_length);
 
-        const int ret = interface->i_op->tx_raw_frame(interface, socket_number, frame, frame_size);
+        socket->s_op->send(socket, frame, frame_size);
         kfree(frame);
-        return ret;
+        return -1;
 }
+
+
+int init_network(void) {
+        const auto interfaces = (struct NetworkInterface **) kmalloc(2 * sizeof(struct NetworkInterface *));
+        if (!interfaces) {
+                return -ENOMEM;
+        }
+
+        network_manager.interfaces = interfaces;
+
+        // const struct Dentry *sockfs = sockfs_mount(nullptr, nullptr, nullptr, 0);
+
+        // network_manager.sockfs_root = sockfs->inode;
+
+        return 0;
+}
+
+static int recv(struct File *file, void *buf, size_t count, off_t) {
+        struct NetworkInterface *interface = network_manager.interfaces[0];
+        //TODO: dynamic interfaces depending on needs
+
+
+        // return interface->i_op->rx_raw_frame(interface, 0, buf, count);
+        return 0;
+}
+
+static int send(struct File *, void *buf, size_t count, off_t) {
+        struct NetworkInterface *interface = network_manager.interfaces[0];
+        //TODO: dynamic interfaces depending on needs
+
+        return -1;
+}
+
+int sys_socket(int domain, int type, int protocol) {
+        struct Dentry tty_dentry = {
+                .name = "new_socket", //TODO: DYNAMIC NAMING
+        };
+
+        // network_manager.sockfs_root->i_op->create(network_manager.sockfs_root, &tty_dentry, S_IFCHR | 0666);
+        // struct Dentry *tty = network_manager.sockfs_root->i_op->lookup(network_manager.sockfs_root, &tty_dentry, 0);
+
+        // tty->inode->i_fop;
+
+        // get parent process and assign new file descriptor
+        // socket must be a file?
+
+        return 0;
+}
+
+int sys_bind(int sockfd, const struct sockaddr *addr, size_t addrlen) {
+        return 0;
+}
+
+int sys_listen(int sockfd, int backlog) {
+        return 0;
+}
+
+int sys_accept(int sockfd, struct sockaddr *addr, size_t addrlen) {
+        return 0;
+}
+
+int sys_connect(int sockfd, const struct sockaddr *addr, size_t adrlen) {
+        return 0;
+}
+
