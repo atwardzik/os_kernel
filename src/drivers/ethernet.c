@@ -35,6 +35,9 @@ static constexpr uint16_t VERR_REG = 0x0080;
 #define SN_IR(socket) (0x0002 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_SR(socket) (0x0003 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_PORTR(socket) (0x0004 + 0x0100 * ((uint16_t) socket + 4))
+#define SN_DHAR(socket) (0x0006 + 0x0100 * ((uint16_t) socket + 4))
+#define SN_DIPR(socket) (0x000c + 0x0100 * ((uint16_t) socket + 4))
+#define SN_DPORTR(socket) (0x0010 + 0x0100 * ((uint16_t) socket + 4))
 #define SN_RXBUF_SIZE(socket) (0x001e + 0x0100 * ((uint16_t) socket + 4))
 #define SN_TXBUF_SIZE(socket) (0x001f + 0x0100 * ((uint16_t) socket + 4))
 #define SN_TX_FSR(socket) (0x0020 + 0x0100 * ((uint16_t) socket + 4))
@@ -247,7 +250,7 @@ static int listen_socket(struct Socket *sock) {
         return 0;
 }
 
-static int accept_socket(struct Socket *sock) {
+static int accept_socket(struct Socket *sock, struct sockaddr *addr, size_t addrlen) {
         const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
 
         enum SocketStatus status = SOCK_LISTEN;
@@ -258,6 +261,9 @@ static int accept_socket(struct Socket *sock) {
         } while (status != SOCK_ESTABLISHED && status != SOCK_CLOSED);
 
         if (status == SOCK_ESTABLISHED) {
+                eth_read_mem(SN_DIPR(socket->index), addr->sa_data + 2, 4);
+                eth_read_mem(SN_DPORTR(socket->index), addr->sa_data, 2);
+
                 return 0;
         }
 

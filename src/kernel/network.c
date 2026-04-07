@@ -201,7 +201,7 @@ int sys_socket(int domain, int type, int protocol) {
 }
 
 int sys_bind(int sockfd, const struct sockaddr *addr, size_t addrlen) {
-        struct Process *current_process = scheduler_get_current_process();
+        const struct Process *current_process = scheduler_get_current_process();
         if (sockfd >= current_process->files.count || sockfd < 0 || current_process->files.fdtable[sockfd] == nullptr) {
                 sys_write(1, "[!] There is no such socket descriptor\n", 39);
                 __asm__("bkpt   #0");
@@ -211,15 +211,36 @@ int sys_bind(int sockfd, const struct sockaddr *addr, size_t addrlen) {
         struct File *socket_file = current_process->files.fdtable[sockfd];
         struct Socket *socket = (struct Socket *) socket_file;
 
-        return 0;
+        const uint16_t port = (addr->sa_data[1] << 8) | (addr->sa_data[0]); // FIXME: endianess dependent
+        return socket->s_op->bind(socket, port);
 }
 
-int sys_listen(int sockfd, int backlog) {
-        return 0;
+int sys_listen(int sockfd, [[maybe_unused]] int backlog) {
+        const struct Process *current_process = scheduler_get_current_process();
+        if (sockfd >= current_process->files.count || sockfd < 0 || current_process->files.fdtable[sockfd] == nullptr) {
+                sys_write(1, "[!] There is no such socket descriptor\n", 39);
+                __asm__("bkpt   #0");
+                return -1;
+        }
+
+        struct File *socket_file = current_process->files.fdtable[sockfd];
+        struct Socket *socket = (struct Socket *) socket_file;
+
+        return socket->s_op->listen(socket);
 }
 
 int sys_accept(int sockfd, struct sockaddr *addr, size_t addrlen) {
-        return 0;
+        const struct Process *current_process = scheduler_get_current_process();
+        if (sockfd >= current_process->files.count || sockfd < 0 || current_process->files.fdtable[sockfd] == nullptr) {
+                sys_write(1, "[!] There is no such socket descriptor\n", 39);
+                __asm__("bkpt   #0");
+                return -1;
+        }
+
+        struct File *socket_file = current_process->files.fdtable[sockfd];
+        struct Socket *socket = (struct Socket *) socket_file;
+
+        return socket->s_op->accept(socket, addr, addrlen);
 }
 
 int sys_connect(int sockfd, const struct sockaddr *addr, size_t adrlen) {

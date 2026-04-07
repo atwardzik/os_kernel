@@ -144,8 +144,16 @@ sighandler_t signal(int signum, sighandler_t handler);
 pid_t wait(int *stat_loc);
 
 /* Network Syscalls */
+struct sockaddr_in {
+        uint16_t sin_family;
+        uint16_t sin_port;
+        char sin_addr[6];
+        char zeroes[4];
+};
+
 struct sockaddr {
-        int i;
+        uint16_t sa_family;
+        char sa_data[14];
 };
 
 int socket(int domain, int type, int protocol);

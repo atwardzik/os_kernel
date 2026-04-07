@@ -3,16 +3,18 @@
 #include "tty.h"
 #include "drivers/gpio.h"
 #include "drivers/keyboard.h"
+#include "drivers/spi.h"
 #include "drivers/time.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
 #include "fs/file.h"
 #include "fs/ramfs.h"
-#include "kernel/proc.h"
-#include "kernel/resets.h"
-#include "drivers/spi.h"
 #include "kernel/error.h"
 #include "kernel/network.h"
+#include "kernel/proc.h"
+#include "kernel/resets.h"
+
+// DO NOT TRY TO CALL KERNEL FUNCTIONS FROM USER SPACE OTHER THAN SYSCALLS!!!
 
 
 void read_sd_card(void) {
@@ -96,15 +98,20 @@ void test_tcp_server(void) {
         for (int i = 0; i < 3; ++i) {
                 int sockfd = socket(AF_INET, SOCK_STREAM, 0);
                 if (sockfd < 0) {
+                        dprintf(2, "Error while trying to open socket");
                         return;
                 }
 
-                bind(sockfd, nullptr, 0); //8080
+                struct sockaddr_in source = {AF_INET, 8080};
+                bind(sockfd, (struct sockaddr *) &source, sizeof(source));
 
-                return;
-                int res = listen(sockfd, 0);
+                if (listen(sockfd, 1) < 0) {
+                        dprintf(2, "Error while trying to listen on port: %i", source.sin_port);
+                        return;
+                }
 
-                if (accept(sockfd, nullptr, 0) == 0) {
+                struct sockaddr destination = {};
+                if (accept(sockfd, &destination, 0) == 0) {
                         printf("Connection accepted :)");
 
                         const char *static_website =

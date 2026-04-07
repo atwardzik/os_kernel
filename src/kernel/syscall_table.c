@@ -32,7 +32,7 @@ syscall_fn syscall_table[] = {
 
         [SOCKET_SVC] = (syscall_fn) sys_socket,
         [BIND_SVC] = (syscall_fn) sys_bind,
-        [LISTEN_SVC] = (syscall_fn) sys_bind,
+        [LISTEN_SVC] = (syscall_fn) sys_listen,
         [ACCEPT_SVC] = (syscall_fn) sys_accept,
         [CONNECT_SVC] = (syscall_fn) sys_connect,
 };

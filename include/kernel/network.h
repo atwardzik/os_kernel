@@ -49,7 +49,7 @@ struct SocketOperations {
 
         int (*listen)(struct Socket *socket);
 
-        int (*accept)(struct Socket *socket);
+        int (*accept)(struct Socket *socket, struct sockaddr *addr, size_t addrlen);
 
         int (*close)(struct Socket *socket);
 
@@ -79,9 +79,6 @@ int str2ip(const char *src_ip, char *buf);
 
 int init_network(void);
 
-struct sockaddr {
-        int i;
-};
 
 int sys_socket(int domain, int type, int protocol);
 
