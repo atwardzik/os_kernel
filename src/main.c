@@ -71,57 +71,42 @@ void test_raw_ethernet_frames(void) {
         }
 
         for (int i = 0; i < 100; ++i) {
-                const char *test_data = "This will be a TCP stack with Modbus on top: ";
-                char msg[64];
-                strcpy(msg, test_data);
-
+                char test_data[64] = "This will be a TCP stack with Modbus on top: ";
                 char num[10];
                 itoa(i, num, 10);
-                strcat(msg, num);
+                strcat(test_data, num);
 
-                send_raw_frame(sockfd,
-                               "de:da:be:ba:fe:fa",
-                               "de:ad:01:10:be:ef",
-                               0x88b5,
-                               msg,
-                               strlen(msg)
-                );
+                char src[6];
+                char dst[6];
+                str2mac("de:da:be:ba:fe:fa", dst);
+                str2mac("de:ad:01:10:be:ef", src);
+
+                char frame[128];
+
+                memcpy(frame, src, 6);
+                memcpy(frame + 6, dst, 6);
+                frame[12] = 0x88b5 >> 8;
+                frame[13] = 0x88b5 & 0xff;
+                memcpy(frame + 14, test_data, strlen(test_data));
+                write(sockfd, frame, strlen(test_data) + 14);
         }
 }
 
 void test_tcp_server(void) {
-#if 0
         for (int i = 0; i < 3; ++i) {
                 int sockfd = socket(AF_INET, SOCK_STREAM, 0);
                 if (sockfd < 0) {
                         return;
                 }
 
-                interface->i_op->bind_socket(interface, socket, 8080);
+                bind(sockfd, nullptr, 0); //8080
 
-                int res = interface->i_op->listen_socket(interface, socket);
+                return;
+                int res = listen(sockfd, 0);
 
-                if (interface->i_op->accept_socket(interface, socket) == 0) {
+                if (accept(sockfd, nullptr, 0) == 0) {
                         printf("Connection accepted :)");
-                        char buf[64];
-                        const int bytes_read = interface->i_op->rx_raw_frame(interface, socket, buf, 64);
 
-                        for (int i = 0; i < bytes_read; ++i) {
-                                char byte = buf[i];
-
-                                if (byte >= 'a' && byte <= 'z') {
-                                        byte -= 32;
-                                }
-
-                                buf[i] = byte;
-                        }
-
-                        interface->i_op->tx_raw_frame(
-                                interface,
-                                socket,
-                                buf,
-                                bytes_read
-                        );
                         const char *static_website =
                                 "HTTP/1.1 200 OK\r\n"
                                 "Content-Type: text/html\r\n"
@@ -129,17 +114,11 @@ void test_tcp_server(void) {
                                 "Connection: close\r\n\r\n"
                                 "<html><body><h1>Server on GeT Computer v0.1 responded :)</h1></body></html>\n";
 
-                        interface->i_op->tx_raw_frame(
-                                interface,
-                                socket,
-                                static_website,
-                                strlen(static_website)
-                        );
+                        write(sockfd, static_website, strlen(static_website));
                 }
 
-                interface->i_op->conn_close(interface, socket);
+                close(sockfd);
         }
-#endif
 }
 
 struct cpio_newc_header {
@@ -187,11 +166,11 @@ void PATER_ADAMVS(int argc, char *argv[]) {
         printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
 
         read_sd_card();
+        init_network();
 
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
         [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
 
-        init_network();
         printf("\x1b[96;40m[!] Testing sending raw frames\x1b[0m\n");
         [[maybe_unused]] const int raw_frames_pid = spawnp(
                 test_raw_ethernet_frames, nullptr, nullptr, nullptr, nullptr

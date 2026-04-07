@@ -72,16 +72,6 @@ struct NetworkInterface {
         int (*destroy_socket)(struct Socket *socket);
 };
 
-[[deprecated("Only for MACRAW testing purposes. Use syscall write instead.")]]
-int send_raw_frame(
-        int sockfd,
-        const char *src_mac,
-        const char *dst_mac,
-        uint16_t ether_type,
-        const char *data,
-        size_t data_length
-);
-
 int str2mac(const char *src_mac, char *buf);
 
 int str2ip(const char *src_ip, char *buf);

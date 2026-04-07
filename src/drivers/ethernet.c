@@ -7,6 +7,7 @@
 
 #include "errno.h"
 #include "gpio.h"
+#include "mutex.h"
 #include "spi.h"
 #include "time.h"
 #include "fs/file.h"
@@ -118,6 +119,11 @@ static void setup_eth_spi(void) {
         spi_init(0, 2, 15, 0);
 }
 
+
+static mutex_t eth_spi_mutex;
+static mutex_t eth_transaction_mutex;
+static mutex_t eth_command_send_mutex;
+
 /**
  * Writes to wiznet register / memory
  * @param reg_offset specified hw register / memory offset
@@ -125,6 +131,8 @@ static void setup_eth_spi(void) {
  * @param len length of the bytes buffer
  */
 static void eth_write_mem(uint16_t reg_offset, const uint8_t *data, const size_t len) {
+        mutex_lock(&eth_spi_mutex);
+
         for (size_t i = 0; i < len; i++) {
                 clr_pin(ETH_CS);
 
@@ -137,6 +145,8 @@ static void eth_write_mem(uint16_t reg_offset, const uint8_t *data, const size_t
                 reg_offset += 1;
                 set_pin(ETH_CS);
         }
+
+        mutex_unlock(&eth_spi_mutex);
 }
 
 /**
@@ -146,6 +156,8 @@ static void eth_write_mem(uint16_t reg_offset, const uint8_t *data, const size_t
  * @param len length of data to be read
  */
 static void eth_read_mem(uint16_t reg_offset, uint8_t *buf, const size_t len) {
+        mutex_lock(&eth_spi_mutex);
+
         for (size_t i = 0; i < len; i++) {
                 clr_pin(ETH_CS);
                 spi_tx(ETH_SPI_BLOCK, 0x0f);
@@ -158,10 +170,13 @@ static void eth_read_mem(uint16_t reg_offset, uint8_t *buf, const size_t len) {
                 reg_offset += 1;
                 set_pin(ETH_CS);
         }
+
+        mutex_unlock(&eth_spi_mutex);
 }
 
 
 static void socket_command(const int socket_number, const enum SocketCommand command) {
+        mutex_lock(&eth_command_send_mutex);
         const uint8_t send[] = {command};
         eth_write_mem(SN_CR(socket_number), send, 1);
 
@@ -170,6 +185,8 @@ static void socket_command(const int socket_number, const enum SocketCommand com
         do {
                 eth_read_mem(SN_CR(socket_number), cr, 1);
         } while (cr[0] != 0x00);
+
+        mutex_unlock(&eth_command_send_mutex);
 }
 
 /**
@@ -179,9 +196,11 @@ static void socket_command(const int socket_number, const enum SocketCommand com
  * @return socket number on success; -ESOCKTNOSUPPORT on failure to open socket in specified mode
  */
 static int open_socket(struct Socket *sock, const enum SocketMode mode) {
-        const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
+        mutex_lock(&eth_transaction_mutex);
+        struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
 
         if (mode == MACRAW && socket->index != 0) {
+                mutex_unlock(&eth_transaction_mutex);
                 return -ESOCKTNOSUPPORT;
         }
 
@@ -198,6 +217,8 @@ open:
                 goto open;
         }
 
+        socket->socket.mode = mode;
+        mutex_unlock(&eth_transaction_mutex);
         return 0;
 }
 
@@ -214,13 +235,7 @@ static int bind_socket(struct Socket *sock, const uint16_t port) {
 static int listen_socket(struct Socket *sock) {
         const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
 
-        constexpr uint8_t listen[] = {CMD_LISTEN};
-        eth_write_mem(SN_CR(socket->index), listen, 1);
-
-        uint8_t cr[1];
-        do {
-                eth_read_mem(SN_CR(socket->index), cr, 1);
-        } while (cr[0] != 0x00); // wait until LISTEN Command is cleared
+        socket_command(socket->index, CMD_LISTEN);
 
         uint8_t sr[1];
         eth_read_mem(SN_SR(socket->index), sr, 1);
@@ -250,6 +265,7 @@ static int accept_socket(struct Socket *sock) {
 }
 
 static int active_close(struct Socket *sock) {
+        mutex_lock(&eth_transaction_mutex);
         const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
 
         socket_command(socket->index, CMD_DISCON);
@@ -266,6 +282,7 @@ static int active_close(struct Socket *sock) {
                 eth_write_mem(SN_IR(socket->index), clear, 1);
         }
         else {
+                mutex_unlock(&eth_transaction_mutex);
                 return -ETIMEDOUT;
         }
 
@@ -276,11 +293,13 @@ static int active_close(struct Socket *sock) {
                 status = sr[0];
         } while (status != SOCK_CLOSED);
 
+        mutex_unlock(&eth_transaction_mutex);
         return 0;
 }
 
 
 static int wait_send_complete(const struct WIZnetSocket *socket) {
+        mutex_lock(&eth_transaction_mutex);
         uint8_t ir[1];
         do {
                 eth_read_mem(SN_IR(socket->index), ir, 1);
@@ -293,9 +312,11 @@ static int wait_send_complete(const struct WIZnetSocket *socket) {
                 eth_write_mem(SN_IR(socket->index), clear, 1);
         }
         else {
+                mutex_unlock(&eth_transaction_mutex);
                 return -ETIMEDOUT;
         }
 
+        mutex_unlock(&eth_transaction_mutex);
         return 0;
 }
 
@@ -413,6 +434,7 @@ static int rx_frame(struct File *socket_file, void *buf, size_t count, off_t) {
 static struct Socket *create_socket(void) {
         for (size_t i = 1; i < WIZNET_SOCKET_COUNT; ++i) {
                 if (wiznet_network_interface.sockets[i]->taken == false) {
+                        wiznet_network_interface.sockets[i]->taken = true;
                         return (struct Socket *) wiznet_network_interface.sockets[i];
                 }
         }

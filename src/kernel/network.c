@@ -5,7 +5,6 @@
 #include "network.h"
 #include "errno.h"
 #include "error.h"
-#include "libc.h"
 #include "memory.h"
 #include "proc.h"
 #include "socket.h"
@@ -113,30 +112,6 @@ static void setup_network_information(
         interface->setup_network_information(interface);
 }
 
-int send_raw_frame(
-        int sockfd,
-        const char *src_mac, const char *dst_mac,
-        const uint16_t ether_type, const char *data, const size_t data_length
-) {
-        char src[6];
-        char dst[6];
-        str2mac(src_mac, src);
-        str2mac(dst_mac, dst);
-
-        const size_t frame_size = ETHERNET_HEADER_LENGTH + data_length;
-        char *frame = (char *) kmalloc(frame_size);
-
-        memcpy(frame, src, 6);
-        memcpy(frame + 6, dst, 6);
-        frame[12] = ether_type >> 8;
-        frame[13] = ether_type & 0xff;
-        memcpy(frame + 14, data, data_length);
-
-        sys_write(sockfd, frame, frame_size);
-        kfree(frame);
-        return -1;
-}
-
 
 int init_network(void) {
         struct NetworkInterface **interfaces = kmalloc(MAX_INTERFACES_COUNT * sizeof(*interfaces));
@@ -226,6 +201,16 @@ int sys_socket(int domain, int type, int protocol) {
 }
 
 int sys_bind(int sockfd, const struct sockaddr *addr, size_t addrlen) {
+        struct Process *current_process = scheduler_get_current_process();
+        if (sockfd >= current_process->files.count || sockfd < 0 || current_process->files.fdtable[sockfd] == nullptr) {
+                sys_write(1, "[!] There is no such socket descriptor\n", 39);
+                __asm__("bkpt   #0");
+                return -1;
+        }
+
+        struct File *socket_file = current_process->files.fdtable[sockfd];
+        struct Socket *socket = (struct Socket *) socket_file;
+
         return 0;
 }
 
