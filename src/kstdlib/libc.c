@@ -150,6 +150,47 @@ char *getcwd(char *buf, unsigned int len) {
         return ret;
 }
 
+
+int socket(int domain, int type, int protocol) {
+        int ret;
+        SYSCALL(SOCKET_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
+}
+
+int bind(int sockfd, const struct sockaddr *addr, size_t addrlen) {
+        int ret;
+        SYSCALL(BIND_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
+}
+
+int listen(int sockfd, int backlog) {
+        int ret;
+        SYSCALL(LISTEN_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
+}
+
+int accept(int sockfd, struct sockaddr *addr, size_t addrlen) {
+        int ret;
+        SYSCALL(ACCEPT_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
+}
+
+int connect(int sockfd, const struct sockaddr *addr, size_t adrlen) {
+        int ret;
+        SYSCALL(CONNECT_SVC)
+        __asm__("mov    %0, r0\n\r" : "=r"(ret));
+
+        return ret;
+}
+
 /*
  * string
  */

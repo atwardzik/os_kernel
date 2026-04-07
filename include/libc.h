@@ -96,6 +96,9 @@ typedef typeof(void (int)) *sighandler_t;
 
 void exit(int code);
 
+
+/* File syscalls */
+
 int write(int file, const void *buf, int len);
 
 int read(int file, void *buf, int len);
@@ -114,6 +117,8 @@ int lseek(int file, int offset, int whence);
 
 char *getcwd(char *buf, unsigned int len);
 
+
+/* Process Syscalls */
 pid_t spawnp(
         void (*process_entry_ptr)(void),
         const spawn_file_actions_t *file_actions,
@@ -137,6 +142,21 @@ void sigreturn(void);
 sighandler_t signal(int signum, sighandler_t handler);
 
 pid_t wait(int *stat_loc);
+
+/* Network Syscalls */
+struct sockaddr {
+        int i;
+};
+
+int socket(int domain, int type, int protocol);
+
+int bind(int sockfd, const struct sockaddr *addr, size_t addrlen);
+
+int listen(int sockfd, int backlog);
+
+int accept(int sockfd, struct sockaddr *addr, size_t addrlen);
+
+int connect(int sockfd, const struct sockaddr *addr, size_t adrlen);
 
 /*
  * string

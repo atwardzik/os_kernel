@@ -78,8 +78,12 @@ struct WIZnetSocket {
         struct Socket socket;
 
         uint16_t txbuf_start;
+        size_t txbuf_size_max;
+        unsigned int txbuf_mask;
 
         uint16_t rxbuf_start;
+        size_t rxbuf_size_max;
+        unsigned int rxbuf_mask;
 
         unsigned int index;
 
@@ -194,7 +198,7 @@ open:
                 goto open;
         }
 
-        return socket->index;
+        return 0;
 }
 
 static int bind_socket(struct Socket *sock, const uint16_t port) {
@@ -318,10 +322,10 @@ static bool fits_socket_txbuf(const struct WIZnetSocket *socket, const size_t fr
 static void write_txbuf(struct WIZnetSocket *socket, const uint8_t *frame, const uint16_t frame_size) {
         uint8_t offsets[2];
         eth_read_mem(SN_TX_WR(socket->index), offsets, 2);
-        const uint16_t current_offset = ((offsets[0] << 8) | (offsets[1])) & socket->socket.socket_txbuf_mask;
+        const uint16_t current_offset = ((offsets[0] << 8) | (offsets[1])) & socket->txbuf_mask;
 
-        if (current_offset + frame_size > socket->socket.socket_txbuf_size_max) {
-                const size_t rest_size = socket->socket.socket_txbuf_size_max - current_offset;
+        if (current_offset + frame_size > socket->txbuf_size_max) {
+                const size_t rest_size = socket->txbuf_size_max - current_offset;
                 eth_write_mem(socket->txbuf_start + current_offset, frame, rest_size);
 
                 eth_write_mem(socket->txbuf_start, frame + rest_size, frame_size - rest_size);
@@ -334,7 +338,7 @@ static void write_txbuf(struct WIZnetSocket *socket, const uint8_t *frame, const
 static int read_rxbuf(struct WIZnetSocket *socket, uint8_t *buffer, const uint16_t length) {
         uint8_t offsets[2];
         eth_read_mem(SN_RX_RD(socket->index), offsets, 2);
-        const uint16_t current_offset = ((offsets[0] << 8) | (offsets[1])) & socket->socket.socket_rxbuf_mask;
+        const uint16_t current_offset = ((offsets[0] << 8) | (offsets[1])) & socket->rxbuf_mask;
 
         uint8_t received[2];
         eth_read_mem(SN_RX_RSR(socket->index), received, 2);
@@ -348,8 +352,8 @@ static int read_rxbuf(struct WIZnetSocket *socket, uint8_t *buffer, const uint16
                 read_length = received_size;
         }
 
-        if (current_offset + read_length > socket->socket.socket_rxbuf_size_max) {
-                const size_t rest_size = socket->socket.socket_rxbuf_size_max - current_offset;
+        if (current_offset + read_length > socket->rxbuf_size_max) {
+                const size_t rest_size = socket->rxbuf_size_max - current_offset;
 
                 eth_read_mem(socket->rxbuf_start + current_offset, buffer, rest_size);
                 eth_read_mem(socket->rxbuf_start, buffer + rest_size, read_length - rest_size);
@@ -363,8 +367,8 @@ static int read_rxbuf(struct WIZnetSocket *socket, uint8_t *buffer, const uint16
 }
 
 
-static int tx_frame(struct Socket *sock, const char *frame, const size_t frame_size) {
-        struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
+static int tx_frame(struct File *socket_file, void *frame, const size_t frame_size, off_t) {
+        struct WIZnetSocket *socket = (struct WIZnetSocket *) socket_file;
         if (!fits_socket_txbuf(socket, frame_size)) {
                 return -EMSGSIZE;
         }
@@ -378,8 +382,8 @@ static int tx_frame(struct Socket *sock, const char *frame, const size_t frame_s
         return status;
 }
 
-static int rx_frame(struct Socket *sock, char *buffer, const size_t length) {
-        const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
+static int rx_frame(struct File *socket_file, void *buf, size_t count, off_t) {
+        const struct WIZnetSocket *socket = (struct WIZnetSocket *) socket_file;
 
         uint8_t ir[1];
         do {
@@ -393,7 +397,7 @@ static int rx_frame(struct Socket *sock, char *buffer, const size_t length) {
                 eth_write_mem(SN_IR(socket->index), clear, 1);
 
                 //receive process
-                const int res = read_rxbuf(socket, buffer, length);
+                const int res = read_rxbuf(socket, buf, count);
 
                 add_to_socket_pointer_reg(socket, SN_RX_RD(socket->index), res);
 
@@ -407,7 +411,7 @@ static int rx_frame(struct Socket *sock, char *buffer, const size_t length) {
 
 
 static struct Socket *create_socket(void) {
-        for (size_t i = 0; i < WIZNET_SOCKET_COUNT; ++i) {
+        for (size_t i = 1; i < WIZNET_SOCKET_COUNT; ++i) {
                 if (wiznet_network_interface.sockets[i]->taken == false) {
                         return (struct Socket *) wiznet_network_interface.sockets[i];
                 }
@@ -424,13 +428,13 @@ static struct Socket *create_raw_socket(void) {
         return (struct Socket *) wiznet_network_interface.sockets[0];
 }
 
-static void setup_socket_file_operations(struct VFS_Inode *mount_point) {
-        struct FileOperations *stdio_op = kmalloc(sizeof(*stdio_op));
-        stdio_op->read = nullptr;
-        stdio_op->write = nullptr;
-        mount_point->i_fop = stdio_op;
-}
+static int destroy_socket(struct Socket *sock) {
+        const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
 
+        wiznet_network_interface.sockets[socket->index]->taken = false;
+
+        return 0;
+}
 
 static bool is_chip_compatible(void) {
         uint8_t reg[1];
@@ -489,8 +493,6 @@ static int init_sockets(void) {
         const struct SocketOperations wiznet_socket_operations = {
                 .open = open_socket,
                 .close = active_close,
-                .send = tx_frame,
-                .recv = rx_frame,
                 .bind = bind_socket,
                 .listen = listen_socket,
                 .accept = accept_socket,
@@ -505,10 +507,10 @@ static int init_sockets(void) {
 
                 struct WIZnetSocket *socket = (struct WIZnetSocket *) kmalloc(sizeof(*socket));
                 socket->socket.mode = CLOSED;
-                socket->socket.socket_txbuf_mask = memory_per_socket * 1024 - 1;
-                socket->socket.socket_txbuf_size_max = memory_per_socket * 1024;
-                socket->socket.socket_rxbuf_mask = memory_per_socket * 1024 - 1;
-                socket->socket.socket_rxbuf_size_max = memory_per_socket * 1024;
+                socket->txbuf_mask = memory_per_socket * 1024 - 1;
+                socket->txbuf_size_max = memory_per_socket * 1024;
+                socket->rxbuf_mask = memory_per_socket * 1024 - 1;
+                socket->rxbuf_size_max = memory_per_socket * 1024;
                 socket->txbuf_start = S0_TX_BASE + (i * memory_per_socket * 1024);
                 socket->rxbuf_start = S0_RX_BASE + (i * memory_per_socket * 1024);
                 socket->index = i;
@@ -517,6 +519,15 @@ static int init_sockets(void) {
                 struct SocketOperations *s_op = (struct SocketOperations *) kmalloc(sizeof(*s_op));
                 *s_op = wiznet_socket_operations;
                 socket->socket.s_op = s_op;
+
+                memset(&socket->socket.file, 0, sizeof(struct File));
+                struct FileOperations *f_op = (struct FileOperations *) kmalloc(sizeof(*f_op));
+                memset(f_op, 0, sizeof(*f_op));
+                f_op->read = rx_frame;
+                f_op->write = tx_frame;
+
+                socket->socket.file.f_op = f_op;
+
                 wiznet_network_interface.sockets[i] = socket;
         }
 
@@ -542,6 +553,7 @@ struct NetworkInterface *init_ethernet(void) {
         wiznet_network_interface.interface.setup_network_information = setup_interface_information;
         wiznet_network_interface.interface.create_socket = create_socket;
         wiznet_network_interface.interface.create_raw_socket = create_raw_socket;
+        wiznet_network_interface.interface.destroy_socket = destroy_socket;
 
         return (struct NetworkInterface *) &wiznet_network_interface;
 }

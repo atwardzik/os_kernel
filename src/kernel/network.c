@@ -4,22 +4,27 @@
 
 #include "network.h"
 #include "errno.h"
+#include "error.h"
 #include "libc.h"
 #include "memory.h"
 #include "proc.h"
+#include "socket.h"
+#include "drivers/ethernet.h"
+
+static constexpr size_t MAX_INTERFACES_COUNT = 1;
 
 static constexpr size_t ETHERNET_HEADER_LENGTH = 14;
 
-struct Sockfs_Inode {
-        struct VFS_Inode vfs_inode;
-
-        struct Socket *socket;
-};
+// struct Sockfs_Inode {
+//         struct VFS_Inode vfs_inode;
+//
+//         struct Socket *socket;
+// };
 
 static struct {
         struct NetworkInterface **interfaces;
 
-        struct Sockfs_Inode *sockfs_root;
+        // struct Sockfs_Inode *sockfs_root;
 } network_manager __attribute__((section(".data")));
 
 int str2mac(const char *src_mac, char *buf) {
@@ -80,7 +85,8 @@ int str2ip(const char *src_ip, char *buf) {
         return 0;
 }
 
-void setup_network_information(
+//TODO: make it ioctl
+static void setup_network_information(
         struct NetworkInterface *interface, const char *ip_address, const char *mac_address, const char *gateway,
         const char *subnet_mask
 ) {
@@ -108,7 +114,8 @@ void setup_network_information(
 }
 
 int send_raw_frame(
-        struct Socket *socket, const char *src_mac, const char *dst_mac,
+        int sockfd,
+        const char *src_mac, const char *dst_mac,
         const uint16_t ether_type, const char *data, const size_t data_length
 ) {
         char src[6];
@@ -125,57 +132,97 @@ int send_raw_frame(
         frame[13] = ether_type & 0xff;
         memcpy(frame + 14, data, data_length);
 
-        socket->s_op->send(socket, frame, frame_size);
+        sys_write(sockfd, frame, frame_size);
         kfree(frame);
         return -1;
 }
 
 
 int init_network(void) {
-        const auto interfaces = (struct NetworkInterface **) kmalloc(2 * sizeof(struct NetworkInterface *));
+        struct NetworkInterface **interfaces = kmalloc(MAX_INTERFACES_COUNT * sizeof(*interfaces));
         if (!interfaces) {
                 return -ENOMEM;
         }
 
+        printf("\x1b[96;40m[!] Checking network adapter: \x1b[0m");
+        struct NetworkInterface *eth0 = init_ethernet();
+        if (IS_ERR(eth0)) {
+                printf("\x1b[91;40mNot found or adapter incompatible\x1b[0m\n");
+                return -ENETDOWN;
+        }
+        else {
+                printf("\x1b[92;40m Ok\x1b[0m\n");
+                interfaces[0] = eth0;
+        }
+
+        printf("\x1b[96;40m[!] Setting up network adapter: \x1b[0m");
+
+        // TODO: dhcp protocol
+        const char *ip_addr = "192.168.2.1";
+        const char *mac_addr = "de:ad:01:10:be:ef";
+        setup_network_information(eth0,
+                                  ip_addr,
+                                  mac_addr,
+                                  "192.168.2.1",
+                                  "255.255.255.0"
+        );
+
+        printf("\x1b[92;40m Ok\x1b[0m\n");
+        printf("\x1b[96;40m[!] Network adapter set up to:\x1b[0m %s %s\n", ip_addr, mac_addr);
+
         network_manager.interfaces = interfaces;
 
-        // const struct Dentry *sockfs = sockfs_mount(nullptr, nullptr, nullptr, 0);
-
-        // network_manager.sockfs_root = sockfs->inode;
-
         return 0;
-}
-
-static int recv(struct File *file, void *buf, size_t count, off_t) {
-        struct NetworkInterface *interface = network_manager.interfaces[0];
-        //TODO: dynamic interfaces depending on needs
-
-
-        // return interface->i_op->rx_raw_frame(interface, 0, buf, count);
-        return 0;
-}
-
-static int send(struct File *, void *buf, size_t count, off_t) {
-        struct NetworkInterface *interface = network_manager.interfaces[0];
-        //TODO: dynamic interfaces depending on needs
-
-        return -1;
 }
 
 int sys_socket(int domain, int type, int protocol) {
-        struct Dentry tty_dentry = {
-                .name = "new_socket", //TODO: DYNAMIC NAMING
-        };
+        if (domain != AF_INET) {
+                UNIMPLEMENTED("Protocol family unknown. Currently only ipv4 (AF_INET) is supported.");
+        }
 
-        // network_manager.sockfs_root->i_op->create(network_manager.sockfs_root, &tty_dentry, S_IFCHR | 0666);
-        // struct Dentry *tty = network_manager.sockfs_root->i_op->lookup(network_manager.sockfs_root, &tty_dentry, 0);
+        struct Process *current_process = scheduler_get_current_process();
+        if (current_process->files.count >= MAX_OPEN_FILE_DESCRIPTORS) {
+                sys_write(2, "[!] Too much files opened.\n", 28);
+                __asm__("bkpt   #0");
+                return -1;
+        }
 
-        // tty->inode->i_fop;
+        // TODO: make it dependent on network interfaces connected
+        struct Socket *socket = nullptr;
+        int res;
+        switch (type) {
+                case SOCK_STREAM:
+                        socket = network_manager.interfaces[0]->create_socket();
+                        if (IS_ERR(socket)) {
+                                return -ENOSOCKFREE;
+                        }
+                        res = socket->s_op->open(socket, TCP);
+                        break;
+                case SOCK_RAW:
+                        socket = network_manager.interfaces[0]->create_raw_socket();
+                        if (IS_ERR(socket)) {
+                                return -ENOSOCKFREE;
+                        }
+                        res = socket->s_op->open(socket, MACRAW);
+                        break;
+                default:
+                        UNIMPLEMENTED("Unknown type. Currently only TCP and RAW supported.");
+        }
 
-        // get parent process and assign new file descriptor
-        // socket must be a file?
+        if (res < 0) {
+                return res;
+        }
 
-        return 0;
+        for (size_t i = 0; i < MAX_OPEN_FILE_DESCRIPTORS; ++i) {
+                if (current_process->files.fdtable[i] == nullptr) {
+                        current_process->files.fdtable[i] = &socket->file;
+                        current_process->files.count += 1;
+
+                        return i;
+                }
+        }
+
+        return -ENOSOCKFREE; //should not happen?
 }
 
 int sys_bind(int sockfd, const struct sockaddr *addr, size_t addrlen) {
@@ -193,4 +240,3 @@ int sys_accept(int sockfd, struct sockaddr *addr, size_t addrlen) {
 int sys_connect(int sockfd, const struct sockaddr *addr, size_t adrlen) {
         return 0;
 }
-

@@ -2,11 +2,26 @@
 // Created by Artur Twardzik on 01/04/2026.
 //
 
+// Networking is quite hard to implement - if multiple processes need internet
+// access the OS would have to manage the sockets. The chip on the board is
+// WIZnet W5100S which has 3 hardwired tcp/udp sockets and one MACRAW socket.
+//
+// The only possibility for the OS to manage processes' sockets (virtual - as
+// used in normal unix programming) is to use MACRAW mode and to implement the
+// whole TCP/UDP stack in the OS.
+//
+// Therefore, for the sake of simplicity and quicker development, for now we
+// assume that not much processes will use the ethernet. By that about 3
+// connections are meant.
+//
+// TODO: implement TCP stack and connection management at the OS level.
+
 #ifndef OS_NETWORK_H
 #define OS_NETWORK_H
 
 #include <stddef.h>
 #include "types.h"
+#include "fs/file.h"
 
 enum SocketMode {
         CLOSED = 0,
@@ -19,14 +34,10 @@ enum SocketMode {
 struct SocketOperations;
 
 struct Socket {
+        struct File file;
+
         enum SocketMode mode;
         uint16_t port;
-
-        size_t socket_txbuf_size_max;
-        unsigned int socket_txbuf_mask;
-
-        size_t socket_rxbuf_size_max;
-        unsigned int socket_rxbuf_mask;
 
         const struct SocketOperations *s_op;
 };
@@ -39,10 +50,6 @@ struct SocketOperations {
         int (*listen)(struct Socket *socket);
 
         int (*accept)(struct Socket *socket);
-
-        int (*recv)(struct Socket *socket, char *buffer, size_t length);
-
-        int (*send)(struct Socket *socket, const char *frame, size_t frame_size);
 
         int (*close)(struct Socket *socket);
 
@@ -62,20 +69,12 @@ struct NetworkInterface {
 
         struct Socket *(*create_raw_socket)(void);
 
-        // void (*setup_socket_file_operations)()
+        int (*destroy_socket)(struct Socket *socket);
 };
 
-//TODO: make it ioctl
-void setup_network_information(
-        struct NetworkInterface *interface,
-        const char *ip_address,
-        const char *mac_address,
-        const char *gateway,
-        const char *subnet_mask
-);
-
+[[deprecated("Only for MACRAW testing purposes. Use syscall write instead.")]]
 int send_raw_frame(
-        struct Socket *socket,
+        int sockfd,
         const char *src_mac,
         const char *dst_mac,
         uint16_t ether_type,
