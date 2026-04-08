@@ -7,13 +7,13 @@
 
 #include "errno.h"
 #include "gpio.h"
-#include "mutex.h"
 #include "spi.h"
 #include "time.h"
 #include "fs/file.h"
 #include "kernel/error.h"
 #include "kernel/isr.h"
 #include "kernel/memory.h"
+#include "kernel/mutex.h"
 
 static constexpr int ETH_CS_PIN = 17;
 static constexpr int ETH_INT_PIN = 21;

@@ -28,12 +28,13 @@ add_subdirectory(src/kstdlib)
 
 add_executable(os
         src/start.S
+        src/config.c
         src/main.c
-        src/archive_loader.S
         $<TARGET_OBJECTS:drivers>
         $<TARGET_OBJECTS:kernel>
         $<TARGET_OBJECTS:fs>
         $<TARGET_OBJECTS:klibc>
+        src/archive_loader.S # PUT THIS ARCHIVE LOADER ALWAYS AT THE END (raw files copied)!!!
 )
 
 target_link_options(os PRIVATE

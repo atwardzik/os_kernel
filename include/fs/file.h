@@ -157,6 +157,7 @@ struct Files {
         // struct File *next;
 };
 
+int printk(const char *ptr);
 
 int sys_open(const char *name, int flags, int mode);
 

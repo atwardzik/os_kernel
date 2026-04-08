@@ -4,7 +4,8 @@
 
 #ifndef OS_MUTEX_H
 #define OS_MUTEX_H
-#include "kernel/proc.h"
+
+#include "proc.h"
 
 typedef struct {
         bool lock;

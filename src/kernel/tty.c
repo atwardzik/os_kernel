@@ -4,6 +4,7 @@
 
 #include "tty.h"
 
+#include "config.h"
 #include "escape_codes.h"
 #include "libc.h"
 #include "signal.h"
@@ -14,6 +15,8 @@
 #include "kernel/resources.h"
 
 #include <sys/errno.h>
+
+#include "drivers/keyboard.h"
 
 
 //TODO: probably UART should be separated from screen terminal!
@@ -31,22 +34,23 @@ void raw_put_letter(
         const unsigned int column_letter_position,
         const ByteColorCode color_code
 ) {
-        uart_set_cursor(row_letter_position, column_letter_position);
+        if (kconf->io_dev.uart.enabled) {
+                if (letter != ENDL) {
+                        uart_set_cursor(row_letter_position, column_letter_position);
+                        uart_change_color(color_code);
+                }
 
-        uart_change_color(color_code);
-
-        if (isprint(letter)) {
-                uart_putc(letter);
+                if (isprint(letter)) {
+                        uart_putc(letter);
+                }
+                else {
+                        uart_putc(EMPTY_SPACE);
+                }
         }
-        else if (letter == ENDL) {
-                //do nothing
-        }
-        else {
-                uart_putc(EMPTY_SPACE);
-        }
 
-
-        vga_put_byte_encoded_color_letter(letter, row_letter_position, column_letter_position, color_code);
+        if (kconf->io_dev.vga_display.enabled) {
+                vga_put_byte_encoded_color_letter(letter, row_letter_position, column_letter_position, color_code);
+        }
 }
 
 struct SingleChar {
@@ -67,10 +71,23 @@ static struct {
 } ScreenWriter = {0, 0, (BLACK << 4 | WHITE), (struct CharBuffer *) screen_buffer_ptr};
 
 void init_tty() {
-        vga_setup_cursor(0, 0, ScreenWriter.current_color_code, 500'000);
+        if (kconf->io_dev.uart.enabled) {
+                uart_init();
+                uart_clr_screen();
+        }
+
+        if (kconf->io_dev.ps2_keyboard.enabled) {
+                init_keyboard(27, 26);
+        }
+
+        if (kconf->io_dev.vga_display.enabled) {
+                vga_init(9, 10, 3);
+
+                vga_setup_cursor(0, 0, ScreenWriter.current_color_code, 500'000);
+        }
 }
 
-static void move_position_left() {
+static void move_buffer_position_left() {
         if (ScreenWriter.current_column_position == 0) {
                 ScreenWriter.current_row_position -= 1;
                 ScreenWriter.current_column_position = BUFFER_WIDTH - 1;
@@ -80,7 +97,7 @@ static void move_position_left() {
         }
 }
 
-static void move_position_right() {
+static void move_buffer_position_right() {
         if (ScreenWriter.current_column_position == BUFFER_WIDTH - 1) {
                 ScreenWriter.current_row_position += 1;
                 ScreenWriter.current_column_position = 0;
@@ -100,8 +117,11 @@ static void save_char_to_buffer(const char c) {
 }
 
 static void scroll_vertical() {
+        if (!kconf->io_dev.vga_display.enabled) {
+                return;
+        }
+
         vga_clr_all();
-        uart_puts("\x1b[S");
 
         for (size_t i = 1; i < BUFFER_HEIGHT; ++i) {
                 for (size_t j = 0; j < BUFFER_WIDTH; ++j) {
@@ -172,6 +192,9 @@ static void scroll_horizontal_left(const unsigned int row_position, const unsign
                         }
                         else if (j == BUFFER_WIDTH) {
                                 current_char = ScreenWriter.buffer->chars[i + 1][0];
+                                if (current_char.ascii_code == ENDL) {
+                                        current_char.ascii_code = 0;
+                                }
                         }
                         else {
                                 current_char = ScreenWriter.buffer->chars[i][j];
@@ -180,9 +203,12 @@ static void scroll_horizontal_left(const unsigned int row_position, const unsign
                         ScreenWriter.buffer->chars[i][j - 1] = current_char;
 
                         raw_put_letter(current_char.ascii_code, i, j - 1, current_char.color_code);
+                        uart_set_cursor(i, j - 1);
 
                         if (current_char.ascii_code == 0) {
-                                uart_set_cursor(row_position, column_position);
+                                if (kconf->io_dev.uart.enabled) {
+                                        uart_set_cursor(row_position, column_position);
+                                }
                                 return;
                         }
                 }
@@ -193,7 +219,7 @@ static void write_new_line() {
         save_char_to_buffer(ENDL);
 
         if (ScreenWriter.current_row_position == BUFFER_HEIGHT - 1) {
-                scroll_vertical(); //FIXME: when vertical scroll happens on screen, the UART prints \n\n
+                scroll_vertical();
         }
         else {
                 ScreenWriter.current_row_position += 1;
@@ -245,33 +271,45 @@ void write_byte(const int c) {
                 return;
         }
 
-        vga_clr_cursor();
+        if (kconf->io_dev.vga_display.enabled) {
+                vga_clr_cursor();
+        }
 
         if (c == ENDL) {
                 write_new_line();
         }
         else if (c == BACKSPACE) {
-                move_position_left();
+                move_buffer_position_left();
 
-                uart_putc(c);
+                if (kconf->io_dev.uart.enabled) {
+                        // uart_putc(c);
+                }
 
                 const auto row = ScreenWriter.current_row_position;
                 const auto column = ScreenWriter.current_column_position;
                 scroll_horizontal_left(row, column);
         }
         else if (c == ARROW_LEFT) {
-                move_position_left();
-                uart_putc(c);
+                move_buffer_position_left();
+
+                if (kconf->io_dev.uart.enabled) {
+                        uart_putc(c);
+                }
         }
         else if (c == ARROW_RIGHT) {
-                move_position_right();
-                uart_putc(c);
+                move_buffer_position_right();
+
+                if (kconf->io_dev.uart.enabled) {
+                        uart_putc(c);
+                }
         }
         else {
                 write_with_line_overflow_if_needed(c);
         }
 
-        vga_update_cursor_position(ScreenWriter.current_row_position, ScreenWriter.current_column_position);
+        if (kconf->io_dev.vga_display.enabled) {
+                vga_update_cursor_position(ScreenWriter.current_row_position, ScreenWriter.current_column_position);
+        }
 }
 
 static void insert_byte(const int c) {

@@ -10,12 +10,15 @@
 #include "kernel/proc.h"
 
 
-int printk(const char *ptr) {
-        for (int i = 0; i < strlen(ptr); i++) {
+int printk(const char *buf) {
+        const char *ptr = buf;
+        const size_t count = strlen(ptr);
+
+        for (int i = 0; i < count; i++) {
                 write_byte(*ptr++);
         }
 
-        return strlen(ptr);
+        return count;
 }
 
 static struct VFS_Inode *get_parent_directory(const char *name) {

@@ -112,8 +112,6 @@ static void setup_network_information(
         interface->setup_network_information(interface);
 }
 
-extern int printk(const char *ptr);
-
 int init_network(void) {
         struct NetworkInterface **interfaces = kmalloc(MAX_INTERFACES_COUNT * sizeof(*interfaces));
         if (!interfaces) {
@@ -123,13 +121,11 @@ int init_network(void) {
         printk("\x1b[96;40m[!] Checking network adapter: \x1b[0m");
         struct NetworkInterface *eth0 = init_ethernet();
         if (IS_ERR(eth0)) {
-                printf("\x1b[91;40mNot found or adapter incompatible\x1b[0m\n");
+                printk("\x1b[91;40mNot found or adapter incompatible\x1b[0m\n");
                 return -ENETDOWN;
         }
-        else {
-                printk("\x1b[92;40m Ok\x1b[0m\n");
-                interfaces[0] = eth0;
-        }
+        printk("\x1b[92;40m Ok\x1b[0m\n");
+        interfaces[0] = eth0;
 
         printk("\x1b[96;40m[!] Setting up network adapter: \x1b[0m");
 

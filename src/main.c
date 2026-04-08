@@ -1,3 +1,4 @@
+#include "config.h"
 #include "libc.h"
 #include "socket.h"
 #include "tty.h"
@@ -9,7 +10,6 @@
 #include "drivers/vga.h"
 #include "fs/file.h"
 #include "fs/ramfs.h"
-#include "kernel/error.h"
 #include "kernel/network.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
@@ -214,7 +214,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
         printf("\x1b[96;40m[!] Running simple www server\x1b[0m\n");
         [[maybe_unused]] const int server_pid = spawnp(test_tcp_server, nullptr, nullptr, nullptr, nullptr);
         printf("\x1b[96;40m[!] Running simple TCP client\x1b[0m\n");
-        [[maybe_unused]] const int client_pid = spawnp(test_tcp_client, nullptr, nullptr, nullptr, nullptr);
+        // [[maybe_unused]] const int client_pid = spawnp(test_tcp_client, nullptr, nullptr, nullptr, nullptr);
 
         printf("\x1b[96;40m[!] Unpacking initramfs\x1b[0m\n");
         char *ptr = __cpio_init_start__;
@@ -309,9 +309,6 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 int main(void) {
         reset_subsys();
         setup_internal_clk();
-        uart_init();
-        uart_clr_screen();
-        vga_init(9, 10, 3);
 
         init_pin_output(25);
         init_pin_output(11);
@@ -341,7 +338,6 @@ int main(void) {
 
         init_tty();
         setup_tty_chrfile(tty->inode);
-        init_keyboard(27, 26);
 
         init_network();
 
