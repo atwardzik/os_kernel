@@ -100,6 +100,7 @@ static struct {
         struct NetworkInterface interface;
 
         struct Process *socket_waiting_processes[4];
+        uint8_t socket_interrupts[4];
 
         struct WIZnetSocket *sockets[WIZNET_SOCKET_COUNT];
 } wiznet_network_interface;
@@ -190,28 +191,49 @@ static void eth_read_mem(uint16_t reg_offset, uint8_t *buf, const size_t len) {
 void eth_irq() {
         clr_interrupt(ETH_INT_PIN);
 
-        uint8_t con[4];
-        eth_read_mem(SN_IR(0), con, 1);
-        eth_read_mem(SN_IR(1), con + 1, 1);
-        eth_read_mem(SN_IR(2), con + 2, 1);
-        eth_read_mem(SN_IR(3), con + 3, 1);
+        uint8_t irq[4];
+        eth_read_mem(SN_IR(0), irq, 1);
+        eth_read_mem(SN_IR(1), irq + 1, 1);
+        eth_read_mem(SN_IR(2), irq + 2, 1);
+        eth_read_mem(SN_IR(3), irq + 3, 1);
 
-        int ready_socket = -1;
         for (size_t i = 0; i < 4; ++i) {
-                if (con[i] & INT_CON) {
-                        ready_socket = i;
+                if (irq[i] & INT_CON) {
+                        wiznet_network_interface.socket_interrupts[i] |= INT_CON;
+                        wiznet_network_interface.socket_waiting_processes[i]->pstate = READY;
+                        //what if it does not exist?
                         break;
                 }
         }
 
         for (size_t i = 0; i < 4; ++i) {
-                con[0] = 0x1f; //clear all interrupts, FIXME: should it be like that?
-                eth_write_mem(SN_IR(i), con, 1);
+                if (irq[i] & INT_TIMEOUT) {
+                        wiznet_network_interface.socket_interrupts[i] |= INT_TIMEOUT;
+                        wiznet_network_interface.socket_waiting_processes[i]->pstate = READY;
+                        break;
+                }
         }
 
+        for (size_t i = 0; i < 4; ++i) {
+                if (irq[i] & INT_RECV) {
+                        wiznet_network_interface.socket_interrupts[i] |= INT_RECV;
+                        wiznet_network_interface.socket_waiting_processes[i]->pstate = READY;
+                        break;
+                }
+        }
 
-        if (ready_socket >= 0) {
-                wiznet_network_interface.socket_waiting_processes[ready_socket]->pstate = READY;
+        for (size_t i = 0; i < 4; ++i) {
+                if (irq[i] & INT_DISCON) {
+                        wiznet_network_interface.socket_interrupts[i] |= INT_DISCON;
+                        wiznet_network_interface.socket_waiting_processes[i]->pstate = READY;
+                        break;
+                }
+        }
+
+        for (size_t i = 0; i < 4; ++i) {
+                //clear all interrupts
+                irq[0] = INT_SENDOK | INT_TIMEOUT | INT_RECV | INT_DISCON | INT_CON;
+                eth_write_mem(SN_IR(i), irq, 1);
         }
 }
 
@@ -307,39 +329,78 @@ static int accept_socket(struct Socket *sock, struct sockaddr *addr, size_t addr
         return 0;
 }
 
-static int active_close(struct File *socket_file) {
-        mutex_lock(&eth_transaction_mutex);
-        struct WIZnetSocket *socket = (struct WIZnetSocket *) socket_file;
+static int connect_socket(struct Socket *sock, struct sockaddr *addr, size_t addrlen) {
+        const struct WIZnetSocket *socket = (struct WIZnetSocket *) sock;
 
-        socket_command(socket->index, CMD_DISCON);
+        eth_write_mem(SN_DIPR(socket->index), addr->sa_data + 2, 4);
+        eth_write_mem(SN_DPORTR(socket->index), addr->sa_data, 2);
 
-        uint8_t ir[1];
-        do {
-                eth_read_mem(SN_IR(socket->index), ir, 1);
+        socket_command(socket->index, CMD_CONNECT);
 
-                ir[0] &= INT_DISCON | INT_TIMEOUT;
-        } while (!ir[0]);
-
-        if (ir[0] & INT_DISCON) {
-                constexpr uint8_t clear[] = {INT_DISCON};
-                eth_write_mem(SN_IR(socket->index), clear, 1);
+        uint8_t con[1];
+        eth_read_mem(SN_IR(socket->index), con, 1);
+        if ((con[0] & INT_CON) == 0) {
+                struct Process *current_process = scheduler_get_current_process();
+                current_process->pstate = WAITING_FOR_RESOURCE;
+                wiznet_network_interface.socket_waiting_processes[socket->index] = current_process;
+                save_kernelmode_and_context_switch();
         }
-        else {
-                socket->taken = false;
-                mutex_unlock(&eth_transaction_mutex);
+
+        if (wiznet_network_interface.socket_interrupts[socket->index] & INT_TIMEOUT) {
+                wiznet_network_interface.socket_interrupts[socket->index] ^= INT_TIMEOUT;
                 return -ETIMEDOUT;
         }
 
-        enum SocketStatus status;
+        if (wiznet_network_interface.socket_interrupts[socket->index] & INT_CON) {
+                wiznet_network_interface.socket_interrupts[socket->index] ^= INT_CON;
+                return 0;
+        }
+
+        return -ECONNABORTED;
+}
+
+static int active_close(struct File *socket_file) {
+        mutex_lock(&eth_transaction_mutex);
+        struct WIZnetSocket *socket = (struct WIZnetSocket *) socket_file;
+        int ret = 0;
+
+        uint8_t sr[1];
+        eth_read_mem(SN_SR(socket->index), sr, 1);
+        enum SocketStatus status = sr[0];
+        if (status == SOCK_CLOSED) {
+                goto socket_close_ret;
+        }
+
+        if (socket->index != 0) {
+                socket_command(socket->index, CMD_DISCON);
+
+                uint8_t con[1];
+                eth_read_mem(SN_IR(socket->index), con, 1);
+                if ((con[0] & INT_CON) == 0) {
+                        struct Process *current_process = scheduler_get_current_process();
+                        current_process->pstate = WAITING_FOR_RESOURCE;
+                        wiznet_network_interface.socket_waiting_processes[socket->index] = current_process;
+                        save_kernelmode_and_context_switch();
+                }
+
+                if (wiznet_network_interface.socket_interrupts[socket->index] & INT_TIMEOUT) {
+                        wiznet_network_interface.socket_interrupts[socket->index] ^= INT_TIMEOUT;
+                        ret = -ETIMEDOUT;
+                }
+        }
+
+        socket_command(socket->index, CMD_CLOSE);
+
         do {
                 uint8_t sr[1];
                 eth_read_mem(SN_SR(socket->index), sr, 1);
                 status = sr[0];
         } while (status != SOCK_CLOSED);
 
+socket_close_ret:
         socket->taken = false;
         mutex_unlock(&eth_transaction_mutex);
-        return 0;
+        return ret;
 }
 
 
@@ -451,28 +512,23 @@ static int tx_frame(struct File *socket_file, void *frame, const size_t frame_si
 static int rx_frame(struct File *socket_file, void *buf, size_t count, off_t) {
         const struct WIZnetSocket *socket = (struct WIZnetSocket *) socket_file;
 
-        uint8_t ir[1];
-        do {
-                eth_read_mem(SN_IR(socket->index), ir, 1);
-
-                ir[0] &= INT_RECV;
-        } while (!ir[0]);
-
-        if (ir[0] & INT_RECV) {
-                constexpr uint8_t clear[] = {INT_RECV};
-                eth_write_mem(SN_IR(socket->index), clear, 1);
-
-                //receive process
-                const int res = read_rxbuf(socket, buf, count);
-
-                add_to_socket_pointer_reg(socket, SN_RX_RD(socket->index), res);
-
-                socket_command(socket->index, CMD_RECV);
-
-                return res;
+        uint8_t con[1];
+        eth_read_mem(SN_IR(socket->index), con, 1);
+        if ((con[0] & INT_RECV) == 0) {
+                struct Process *current_process = scheduler_get_current_process();
+                current_process->pstate = WAITING_FOR_RESOURCE;
+                wiznet_network_interface.socket_waiting_processes[socket->index] = current_process;
+                save_kernelmode_and_context_switch();
         }
 
-        return -1;
+        //receive process
+        const int res = read_rxbuf(socket, buf, count);
+
+        add_to_socket_pointer_reg(socket, SN_RX_RD(socket->index), res);
+
+        socket_command(socket->index, CMD_RECV);
+
+        return res;
 }
 
 
@@ -562,7 +618,7 @@ static int init_sockets(void) {
                 .bind = bind_socket,
                 .listen = listen_socket,
                 .accept = accept_socket,
-                .connect = nullptr
+                .connect = connect_socket
         };
 
         for (int i = 0; i < 4; i++) {
@@ -625,6 +681,7 @@ struct NetworkInterface *init_ethernet(void) {
                0,
                sizeof(wiznet_network_interface.socket_waiting_processes)
         );
+        memset(wiznet_network_interface.socket_interrupts, 0, sizeof(wiznet_network_interface.socket_interrupts));
 
         return (struct NetworkInterface *) &wiznet_network_interface;
 }

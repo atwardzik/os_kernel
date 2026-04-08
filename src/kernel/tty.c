@@ -193,7 +193,7 @@ static void write_new_line() {
         save_char_to_buffer(ENDL);
 
         if (ScreenWriter.current_row_position == BUFFER_HEIGHT - 1) {
-                scroll_vertical();
+                scroll_vertical(); //FIXME: when vertical scroll happens on screen, the UART prints \n\n
         }
         else {
                 ScreenWriter.current_row_position += 1;

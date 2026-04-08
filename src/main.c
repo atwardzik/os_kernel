@@ -92,13 +92,15 @@ void test_raw_ethernet_frames(void) {
                 memcpy(frame + 14, test_data, strlen(test_data));
                 write(sockfd, frame, strlen(test_data) + 14);
         }
+
+        close(sockfd);
 }
 
 void test_tcp_server(void) {
-        for (int i = 0; i < 3; ++i) {
+        while (1) {
                 int sockfd = socket(AF_INET, SOCK_STREAM, 0);
                 if (sockfd < 0) {
-                        dprintf(2, "Error while trying to open socket");
+                        dprintf(2, "Error while trying to open socket\n");
                         return;
                 }
 
@@ -106,7 +108,7 @@ void test_tcp_server(void) {
                 bind(sockfd, (struct sockaddr *) &source, sizeof(source));
 
                 if (listen(sockfd, 1) < 0) {
-                        dprintf(2, "Error while trying to listen on port: %i", source.sin_port);
+                        dprintf(2, "Error while trying to listen on port: %i\n", source.sin_port);
                         return;
                 }
 
@@ -123,6 +125,34 @@ void test_tcp_server(void) {
 
                         write(sockfd, static_website, strlen(static_website));
                 }
+
+                close(sockfd);
+        }
+}
+
+void test_tcp_client(void) {
+        while (1) {
+                int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+                if (sockfd < 0) {
+                        dprintf(2, "Error while trying to open socket\n");
+                        continue;
+                }
+                struct sockaddr_in source = {AF_INET, 8080};
+                bind(sockfd, (struct sockaddr *) &source, sizeof(source));
+
+
+                struct sockaddr_in dest = {AF_INET, 53764, {192, 168, 1, 41}};
+
+                if (connect(sockfd, (struct sockaddr *) &dest, sizeof(dest)) < 0) {
+                        dprintf(2, "Error while trying to connect - connection timed out\n");
+                        close(sockfd);
+                        continue;
+                }
+
+                char buffer[64];
+                read(sockfd, buffer, 64);
+
+                printf("Recv: %s\n", buffer);
 
                 close(sockfd);
         }
@@ -183,6 +213,8 @@ void PATER_ADAMVS(int argc, char *argv[]) {
         );
         printf("\x1b[96;40m[!] Running simple www server\x1b[0m\n");
         [[maybe_unused]] const int server_pid = spawnp(test_tcp_server, nullptr, nullptr, nullptr, nullptr);
+        printf("\x1b[96;40m[!] Running simple TCP client\x1b[0m\n");
+        [[maybe_unused]] const int client_pid = spawnp(test_tcp_client, nullptr, nullptr, nullptr, nullptr);
 
         printf("\x1b[96;40m[!] Unpacking initramfs\x1b[0m\n");
         char *ptr = __cpio_init_start__;

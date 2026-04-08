@@ -51,7 +51,7 @@ struct SocketOperations {
 
         int (*accept)(struct Socket *socket, struct sockaddr *addr, size_t addrlen);
 
-        int (*connect)(struct Socket *socket, const char *ipaddr, uint16_t port);
+        int (*connect)(struct Socket *socket, struct sockaddr *addr, size_t addrlen);
 };
 
 struct NetworkInterface {
@@ -86,6 +86,6 @@ int sys_listen(int sockfd, int backlog);
 
 int sys_accept(int sockfd, struct sockaddr *addr, size_t addrlen);
 
-int sys_connect(int sockfd, const struct sockaddr *addr, size_t adrlen);
+int sys_connect(int sockfd, const struct sockaddr *addr, size_t addrlen);
 
 #endif //OS_NETWORK_H

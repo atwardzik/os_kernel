@@ -139,7 +139,7 @@ int init_network(void) {
         setup_network_information(eth0,
                                   ip_addr,
                                   mac_addr,
-                                  "192.168.2.1",
+                                  "192.168.1.1",
                                   "255.255.255.0"
         );
 
@@ -244,6 +244,16 @@ int sys_accept(int sockfd, struct sockaddr *addr, size_t addrlen) {
         return socket->s_op->accept(socket, addr, addrlen);
 }
 
-int sys_connect(int sockfd, const struct sockaddr *addr, size_t adrlen) {
-        return 0;
+int sys_connect(int sockfd, const struct sockaddr *addr, size_t addrlen) {
+        const struct Process *current_process = scheduler_get_current_process();
+        if (sockfd >= current_process->files.count || sockfd < 0 || current_process->files.fdtable[sockfd] == nullptr) {
+                sys_write(1, "[!] There is no such socket descriptor\n", 39);
+                __asm__("bkpt   #0");
+                return -1;
+        }
+
+        struct File *socket_file = current_process->files.fdtable[sockfd];
+        struct Socket *socket = (struct Socket *) socket_file;
+
+        return socket->s_op->connect(socket, addr, addrlen);
 }

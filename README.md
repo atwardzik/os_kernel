@@ -28,6 +28,7 @@ unsafe and not recommended. This is an experimental project intended for learnin
 | Multitasking                                  | ✅      | Pre-emptive task scheduler                                                                   |
 | POSIX-like syscalls                           | ✅      | [List of syscalls](https://github.com/atwardzik/os_kernel/blob/main/include/syscall_codes.h) |
 | Filesystem                                    | ✅      | Virtual Filessystem structure and RAMFS                                                      |
+| Networking                                    | ✅      | Raw sockets, TCP client and server                                                           |
 | EXT2 support                                  | 🚧     | Planned                                                                                      |
 | Multithreading                                | 🚧     | In progress                                                                                  |
 | Custom C compiler and assembler for userspace | 🚧     | In progress                                                                                  |
@@ -40,7 +41,7 @@ unsafe and not recommended. This is an experimental project intended for learnin
 | UART communication       | ✅      |                                                               |
 | VGA driver (640x480)     | ✅      | Scaling up resolutions is in progress                         |
 | SD card driver           | 🚧     | In progress                                                   |
-| Ethernet (WIZnet W5100S) | 🚧     | In progress                                                   |
+| Ethernet (WIZnet W5100S) | ✅      | Raw sockets, TCP client and server                            |
 
 ## Future plans
 
