@@ -3,11 +3,8 @@
 #include "socket.h"
 #include "tty.h"
 #include "drivers/gpio.h"
-#include "drivers/keyboard.h"
-#include "drivers/spi.h"
+#include "drivers/sd_card.h"
 #include "drivers/time.h"
-#include "drivers/uart.h"
-#include "drivers/vga.h"
 #include "fs/file.h"
 #include "fs/ramfs.h"
 #include "kernel/network.h"
@@ -16,55 +13,6 @@
 
 // DO NOT TRY TO CALL KERNEL FUNCTIONS FROM USER SPACE OTHER THAN SYSCALLS!!!
 
-
-void read_sd_card(void) {
-        GPIO_function_select(15, 1);
-        GPIO_function_select(14, 1);
-        init_pin_output(13); //manual CS
-        GPIO_function_select(12, 1);
-        output_enable_pin(15);
-        output_enable_pin(14);
-        output_enable_pin(12);
-
-        spi_init(1, 2, 15, 0);
-
-        set_pin(13);
-        for (int i = 0; i < 10; ++i) { spi_tx(1, 0xff); }
-
-        clr_pin(13);
-        spi_tx(1, 0xff);
-        spi_tx(1, 0x40); // CMD0
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x00);
-        spi_tx(1, 0x95); // valid CRC for CMD0
-
-        for (int i = 0; i < 30; ++i) {
-                if (spi_rx(1) == 0x1) {
-                        printf("\x1b[96;40m[!] SD Card found!\x1b[0m\n");
-
-                        spi_tx(1, 0x7a); // CMD58 (0x40 + 58)
-                        spi_tx(1, 0x00);
-                        spi_tx(1, 0x00);
-                        spi_tx(1, 0x00);
-                        spi_tx(1, 0x00);
-                        spi_tx(1, 0x75); // dummy CRC
-
-                        while (spi_rx(1) != 0x1) {}
-                        printf("\x1b[96;40m[!] Reading SD's OCR: \x1b[0m");
-                        for (int j = 0; j < 4; ++j) {
-                                printf("\x1b[91;40m0x%x\x1b[0m ", spi_rx(1));
-                        }
-                        printf("\n");
-
-                        break;
-                }
-        }
-
-
-        set_pin(13);
-}
 
 void test_raw_ethernet_frames(void) {
         int sockfd = socket(AF_INET, SOCK_RAW, 0);
@@ -203,7 +151,6 @@ void PATER_ADAMVS(int argc, char *argv[]) {
         printf(
                 "\n\x1b[96;40m  PATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n\n");
 
-        read_sd_card();
 
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
         [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
@@ -350,6 +297,19 @@ int main(void) {
 
         res = setup_tty_chrfile(tty->inode);
         printk_status_finish(res);
+
+
+        res = init_sd_card();
+        if (res == 0) {
+                char buffer[512] = {};
+                sd_card_read512_block(0, buffer);
+                buffer[0] = 0xfa;
+                buffer[1] = 0xb8;
+                buffer[2] = 0x00;
+                buffer[3] = 0x10;
+                sd_card_write512_block(0, buffer);
+                sd_card_read512_block(0, buffer);
+        }
 
 
         init_network();

@@ -13,6 +13,7 @@ add_library(drivers OBJECT
         vga.S
         spi.S
         ethernet.c
+        sd_card.c
 )
 
 target_include_directories(drivers PUBLIC ${CMAKE_SOURCE_DIR}/include/drivers)
