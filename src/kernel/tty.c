@@ -5,18 +5,15 @@
 #include "tty.h"
 
 #include "config.h"
+#include "errno.h"
 #include "escape_codes.h"
 #include "libc.h"
 #include "signal.h"
+#include "drivers/keyboard.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
-#include "fs/file.h"
 #include "kernel/memory.h"
 #include "kernel/resources.h"
-
-#include <sys/errno.h>
-
-#include "drivers/keyboard.h"
 
 
 //TODO: probably UART should be separated from screen terminal!
@@ -117,6 +114,9 @@ static void save_char_to_buffer(const char c) {
 }
 
 static void scroll_vertical() {
+        if (!kconf->io_dev.uart.enabled) {
+                uart_puts("\x1b[S");
+        }
         if (!kconf->io_dev.vga_display.enabled) {
                 return;
         }
@@ -281,13 +281,12 @@ void write_byte(const int c) {
         else if (c == BACKSPACE) {
                 move_buffer_position_left();
 
-                if (kconf->io_dev.uart.enabled) {
-                        // uart_putc(c);
-                }
-
                 const auto row = ScreenWriter.current_row_position;
                 const auto column = ScreenWriter.current_column_position;
                 scroll_horizontal_left(row, column);
+        }
+        else if (c == CARRIAGE_RETURN) {
+                ScreenWriter.current_column_position = 0;
         }
         else if (c == ARROW_LEFT) {
                 move_buffer_position_left();
@@ -508,8 +507,16 @@ static ssize_t tty_write(struct File *, void *buf, const size_t count, off_t fil
         return count;
 }
 
-void setup_tty_chrfile(struct VFS_Inode *mount_point) {
+int setup_tty_chrfile(struct VFS_Inode *mount_point) {
+        if (!mount_point) {
+                return -ENOENT;
+        }
+
         struct FileOperations *stdio_op = kmalloc(sizeof(*stdio_op));
+        if (!stdio_op) {
+                return -ENOMEM;
+        }
+
         stdio_op->read = tty_read;
         stdio_op->write = tty_write;
         kfree(mount_point->i_fop);
@@ -524,4 +531,89 @@ void setup_tty_chrfile(struct VFS_Inode *mount_point) {
 
         keyboard_device_file_stream->length = buf_size;
         keyboard_device_file_stream->read_wait = nullptr;
+
+        return 0;
+}
+
+
+int printk(const char *buf) {
+        const char *ptr = buf;
+        const size_t count = strlen(ptr);
+
+        for (int i = 0; i < count; i++) {
+                write_byte(*ptr++);
+        }
+
+        return count;
+}
+
+static constexpr int STATUS_BAR_SIZE = 11;
+static int current_status_len;
+static int current_status_step;
+static constexpr int MAX_STATUS_STEP = 8;
+
+enum StartupStatus {
+        STATUS_NONE,
+        STATUS_OK,
+        STATUS_FAILED,
+};
+
+static void printk_status(enum StartupStatus status) {
+        switch (status) {
+                case STATUS_NONE:
+                        printk("\r[        ] ");
+                        break;
+                case STATUS_OK:
+                        printk("\r[   \x1b[92;40mOK\x1b[0m   ] ");
+                        break;
+                case STATUS_FAILED:
+                        printk("\r[ \x1b[91;40mFAILED\x1b[0m ] ");
+                        break;
+        }
+}
+
+void printk_status_init(const char *msg) {
+        current_status_len = strlen(msg);
+        current_status_step = 0;
+
+        printk_status(STATUS_NONE);
+        printk(msg);
+}
+
+void printk_status_step(void) {
+        printk("\r[");
+        for (int i = 0; i < current_status_step; ++i) {
+                printk("#");
+        }
+
+        if (current_status_step < MAX_STATUS_STEP) {
+                current_status_step += 1;
+                printk("#");
+        }
+
+        for (int i = current_status_step; i < MAX_STATUS_STEP; ++i) {
+                printk(" ");
+        }
+
+        printk("] ");
+}
+
+void printk_status_finish(const int return_code) {
+        const enum StartupStatus status = (return_code == 0) ? STATUS_OK : STATUS_FAILED;
+        printk_status(status);
+
+        for (int i = 0; i < current_status_len + 1; ++i) {
+                write_byte(ARROW_RIGHT);
+        }
+
+        printk("\n");
+}
+
+void printk_status_info(const char *msg) {
+        for (int i = 0; i < STATUS_BAR_SIZE; ++i) {
+                printk(" ");
+        }
+
+        printk(msg);
+        printk("\n");
 }

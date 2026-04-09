@@ -149,7 +149,7 @@ void test_tcp_client(void) {
                         continue;
                 }
 
-                char buffer[64];
+                char buffer[64] = {0};
                 read(sockfd, buffer, 64);
 
                 printf("Recv: %s\n", buffer);
@@ -200,7 +200,8 @@ extern uint8_t __cpio_init_start__[];
 
 void PATER_ADAMVS(int argc, char *argv[]) {
         signal(SIGINT, PATER_ADAMVS_SIGINT);
-        printf("\n\x1b[96;40mPATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n");
+        printf(
+                "\n\x1b[96;40m  PATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n\n");
 
         read_sd_card();
 
@@ -214,7 +215,7 @@ void PATER_ADAMVS(int argc, char *argv[]) {
         printf("\x1b[96;40m[!] Running simple www server\x1b[0m\n");
         [[maybe_unused]] const int server_pid = spawnp(test_tcp_server, nullptr, nullptr, nullptr, nullptr);
         printf("\x1b[96;40m[!] Running simple TCP client\x1b[0m\n");
-        // [[maybe_unused]] const int client_pid = spawnp(test_tcp_client, nullptr, nullptr, nullptr, nullptr);
+        [[maybe_unused]] const int client_pid = spawnp(test_tcp_client, nullptr, nullptr, nullptr, nullptr);
 
         printf("\x1b[96;40m[!] Unpacking initramfs\x1b[0m\n");
         char *ptr = __cpio_init_start__;
@@ -309,16 +310,25 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 int main(void) {
         reset_subsys();
         setup_internal_clk();
+        init_tty();
+        printk("   --- \x1b[91;40mG\x1b[93;40me\x1b[92;40mT \x1b[94;40mO\x1b[95;40mS\x1b[0m Kernel startup ---\n\n");
+        int res;
 
         init_pin_output(25);
         init_pin_output(11);
 
+        printk_status_init("Initializing scheduler");
         void *msp;
         __asm__("mrs    %0, msp" : "=r"(msp));
-        scheduler_init(msp);
+        res = scheduler_init(msp);
+        printk_status_finish(res);
 
 
+        printk_status_init("Mounting ramfs");
         struct Dentry *root = ramfs_mount(nullptr, nullptr, nullptr, 0);
+        if (root) {
+                printk_status_step();
+        }
         constexpr size_t root_dirs_count = 1;
         const char *root_dirs[root_dirs_count] = {"dev"};
         for (size_t i = 0; i < root_dirs_count; ++i) {
@@ -327,6 +337,7 @@ int main(void) {
                 };
                 root->inode->i_op->create(root->inode, &file, S_IFDIR | 0666);
         }
+        printk_status_step();
 
         struct Dentry dev_dentry = {.name = "dev"};
         struct Dentry *dev = root->inode->i_op->lookup(root->inode, &dev_dentry, 0);
@@ -335,18 +346,19 @@ int main(void) {
         };
         dev->inode->i_op->create(dev->inode, &tty_dentry, S_IFCHR | 0666);
         struct Dentry *tty = dev->inode->i_op->lookup(dev->inode, &tty_dentry, 0);
+        printk_status_step();
 
-        init_tty();
-        setup_tty_chrfile(tty->inode);
+        res = setup_tty_chrfile(tty->inode);
+        printk_status_finish(res);
+
 
         init_network();
 
+        printk_status_init("Creating process init");
+        res = create_process_init((void (*)(void)) PATER_ADAMVS, root->inode);
+        printk_status_finish(res);
 
-        //TODO: REPLACE WITH PRINTK
-        // printf("\x1b[40;47mWelcome in the kernel.\x1b[0m\n"
-        //         "\x1b[92;40mSwitching to init process (temporary shell).\x1b[0m\n");
-
-        create_process_init((void (*)(void)) PATER_ADAMVS, root->inode);
+        printk("\n   --- Switching to process init ---\n\n");
         run_process_init();
         return 0;
 }

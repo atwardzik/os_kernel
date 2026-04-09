@@ -8,6 +8,7 @@
 #include "memory.h"
 #include "proc.h"
 #include "socket.h"
+#include "tty.h"
 #include "drivers/ethernet.h"
 
 static constexpr size_t MAX_INTERFACES_COUNT = 1;
@@ -85,7 +86,7 @@ int str2ip(const char *src_ip, char *buf) {
 }
 
 //TODO: make it ioctl
-static void setup_network_information(
+static int setup_network_information(
         struct NetworkInterface *interface, const char *ip_address, const char *mac_address, const char *gateway,
         const char *subnet_mask
 ) {
@@ -109,7 +110,7 @@ static void setup_network_information(
                 memcpy(interface->ip, ip, sizeof(ip));
         }
 
-        interface->setup_network_information(interface);
+        return interface->setup_network_information(interface);
 }
 
 int init_network(void) {
@@ -118,31 +119,31 @@ int init_network(void) {
                 return -ENOMEM;
         }
 
-        printk("\x1b[96;40m[!] Checking network adapter: \x1b[0m");
+        printk_status_init("Checking network adapter");
         struct NetworkInterface *eth0 = init_ethernet();
         if (IS_ERR(eth0)) {
-                printk("\x1b[91;40mNot found or adapter incompatible\x1b[0m\n");
+                printk_status_finish(-ENETDOWN);
                 return -ENETDOWN;
         }
-        printk("\x1b[92;40m Ok\x1b[0m\n");
         interfaces[0] = eth0;
+        printk_status_finish(0);
 
-        printk("\x1b[96;40m[!] Setting up network adapter: \x1b[0m");
 
+        printk_status_init("Setting up network adapter");
         // TODO: dhcp protocol
         const char *ip_addr = "192.168.2.1";
         const char *mac_addr = "de:ad:01:10:be:ef";
-        setup_network_information(eth0,
-                                  ip_addr,
-                                  mac_addr,
-                                  "192.168.1.1",
-                                  "255.255.255.0"
+        const int res = setup_network_information(eth0,
+                                                  ip_addr,
+                                                  mac_addr,
+                                                  "192.168.1.1",
+                                                  "255.255.255.0"
         );
 
-        printk("\x1b[92;40m Ok\x1b[0m\n");
-        printk("\x1b[96;40m[!] Network adapter set up to:\x1b[0m 192.168.2.1 de:ad:01:10:be:ef\n");
 
         network_manager.interfaces = interfaces;
+        printk_status_finish(res);
+        printk_status_info("Network adapter set up to: 192.168.2.1 de:ad:01:10:be:ef");
 
         return 0;
 }

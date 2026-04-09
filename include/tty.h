@@ -30,12 +30,25 @@ void init_tty(void);
 
 void write_byte(int c);
 
-void setup_tty_chrfile(struct VFS_Inode *mount_point);
+int setup_tty_chrfile(struct VFS_Inode *mount_point);
 
 void write_to_keyboard_buffer(int c);
 
 void *get_current_keyboard_buffer_offset(void);
 
 int newline_buffered_at(void);
+
+
+int printk(const char *ptr);
+
+
+void printk_status_init(const char *msg);
+
+void printk_status_step(void);
+
+void printk_status_info(const char *msg);
+
+void printk_status_finish(int return_code);
+
 
 #endif //OS_STDIO_H

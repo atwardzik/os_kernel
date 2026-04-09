@@ -70,7 +70,7 @@ typedef struct SpawnFileActions spawn_file_actions_t;
 typedef struct SpawnAttr spawnattr_t;
 
 
-void scheduler_init(void *current_main_kernel_stack);
+int scheduler_init(void *current_main_kernel_stack);
 
 struct Process *scheduler_get_current_process(void);
 

@@ -10,17 +10,6 @@
 #include "kernel/proc.h"
 
 
-int printk(const char *buf) {
-        const char *ptr = buf;
-        const size_t count = strlen(ptr);
-
-        for (int i = 0; i < count; i++) {
-                write_byte(*ptr++);
-        }
-
-        return count;
-}
-
 static struct VFS_Inode *get_parent_directory(const char *name) {
         const struct Process *current_process = scheduler_get_current_process();
         struct VFS_Inode *inode = current_process->pwd;

@@ -4,6 +4,7 @@
 
 #include "proc.h"
 
+#include "errno.h"
 #include "libc.h"
 #include "memory.h"
 #include "signal.h"
@@ -51,9 +52,14 @@ static struct {
 constexpr int PID_IDLE = 0xffff;
 static void idle(void) { while (1); }
 
-static void create_idle_process() {
+static int create_idle_process() {
         const int idle_process_size = 512;
+
         void *process_page = kmalloc(idle_process_size);
+        if (!process_page) {
+                return -ENOMEM;
+        }
+
         void *kstack = process_page + idle_process_size - sizeof(size_t);
         void *pstack = process_page + (idle_process_size / 2) - sizeof(size_t);
         create_process_stack_frame(&pstack,
@@ -86,11 +92,15 @@ static void create_idle_process() {
         scheduler.process_idle = process;
 }
 
-void scheduler_init(void *current_main_kernel_stack) {
+int scheduler_init(void *current_main_kernel_stack) {
         scheduler.max_processes = INITIAL_PROCESS_COUNT;
         scheduler.processes_count = 0;
 
         struct Process *processes = kmalloc(sizeof(struct Process) * INITIAL_PROCESS_COUNT);
+        if (!processes) {
+                return -ENOMEM;
+        }
+
         scheduler.processes = processes;
         for (size_t i = 0; i < INITIAL_PROCESS_COUNT; ++i) { //TODO: this should be DYNAMIC
                 processes[i].ptr = nullptr;
@@ -101,6 +111,8 @@ void scheduler_init(void *current_main_kernel_stack) {
 
         scheduler.main_kernel_stack = current_main_kernel_stack;
         create_idle_process();
+
+        return 0;
 }
 
 struct Process *scheduler_get_current_process() { return scheduler.current_process; }
