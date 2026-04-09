@@ -204,7 +204,7 @@ void vga_put_physical_color_letter(
         row_letter_position = row_letter_position * SCREEN_WIDTH * FONT_HEIGHT;
         column_letter_position = column_letter_position * FONT_WIDTH;
 
-        const unsigned int position = row_letter_position + row_padding + column_letter_position;
+        const unsigned int position = row_letter_position + row_padding + column_letter_position + TOP_IMAGE_PADDING;
 
         for (size_t i = 0; i < 8; ++i) {
                 const uint8_t pixel_line = letter_lookup[i];
@@ -239,7 +239,7 @@ void vga_put_pixel_map(
         const struct PixelMap *pixel_map, const unsigned int row_pixel_position,
         const unsigned int column_pixel_position
 ) {
-        const unsigned int position = row_pixel_position * SCREEN_WIDTH + column_pixel_position;
+        const unsigned int position = row_pixel_position * SCREEN_WIDTH + column_pixel_position + TOP_IMAGE_PADDING;
 
         for (size_t i = 0; i < pixel_map->height; ++i) {
                 for (size_t j = 0; j < pixel_map->width; ++j) {
@@ -269,7 +269,7 @@ static void vga_determine_letter_under_cursor() {
         row_letter_position = row_letter_position * SCREEN_WIDTH * FONT_HEIGHT;
         column_letter_position = column_letter_position * FONT_WIDTH;
 
-        const unsigned int position = row_letter_position + row_padding + column_letter_position;
+        const unsigned int position = row_letter_position + row_padding + column_letter_position + TOP_IMAGE_PADDING;
 
         for (size_t i = 0; i < 8; ++i) {
                 for (size_t j = 0; j < 8; ++j) {

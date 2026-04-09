@@ -16,6 +16,7 @@ constexpr int SCREEN_HEIGHT = 480;
 constexpr int BUFFER_WIDTH = 80;
 constexpr int BUFFER_HEIGHT = 40;
 
+constexpr int TOP_IMAGE_PADDING = 100 * SCREEN_WIDTH;
 
 typedef uint8_t PhysicalColor;
 
@@ -27,17 +28,20 @@ struct PixelMap {
 
 void vga_init(uint32_t hsync_pin, uint32_t vsync_pin, uint32_t pin_red0);
 
-void vga_put_physical_color_letter(char letter, unsigned int row_letter_position, unsigned int column_letter_position,
-                                   PhysicalColor foreground_color,
-                                   PhysicalColor background_color
+void vga_put_physical_color_letter(
+        char letter, unsigned int row_letter_position, unsigned int column_letter_position,
+        PhysicalColor foreground_color,
+        PhysicalColor background_color
 );
 
-void vga_put_byte_encoded_color_letter(char letter, unsigned int row_letter_position,
-                                       unsigned int column_letter_position, ByteColorCode color_code
+void vga_put_byte_encoded_color_letter(
+        char letter, unsigned int row_letter_position,
+        unsigned int column_letter_position, ByteColorCode color_code
 );
 
-void vga_put_pixel_map(const struct PixelMap *pixel_map, unsigned int row_pixel_position,
-                       unsigned int column_pixel_position
+void vga_put_pixel_map(
+        const struct PixelMap *pixel_map, unsigned int row_pixel_position,
+        unsigned int column_pixel_position
 );
 
 
