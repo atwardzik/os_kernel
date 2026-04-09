@@ -21,8 +21,8 @@ struct Chunk {
 
 static struct {
         struct Chunk *head;
-        size_t size;
-        size_t count;
+        size_t allocated_size;
+        unsigned int allocated_chunks;
         void *heap_start;
 } Allocator __attribute__ ((section (".data"))) = {nullptr, 0, 0, heap_start_ptr};
 
@@ -88,8 +88,8 @@ void *kmalloc(size_t size) {
                 return nullptr;
         }
 
-        Allocator.size += chunk.size;
-        Allocator.count += 1;
+        Allocator.allocated_size += chunk.size;
+        Allocator.allocated_chunks += 1;
 
         *(struct Chunk *) (chunk.ptr - sizeof(struct Chunk)) = chunk;
 
@@ -142,8 +142,8 @@ void kfree(void *ptr) {
         if (temp->ptr == ptr) {
                 Allocator.head = temp->next_node;
 
-                Allocator.count -= 1;
-                Allocator.size -= temp->size;
+                Allocator.allocated_chunks -= 1;
+                Allocator.allocated_size -= temp->size;
 
                 return;
         }
@@ -159,17 +159,17 @@ void kfree(void *ptr) {
                 struct Chunk *next = found_chunk->next_node;
                 temp->next_node = next;
 
-                Allocator.count -= 1;
-                Allocator.size -= found_chunk_size;
+                Allocator.allocated_chunks -= 1;
+                Allocator.allocated_size -= found_chunk_size;
         }
 }
 
 size_t get_allocated_size(void) {
-        return Allocator.size;
+        return Allocator.allocated_size;
 }
 
 size_t get_current_heap_size(void) {
-        return Allocator.size + Allocator.count * sizeof(struct Chunk);
+        return Allocator.allocated_size + Allocator.allocated_chunks * sizeof(struct Chunk);
 }
 
 #ifdef TESTS
@@ -188,7 +188,7 @@ void tearDown(void) {
 
 void setup_global_allocator(void) {
         Allocator.head = nullptr;
-        Allocator.size = 0;
+        Allocator.allocated_size = 0;
 }
 
 void setup_test_chunks_3size_t_empty_between() {
@@ -298,8 +298,8 @@ void test_kmalloc_size_info(void) {
         }
 
 
-        TEST_ASSERT_EQUAL_INT(5, Allocator.count);
-        TEST_ASSERT_EQUAL_INT(5 * align_size(sizeof(int)), Allocator.size);
+        TEST_ASSERT_EQUAL_INT(5, Allocator.allocated_chunks);
+        TEST_ASSERT_EQUAL_INT(5 * align_size(sizeof(int)), Allocator.allocated_size);
 }
 
 void test_kfree_nullptr(void) {
@@ -384,8 +384,8 @@ void test_kfree_size_info(void) {
 
         kfree(test1);
 
-        TEST_ASSERT_EQUAL_INT(2, Allocator.count);
-        TEST_ASSERT_EQUAL_INT(2 * sizeof(size_t), Allocator.size);
+        TEST_ASSERT_EQUAL_INT(2, Allocator.allocated_chunks);
+        TEST_ASSERT_EQUAL_INT(2 * sizeof(size_t), Allocator.allocated_size);
 }
 
 void test_get_current_heap_size(void) {
