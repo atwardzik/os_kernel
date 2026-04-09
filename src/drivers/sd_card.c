@@ -59,13 +59,15 @@ int init_sd_card(void) {
         output_enable_pin(15);
         output_enable_pin(14);
         output_enable_pin(12);
-        spi_init(SD_SPI_BLOCK, 2, 15, 0);
+        spi_init(SD_SPI_BLOCK, 2, 3, 0); // 125[MHz] / 2*(1+3) = 15.625 [MHz]
         printk_status_step();
 
         // Power up
         set_pin(SD_CS);
-        delay_ms(1);
-        for (int i = 0; i < 10; ++i) { spi_tx(1, 0xff); }
+        for (int i = 0; i < 10; ++i) {
+                spi_tx(1, 0xff);
+                delay_us(10); //pretend to be much slower
+        }
         printk_status_step();
 
         // Reset into SPI mode

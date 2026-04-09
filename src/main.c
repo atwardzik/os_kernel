@@ -309,6 +309,8 @@ int main(void) {
                 buffer[3] = 0x10;
                 sd_card_write512_block(0, buffer);
                 sd_card_read512_block(0, buffer);
+
+                buffer[0] = 0x00;
         }
 
 
