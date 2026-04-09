@@ -7,15 +7,19 @@
 ![License](https://img.shields.io/badge/License-BSD_3--Clause-blue?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Experimental-orange?style=flat-square)
 
-This project is a custom, monolithic operating system kernel designed specifically for the Raspberry Pi Pico (RP2040)
-and the newer RP2350 microcontrollers. Written primarily in ARM Assembly to maximize low-level control and serve as an
-educational deep-dive into OS architecture, it implements core features like dynamic memory allocation, a custom libc,
+This project is a custom, monolithic operating system kernel designed
+specifically for the Raspberry Pi Pico (RP2040) and the newer RP2350
+microcontrollers. Written primarily in ARM Assembly to maximize low-level
+control and serve as an educational deep-dive into OS architecture, it
+implements core features like dynamic memory allocation, a custom libc,
 preemptive multitasking, and a POSIX-influenced syscall interface.
 
-I also engineered a custom GeT Computer PCB, available [here](https://github.com/atwardzik/GeT_Computer).
+I also engineered a custom GeT Computer PCB, available
+[here](https://github.com/atwardzik/GeT_Computer).
 
-⚠️ Warning: Due to the kernel's complexity, writing new assembly code outside of hardware drivers is currently highly
-unsafe and not recommended. This is an experimental project intended for learning and research.
+⚠️ Warning: Due to the kernel's complexity, writing new assembly code outside
+of hardware drivers is currently highly unsafe and not recommended. This is an
+experimental project intended for learning and research.
 
 ![Shell](images/shell_screen.png)
 
@@ -74,11 +78,17 @@ Depending on your needs you should choose `-DARCH_RP2040=1` or `-DARCH_RP2350=1`
 
 ## Contributing
 
-Issues and pull requests are welcome! Please open an issue before starting major work.
+Issues and pull requests are welcome! Please open an issue before starting
+major work.
+
+There are also issues you can choose from. Some of them are marked
+as "good first issue" – they require little to no knowledge of kernel internals,
+but often are important for the stability of the system.
 
 ## License
 
-Open-source and released under the BSD 3-Clause License. Feel free to use, modify, and distribute the code in accordance
-with the terms specified in the license.
+Open-source and released under the BSD 3-Clause License. Feel free to use,
+modify, and distribute the code in accordance with the terms specified in the
+license.
 
 Copyright (C) 2024-2026 Artur Twardzik
