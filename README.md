@@ -44,7 +44,7 @@ experimental project intended for learning and research.
 | PS/2 keyboard driver     | ✅      | Both immediate and parallel interfaces (with shift-registers) |
 | UART communication       | ✅      |                                                               |
 | VGA driver (640x480)     | ✅      | Scaling up resolutions is in progress                         |
-| SD card driver           | 🚧     | In progress                                                   |
+| SD card driver           | ✅      | Requires additional error checks and refactoring              |
 | Ethernet (WIZnet W5100S) | ✅      | Raw sockets, TCP client and server                            |
 
 ## Future plans
@@ -84,6 +84,13 @@ major work.
 There are also issues you can choose from. Some of them are marked
 as "good first issue" – they require little to no knowledge of kernel internals,
 but often are important for the stability of the system.
+
+### Code Style
+
+This project uses a `.clang-format` configuration file to enforce consistent
+formatting.
+
+Before submitting a pull request, please format your code using `clang-format`.
 
 ## License
 
