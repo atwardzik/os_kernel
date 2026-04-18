@@ -26,18 +26,11 @@ constexpr uint8_t EMPTY_SPACE = 0x20;
 constexpr uint32_t ARROW_LEFT = 0x1b5b44;
 constexpr uint32_t ARROW_RIGHT = 0x1b5b43;
 
-void init_tty(void);
-
-void write_byte(int c);
+int init_tty(void);
 
 int setup_tty_chrfile(struct VFS_Inode *mount_point);
 
 void write_to_keyboard_buffer(int c);
-
-void *get_current_keyboard_buffer_offset(void);
-
-int newline_buffered_at(void);
-
 
 int printk(const char *ptr);
 

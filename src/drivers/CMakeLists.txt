@@ -8,12 +8,14 @@ add_library(drivers OBJECT
 
         divider.S
 
-        keyboard.S
+        ps2_keyboard.S
         vga.c
         vga.S
         spi.S
         ethernet.c
         sd_card.c
+        ps2.c
+        ps2_keyboard.c
 )
 
 target_include_directories(drivers PUBLIC ${CMAKE_SOURCE_DIR}/include/drivers)

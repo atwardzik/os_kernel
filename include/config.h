@@ -22,6 +22,8 @@ typedef struct {
 
                 struct {
                         bool enabled;
+                        unsigned int clk_pin;
+                        unsigned int dat_pin;
                 } ps2_keyboard;
         } io_dev;
 

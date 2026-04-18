@@ -43,9 +43,9 @@
  * r0 - keyboard interrupt pin
  */
 .thumb_func
-.global init_keyboard
+.global init_ps2_keyboard_interface
 .align 4
-init_keyboard:
+init_ps2_keyboard_interface:
         push    {r4, r5, lr}
         mov     r4, r0
 
@@ -133,9 +133,9 @@ init_keyboard:
  *  r1 - keyboard CLK pin (in range 0-32)
  */
 .thumb_func
-.global init_keyboard
+.global init_ps2_keyboard_interface
 .align 4
-init_keyboard:
+init_ps2_keyboard_interface:
         push    {r4, r5, lr}
         mov     r4, r0
         mov     r5, r1

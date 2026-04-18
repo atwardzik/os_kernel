@@ -18,7 +18,9 @@ static runtime_config_t kconf_mutable = {
                 },
 
                 .ps2_keyboard = {
-                        .enabled = true
+                        .enabled = true,
+                        .clk_pin = 26,
+                        .dat_pin = 27,
                 }
         },
 

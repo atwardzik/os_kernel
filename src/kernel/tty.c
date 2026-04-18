@@ -9,17 +9,11 @@
 #include "escape_codes.h"
 #include "libc.h"
 #include "signal.h"
-#include "drivers/gpio.h"
-#include "drivers/keyboard.h"
-#include "drivers/pio.h"
-#include "drivers/time.h"
+#include "drivers/ps2_keyboard.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
 #include "kernel/memory.h"
 #include "kernel/resources.h"
-
-
-//TODO: probably UART should be separated from screen terminal!
 
 
 extern uint8_t __screen_buffer_start__[];
@@ -29,7 +23,7 @@ uint8_t *const screen_buffer_ptr = __screen_buffer_start__;
 const uint8_t *const screen_length_ptr = __screen_buffer_length__;
 
 
-void raw_put_letter(
+static void raw_put_letter(
         const char letter, const unsigned int row_letter_position,
         const unsigned int column_letter_position,
         const ByteColorCode color_code
@@ -70,110 +64,6 @@ static struct {
         struct CharBuffer *buffer;
 } ScreenWriter = {0, 0, (BLACK << 4 | WHITE), (struct CharBuffer *) screen_buffer_ptr};
 
-
-void init_tty() {
-        if (kconf->io_dev.uart.enabled) {
-                uart_init();
-                uart_clr_screen();
-        }
-
-        if (kconf->io_dev.ps2_keyboard.enabled) {
-                constexpr int CLK_PIN = 26;
-                constexpr int DAT_PIN = 27;
-                init_keyboard(DAT_PIN, CLK_PIN);
-
-                set_sm_enabled(1, 0, false);
-
-                /*
-                 * Step 0, cmd SET LED
-                 */
-                clr_pin(CLK_PIN);
-                clr_pin(DAT_PIN);
-                //cmd request
-                init_pin_output(CLK_PIN); //clk low
-                delay_us(120);
-                init_pin_output(DAT_PIN);                //dat low
-                init_pin_input_with_pull(CLK_PIN, true); //release CLK
-
-                //0xed - set led + parity on
-                uint16_t cmd =  (0xed) | (1 << 8);
-                for (int i = 0; i < 9; ++i) {
-                        while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
-                        if ((cmd >> i) & 0x1) {
-                                set_pin(DAT_PIN);
-                        }
-                        else {
-                                clr_pin(DAT_PIN);
-                        }
-                        while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
-                }
-                init_pin_input_with_pull(DAT_PIN, true); //release DAT
-                while (get_pin_mask() & (1 << DAT_PIN)) {} //wait for dat low - ACK signal
-                while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
-
-                //wait for ACK byte
-                uint32_t value = 0;
-                while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
-                // START bit
-                while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
-                for (int i = 0; i < 9; ++i) {
-                        while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
-                        value = (value << 1) | (get_pin_mask() & (1 << DAT_PIN));
-                        while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
-                }
-                delay_us(200);
-
-                /*
-                 * Step 1, ARGUMENT
-                 */
-                clr_pin(CLK_PIN);
-                clr_pin(DAT_PIN);
-                //cmd request
-                init_pin_output(CLK_PIN); //clk low
-                delay_us(120);
-                init_pin_output(DAT_PIN);                //dat low
-                init_pin_input_with_pull(CLK_PIN, true); //release CLK
-
-
-                //0xed - set led + parity on
-                cmd = 0x06 | (1 << 8);
-                for (int i = 0; i < 9; ++i) {
-                        while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
-                        if ((cmd >> i) & 0x1) {
-                                set_pin(DAT_PIN);
-                        }
-                        else {
-                                clr_pin(DAT_PIN);
-                        }
-                        while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
-                }
-                init_pin_input_with_pull(DAT_PIN, true); //release DAT
-                while (get_pin_mask() & (1 << DAT_PIN)) {} //wait for dat low - ACK signal
-                while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
-
-
-                //wait for ACK byte
-                value = 0;
-                while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
-                // START bit
-                while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
-                for (int i = 0; i < 9; ++i) {
-                        while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
-                        value = (value << 1) | (get_pin_mask() & (1 << DAT_PIN));
-                        while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
-                }
-                delay_us(200);
-
-                clear_internal_and_jump(1, 0, 0);
-                set_sm_enabled(1, 0, true);
-        }
-
-        if (kconf->io_dev.vga_display.enabled) {
-                vga_init(9, 10, 3);
-
-                vga_setup_cursor(0, 0, ScreenWriter.current_color_code, 500'000);
-        }
-}
 
 static void move_buffer_position_left() {
         if (ScreenWriter.current_column_position == 0) {
@@ -336,7 +226,7 @@ static void write_with_line_overflow_if_needed(const char c) {
 }
 
 
-void write_byte(const int c) {
+static void write_byte(const int c) {
         static uint8_t escape_sequence[10] = {};
         static size_t escape_sequence_position = 0;
 
@@ -433,7 +323,7 @@ static int keyboard_buffer_current_position = 0;
 
 static bool signal_buffer_newline = false;
 
-void *get_current_keyboard_buffer_offset() {
+static void *get_current_keyboard_buffer_offset() {
         return keyboard_device_file_stream->buffer + keyboard_buffer_final_length;
 }
 
@@ -549,7 +439,7 @@ void write_to_keyboard_buffer(int c) {
         }
 }
 
-int newline_buffered_at() { //TODO: rename
+static int newline_buffered_at() { //TODO: rename
         if (signal_buffer_newline) {
                 const auto temp = keyboard_buffer_final_length;
 
@@ -598,6 +488,45 @@ static ssize_t tty_write(struct File *, void *buf, const size_t count, off_t fil
         return count;
 }
 
+static int init_keyboard_device_file_stream(void) {
+        constexpr size_t buf_size = 1024;
+
+        keyboard_device_file_stream = kmalloc(
+                sizeof(*keyboard_device_file_stream)
+                + (buf_size - 1) * sizeof(char)
+        );
+        if (!keyboard_device_file_stream) {
+                return -ENOMEM;
+        }
+
+        keyboard_device_file_stream->length = buf_size;
+        keyboard_device_file_stream->read_wait = nullptr;
+
+        return 0;
+}
+
+int init_tty() {
+        if (init_keyboard_device_file_stream() < 0) {
+                return -ENOMEM;
+        }
+
+
+        if (kconf->io_dev.uart.enabled) {
+                uart_init();
+                uart_clr_screen();
+        }
+
+        init_ps2_keyboard();
+
+        if (kconf->io_dev.vga_display.enabled) {
+                vga_init(9, 10, 3);
+
+                vga_setup_cursor(0, 0, ScreenWriter.current_color_code, 500'000);
+        }
+
+        return 0;
+}
+
 int setup_tty_chrfile(struct VFS_Inode *mount_point) {
         if (!mount_point) {
                 return -ENOENT;
@@ -612,16 +541,6 @@ int setup_tty_chrfile(struct VFS_Inode *mount_point) {
         stdio_op->write = tty_write;
         kfree(mount_point->i_fop);
         mount_point->i_fop = stdio_op;
-
-        constexpr size_t buf_size = 1024;
-
-        keyboard_device_file_stream = kmalloc(
-                sizeof(*keyboard_device_file_stream)
-                + (buf_size - 1) * sizeof(char)
-        );
-
-        keyboard_device_file_stream->length = buf_size;
-        keyboard_device_file_stream->read_wait = nullptr;
 
         return 0;
 }
