@@ -25,4 +25,6 @@ void set_irq_pin_enabled_edge_low(uint32_t pin);
 
 void clr_interrupt(uint32_t pin);
 
+uint32_t get_pin_mask(void);
+
 #endif //GPIO_H

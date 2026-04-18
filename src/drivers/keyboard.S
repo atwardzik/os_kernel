@@ -215,115 +215,10 @@ init_keyboard:
         bl      clear_internal_and_jump
 
 
-.init_sm1_keyboard_tx_clk:
-        @ 0) Disable State Machine!!!
-        movs    r0, #1                  @ PIO BLOCK 1
-        movs    r1, #1                  @ State Machine 1
-        movs    r2, #0                  @ disable
-        bl      set_sm_enabled
-
-        @ 1) Load program
-        ldr     r0, =ps2_serial_tx_clk
-        movs    r1, #10                 @ Total of 10 words
-        movs    r2, #1                  @ PIO1
-        bl      load_pio_prog
-
-        @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL);
-        @ (WRAP_TARGET << 7) | (WRAP << 12)
-        movs    r0, #1                  @ PIO BLOCK 1
-        movs    r1, #1                  @ State Machine 1
-        ldr     r2, =0x13580            @ bottom wrap at 11, top wrap at 19
-        bl      setup_pio_execctrl
-
-        @ 3) Set state machine pin ctrl
-        movs    r0, #1                  @ one pin affected
-        lsls    r0, #26                 @ SET_COUNT_BITS
-        mov     r1, r5                  @ pin clk affected
-        lsls    r1, #5                  @ SET_BASE_BITS
-        orrs    r2, r0, r1              @ control bits
-
-        movs    r0, #1                  @ PIO BLOCK 1
-        movs    r1, #1                  @ State Machine 1
-        bl      setup_pio_pinctrl
-
-        @ 4) setup interrupt
-
-        @ 5) Setup pins
-        movs    r0, #1                  @ PIO1
-        movs    r1, #1                  @ SM1
-        mov     r2, r5                  @ clk pin
-        movs    r3, #1                  @ one pin affected
-        bl      set_consecutive_pindirs_out
-
-        @ 6) set clock divisor
-        movs    r0, #1
-        movs    r1, #1
-        ldr     r2, =0x8230000          @ 125[MHz] / 2083 = 60kHz
-        bl      setup_pio_clkdiv
-
-        @ 7) PIO State Machine init - load and jump to first instruction
-        movs    r0, #1
-        movs    r1, #1
-        movs    r2, #11                 @ address begin
-        bl      clear_internal_and_jump
-
-.init_sm2_keyboard_tx_dat:
-        @ 0) Disable State Machine!!!
-        movs    r0, #1                  @ PIO BLOCK 1
-        movs    r1, #2                  @ State Machine 2
-        movs    r2, #0                  @ disable
-        bl      set_sm_enabled
-
-        @ 1) Load program
-        ldr     r0, =ps2_serial_tx_clk
-        movs    r1, #11                 @ Total of 11 words
-        movs    r2, #1                  @ PIO1
-        bl      load_pio_prog
-
-        @ 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL);
-        @ (WRAP_TARGET << 7) | (WRAP << 12)
-        movs    r0, #1                  @ PIO BLOCK 1
-        movs    r1, #2                  @ State Machine 2
-        ldr     r2, =0x1fa80            @ bottom wrap at 21, top wrap at 31
-        bl      setup_pio_execctrl
-
-        @ 3) Set state machine pin ctrl
-        movs    r0, #1                  @ one pin affected
-        lsls    r0, #26                 @ SET_COUNT_BITS
-        mov     r1, r4                  @ pin dat affected
-        lsls    r1, #5                  @ SET_BASE_BITS
-        orrs    r2, r0, r1              @ control bits
-
-        movs    r0, #1                  @ PIO BLOCK 1
-        movs    r1, #2                  @ State Machine 2
-        bl      setup_pio_pinctrl
-
-        @ 4) setup interrupt
-
-        @ 5) Setup pins
-        movs    r0, #1                  @ PIO1
-        movs    r1, #2                  @ State Machine 2
-        mov     r2, r4                  @ dat pin
-        movs    r3, #1                  @ one pin affected
-        bl      set_consecutive_pindirs_out
-
-        @ 6) set clock divisor
-        movs    r0, #1                  @ PIO1
-        movs    r1, #2                  @ State Machine 2
-        movs    r2, #125                @ 125 [MHz] / 125 = 1 [MHz]
-        bl      setup_pio_clkdiv
-
-        @ 7) PIO State Machine init - load and jump to first instruction
-        movs    r0, #1
-        movs    r1, #2
-        movs    r2, #21                 @ address begin
-        bl      clear_internal_and_jump
-
-
 .run_all_sm:
         @ 9) Set state machine running
         movs    r0, #1                  @ PIO1
-        movs    r1, #7                  @ sm 0, 1, 2
+        movs    r1, #1                  @ sm 0
         movs    r2, #1                  @ enabled=true
         bl      set_multiple_sm_enabled
 
@@ -344,38 +239,6 @@ ps2_serial_rcv:
         .word 0x2060    @ 9:            wait    0 jmppin, 0
         .word 0x20e0    @ 10:           wait    1 jmppin, 0
                         @       .wrap
-
-
-.align 4
-ps2_serial_tx_clk:
-                        @       .wrap_target
-        .word 0x80a0    @ 11:           pull   block
-        .word 0xe028    @ 12:           set     x, 8
-        .word 0xe081    @ 13:           set     pindirs, 1
-        .word 0xe801    @ 14:           set     pins, 0 [8]     @ clk low >100us
-        .word 0xc000    @ 15:           irq     nowait 0        @ signal dat low
-        .word 0xe080    @ 16:           set     pindirs, 0      @ release clk
-        .word 0x2020    @ 17: send:     wait    0 pin, 0        @ wait clk low
-        .word 0xc000    @ 18:           irq     nowait 0        @ signal tx dat
-        .word 0x20a1    @ 19:           wait    1 pin, 1        @ wait clk high
-        .word 0x0051    @ 20:           jmp     x--, send
-                        @       .wrap
-
-.align 4
-ps2_serial_tx_dat:
-                        @     .wrap_target
-        .word 0xe028    @ 21:           set    x, 8
-        .word 0x20c0    @ 22:           wait   1 irq, 0         @ wait for perm
-        .word 0xe081    @ 23:           set    pindirs, 1
-        .word 0xe000    @ 24:           set    pins, 0          @ set dat low
-        .word 0x80a0    @ 25:           pull   block            @ get data
-        .word 0x20c0    @ 26: send:     wait   1 irq, 0         @ wait for perm
-        .word 0x6001    @ 27:           out    pins, 1          @ tx bit
-        .word 0x005a    @ 28:           jmp    x--, send
-        .word 0xe080    @ 29:           set    pindirs, 0       @ release dat
-        .word 0x2020    @ 30:           wait   0 pin, 0         @ wait for acq
-        .word 0xc002    @ 31:           irq    nowait 2         @ signal acq
-                        @     .wrap
 
 #endif
 

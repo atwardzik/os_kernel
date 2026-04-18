@@ -9,7 +9,10 @@
 #include "escape_codes.h"
 #include "libc.h"
 #include "signal.h"
+#include "drivers/gpio.h"
 #include "drivers/keyboard.h"
+#include "drivers/pio.h"
+#include "drivers/time.h"
 #include "drivers/uart.h"
 #include "drivers/vga.h"
 #include "kernel/memory.h"
@@ -67,6 +70,7 @@ static struct {
         struct CharBuffer *buffer;
 } ScreenWriter = {0, 0, (BLACK << 4 | WHITE), (struct CharBuffer *) screen_buffer_ptr};
 
+
 void init_tty() {
         if (kconf->io_dev.uart.enabled) {
                 uart_init();
@@ -74,7 +78,94 @@ void init_tty() {
         }
 
         if (kconf->io_dev.ps2_keyboard.enabled) {
-                init_keyboard(27, 26);
+                constexpr int CLK_PIN = 26;
+                constexpr int DAT_PIN = 27;
+                init_keyboard(DAT_PIN, CLK_PIN);
+
+                set_sm_enabled(1, 0, false);
+
+                /*
+                 * Step 0, cmd SET LED
+                 */
+                clr_pin(CLK_PIN);
+                clr_pin(DAT_PIN);
+                //cmd request
+                init_pin_output(CLK_PIN); //clk low
+                delay_us(120);
+                init_pin_output(DAT_PIN);                //dat low
+                init_pin_input_with_pull(CLK_PIN, true); //release CLK
+
+                //0xed - set led + parity on
+                uint16_t cmd =  (0xed) | (1 << 8);
+                for (int i = 0; i < 9; ++i) {
+                        while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
+                        if ((cmd >> i) & 0x1) {
+                                set_pin(DAT_PIN);
+                        }
+                        else {
+                                clr_pin(DAT_PIN);
+                        }
+                        while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
+                }
+                init_pin_input_with_pull(DAT_PIN, true); //release DAT
+                while (get_pin_mask() & (1 << DAT_PIN)) {} //wait for dat low - ACK signal
+                while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
+
+                //wait for ACK byte
+                uint32_t value = 0;
+                while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
+                // START bit
+                while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
+                for (int i = 0; i < 9; ++i) {
+                        while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
+                        value = (value << 1) | (get_pin_mask() & (1 << DAT_PIN));
+                        while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
+                }
+                delay_us(200);
+
+                /*
+                 * Step 1, ARGUMENT
+                 */
+                clr_pin(CLK_PIN);
+                clr_pin(DAT_PIN);
+                //cmd request
+                init_pin_output(CLK_PIN); //clk low
+                delay_us(120);
+                init_pin_output(DAT_PIN);                //dat low
+                init_pin_input_with_pull(CLK_PIN, true); //release CLK
+
+
+                //0xed - set led + parity on
+                cmd = 0x06 | (1 << 8);
+                for (int i = 0; i < 9; ++i) {
+                        while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
+                        if ((cmd >> i) & 0x1) {
+                                set_pin(DAT_PIN);
+                        }
+                        else {
+                                clr_pin(DAT_PIN);
+                        }
+                        while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
+                }
+                init_pin_input_with_pull(DAT_PIN, true); //release DAT
+                while (get_pin_mask() & (1 << DAT_PIN)) {} //wait for dat low - ACK signal
+                while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
+
+
+                //wait for ACK byte
+                value = 0;
+                while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
+                // START bit
+                while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
+                for (int i = 0; i < 9; ++i) {
+                        while (get_pin_mask() & (1 << CLK_PIN)) {} //wait for clk low
+                        value = (value << 1) | (get_pin_mask() & (1 << DAT_PIN));
+                        while (!(get_pin_mask() & (1 << CLK_PIN))) {} //wait for clk high
+                }
+                delay_us(200);
+
+                clear_internal_and_jump(1, 0, 0);
+                set_sm_enabled(1, 0, true);
         }
 
         if (kconf->io_dev.vga_display.enabled) {
