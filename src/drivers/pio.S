@@ -672,6 +672,40 @@ setup_pio_inte:
                 movs    r0, #1
                 pop     {r4, pc}
 
+/**
+ * Checks if specified state machine is running
+ *  r0 - PIO block number
+ *  r1 - state machine
+ */
+.thumb_func
+.global is_pio_sm_running
+.align 4
+is_pio_sm_running:
+        push    {r4, lr}
+        mov     r4, r1
+
+        bl      determine_pio_block_address
+        cmp     r0, #0
+        beq     .exit_sm_running_failure
+        cmp     r1, #3
+        bgt     .exit_sm_running_failure
+
+
+
+        movs    r1, #1
+        lsls    r1, r4
+        ldr     r0, [r0, PIO_CTRL]
+        tst     r0, r1
+        ite     eq
+        moveq   r0, #0
+        movne   r0, #1
+
+        pop     {r4, pc}
+
+        .exit_sm_running_failure:
+                movs    r0, #1
+                pop     {r4, pc}
+
 
 /**
  * Determine specified PIO register

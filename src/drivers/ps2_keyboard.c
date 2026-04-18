@@ -5,7 +5,9 @@
 #include "ps2_keyboard.h"
 
 #include "config.h"
+#include "gpio.h"
 #include "ps2.h"
+#include "time.h"
 #include "kernel/error.h"
 #include "kernel/memory.h"
 
@@ -43,9 +45,7 @@ int ps2_keyboard_toggle_led(const enum KeyboardLED led) {
 
         ps2_keyboard->led_status ^= led_toggled;
 
-        led_toggled ^= 2;
-
-        uint8_t cmd[] = {PS2_KBRD_SET_LED, led_toggled};
+        const uint8_t cmd[] = {PS2_KBRD_SET_LED, ps2_keyboard->led_status};
         return ps2_tx(&ps2_keyboard->interface, cmd, 2);
 }
 
@@ -53,8 +53,6 @@ int init_ps2_keyboard(void) {
         if (!kconf->io_dev.ps2_keyboard.enabled) {
                 return -ENODEV;
         }
-
-        init_ps2_keyboard_interface(kconf->io_dev.ps2_keyboard.dat_pin, kconf->io_dev.ps2_keyboard.clk_pin);
 
         ps2_keyboard = kmalloc(sizeof(*ps2_keyboard));
         if (!ps2_keyboard) {
@@ -67,10 +65,11 @@ int init_ps2_keyboard(void) {
         ps2_keyboard->interface.state_machine = 0;
         ps2_keyboard->led_status = 0;
 
-        uint8_t cmd[] = {PS2_KBRD_RST};
-        ps2_tx(&ps2_keyboard->interface, cmd, 1);
 
-        ps2_keyboard_toggle_led(CAPS_LOCK); //FIXME: remove; test only
+        const uint8_t cmd = PS2_KBRD_RST;
+        ps2_tx(&ps2_keyboard->interface, &cmd, 1);
+
+        init_ps2_keyboard_interface(kconf->io_dev.ps2_keyboard.dat_pin, kconf->io_dev.ps2_keyboard.clk_pin);
 
         return 0;
 }

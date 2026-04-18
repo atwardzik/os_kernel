@@ -15,4 +15,6 @@ void set_sm_enabled(int pio_block, int state_machine, bool enabled);
 
 void clear_internal_and_jump(int pio_block, int state_machine, uint8_t address_begin);
 
+bool is_pio_sm_running(int pio_block, int state_machine);
+
 #endif //PIO_H
