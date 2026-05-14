@@ -303,7 +303,7 @@ char *strchr(const char *str, const int ch) {
 
         for (size_t i = 0; i < strlen(str) + 1; ++i) {
                 if (str[i] == (char) ch) {
-                        return str;
+                        return str + i;
                 }
         }
 
