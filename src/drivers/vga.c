@@ -209,6 +209,9 @@ void vga_put_physical_color_letter(
         for (size_t i = 0; i < 8; ++i) {
                 const uint8_t pixel_line = letter_lookup[i];
                 for (size_t j = 0; j < 8; ++j) {
+                        // As you can see, the first bit shifted is the least significant one.
+                        // This bit goes to the very first bit position in bitmap. Therefore,
+                        // the array containing glyphs has those glyphs mirrored.
                         if (pixel_line & (1 << j)) {
                                 *(uint8_t *) (vidram_start_ptr + i * SCREEN_WIDTH + j + position) =
                                         foreground_color;
