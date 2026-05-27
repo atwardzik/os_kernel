@@ -10,6 +10,7 @@ add_library(kernel OBJECT
         signal.c
         network.c
         error.c
+        loader.c
 )
 
 set_source_files_properties(memory.c PROPERTIES COMPILE_FLAGS -Wno-pointer-arith)
