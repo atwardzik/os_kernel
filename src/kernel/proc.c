@@ -356,7 +356,9 @@ pid_t sys_spawn_process(
         const struct RAMFS_Inode *inode = (struct RAMFS_Inode *) current->files.fdtable[fd]->f_inode;
         const struct ProcessPage *ppage = load_exec(inode->file_begin);
 
-        return sys_spawnp_process(ppage->_start_address, file_actions, attrp, argv, envp);
+        void *_start_address = (uint8_t *) ppage->page_ptr + ppage->_start_offset;
+
+        return sys_spawnp_process(_start_address, file_actions, attrp, argv, envp);
 }
 
 static struct Files setup_init_stdio(struct VFS_Inode *root) {

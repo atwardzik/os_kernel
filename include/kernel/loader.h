@@ -7,11 +7,13 @@
 
 #include <stddef.h>
 
+#include "types.h"
+
 struct ProcessPage {
         void *page_ptr;
         unsigned int pages_count;
 
-        void *_start_address;
+        off_t _start_offset;
 
         //todo: add leftover memory from process pages to reuse in the heap
 };

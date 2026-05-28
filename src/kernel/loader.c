@@ -138,22 +138,22 @@ bool validate_elf(const void *fbytes) {
 
         constexpr uint8_t magic[8] = {0x7f, 0x45, 0x4c, 0x46, 0x01, 0x01, 0x01, 0x00};
         if (memcmp(elf_header->e_ident, magic, 8) != 0) {
-                dprintf(2, "Not an elf file. Magic number did not match.\n");
+                // dprintf(2, "Not an elf file. Magic number did not match.\n");
                 return false;
         }
 
         if (elf_header->e_type != E_TYPE_EXEC && elf_header->e_type != E_TYPE_DYN) {
-                dprintf(2, "File type not supported. Supported types are currently EXEC/DYN only.\n");
+                // dprintf(2, "File type not supported. Supported types are currently EXEC/DYN only.\n");
                 return false;
         }
 
         if (elf_header->e_machine != E_MACHINE_ARM) {
-                dprintf(2, "Machine not supported, only ARM!\n");
+                // dprintf(2, "Machine not supported, only ARM!\n");
                 return false;
         }
 
         if (elf_header->e_version != 1) {
-                dprintf(2, "Version is not current.\n");
+                // dprintf(2, "Version is not current.\n");
                 return false;
         }
 
@@ -167,15 +167,15 @@ Elf32_Sections parse_sections(const void *fbytes) {
         const Elf32_SHdr *shdr_table = fbytes + elf_header->e_shoff;
         const Elf32_SHdr *shstrtab = &shdr_table[elf_header->e_shstrndx];
 
-        printf("\nSection Headers:\n");
-        printf("Indx %-20s Addr   Offs   Size\n", "Section name");
+        // printf("\nSection Headers:\n");
+        // printf("Indx %-20s Addr   Offs   Size\n", "Section name");
         for (size_t i = 0; i < elf_header->e_shnum; ++i) {
                 const Elf32_SHdr *shdr = &shdr_table[i];
 
                 const char *section_name = (char *) (fbytes + shstrtab->sh_offset + shdr->sh_name);
                 const uintptr_t section_offset = shdr->sh_offset;
-                printf("[%2zu] %-20s 0x%04x 0x%04x %4i\n", i, section_name,
-                       shdr->sh_addr, shdr->sh_offset, shdr->sh_size);
+                // printf("[%2zu] %-20s 0x%04x 0x%04x %4i\n", i, section_name,
+                // shdr->sh_addr, shdr->sh_offset, shdr->sh_size);
 
 
                 if (strcmp(section_name, ".text") == 0) {
@@ -245,8 +245,52 @@ struct ProcessPage *load_exec(void *fbytes) {
         Address _start_address = 0;
 
         if (!sections.text) {
-                dprintf(2, "ELF file does not contain .text section.\n");
+                // dprintf(2, "ELF file does not contain .text section.\n");
                 return nullptr;
+        }
+
+        unsigned int bufsz = 2 * 4096;
+        unsigned char *buffer = kmalloc(bufsz);
+        if (!buffer) {
+                return nullptr;
+        }
+        memset(buffer, 0, bufsz);
+
+        size_t index = 0;
+        unsigned int loaded_pages_count = 0;
+        for (size_t i = 0; i < elf_header->e_phnum; ++i) {
+                const Elf32_PHdr *phdr = &phdr_table[i];
+                if (phdr->p_type != PT_LOAD) {
+                        continue;
+                }
+
+                index = phdr->p_paddr;
+
+                if (index + phdr->p_memsz >= bufsz) {
+                        bufsz += index + phdr->p_memsz;
+                        buffer = krealloc(buffer, bufsz);
+                        if (!buffer) {
+                                return nullptr;
+                        }
+                }
+
+                memcpy(buffer + index, fbytes + phdr->p_offset, phdr->p_filesz);
+
+                loaded_pages_count += 1;
+        }
+
+        for (size_t i = 0; i < sections.rel_plt_len; ++i) {
+                const Elf32_Rel *rel = &sections.rel_plt[i];
+                const Elf32_Sym *symbol = &sections.dynsym[ELF32_R_SYM(rel->r_info)];
+                const char *symbol_name = &sections.dynstr[symbol->st_name];
+
+                //todo: search in .dynamic section for info about whereabouts of dynamic libraries
+                //todo: should one check if it is a function or an object? The readelf shows R_ARM_JUMP_SLOT for functions
+                const uint32_t dyn_address_replacement = get_dyn(symbol_name);
+
+                //For an executable file or a shared object, the offset is the virtual address of the storage
+                //unit affected by the relocation.
+                memcpy(buffer + rel->r_offset, (char *) &dyn_address_replacement, 4); //endianess?
         }
 
 
@@ -269,54 +313,10 @@ struct ProcessPage *load_exec(void *fbytes) {
                 // printf("[%2zu] %s\n", i, name);
         }
 
-
-        constexpr int bufsz = 2 * 4096;
-        unsigned char *buffer = kmalloc(bufsz);
-        if (!buffer) {
-                return nullptr;
-        }
-        memset(buffer, 0, bufsz);
-
-        size_t index = 0;
-        unsigned int loaded_pages_count = 0;
-        for (size_t i = 0; i < elf_header->e_phnum; ++i) {
-                const Elf32_PHdr *phdr = &phdr_table[i];
-                index += phdr->p_paddr;
-
-                if (phdr->p_type != PT_LOAD) {
-                        continue;
-                }
-
-                if (index + phdr->p_memsz >= bufsz) {
-                        // dprintf(2, "Not enough memory.\n");
-                        kfree(buffer);
-                        return nullptr;
-                }
-
-                memcpy(buffer + index, fbytes + phdr->p_offset, phdr->p_filesz);
-
-                loaded_pages_count += 1;
-                index += phdr->p_memsz;
-        }
-
-        for (size_t i = 0; i < sections.rel_plt_len; ++i) {
-                const Elf32_Rel *rel = &sections.rel_plt[i];
-                const Elf32_Sym *symbol = &sections.dynsym[ELF32_R_SYM(rel->r_info)];
-                const char *symbol_name = &sections.dynstr[symbol->st_shndx];
-
-                //todo: search in .dynamic section for info about whereabouts of dynamic libraries
-                //todo: should one check if it is a function or an object? The readelf shows R_ARM_JUMP_SLOT for functions
-                const uint32_t dyn_address_replacement = get_dyn(symbol_name);
-
-                //For an executable file or a shared object, the offset is the virtual address of the storage
-                //unit affected by the relocation.
-                memcpy(buffer + rel->r_offset, (char *) &dyn_address_replacement, 4); //endianess?
-        }
-
         struct ProcessPage *ppage = kmalloc(sizeof(*ppage));
         ppage->page_ptr = buffer;
         ppage->pages_count = loaded_pages_count;
-        ppage->_start_address = (void *) (uintptr_t) (_start_address + 1); //+1 for the thumb mode
+        ppage->_start_offset = _start_address;
 
         return ppage;
 }
