@@ -133,31 +133,6 @@ typedef struct {
         size_t bss_len;
 } Elf32_Sections;
 
-
-void *read_exec(const char *filename) {
-        int fd = open(filename, O_RDONLY, 0);
-        if (fd < 0) {
-                dprintf(2, "File not found.\n");
-                return nullptr;
-        }
-
-        const auto len = lseek(fd, 0, SEEK_END);
-        lseek(fd, 0, SEEK_SET);
-
-        void *fbytes = kmalloc(len);
-        if (!fbytes) {
-                return nullptr;
-        }
-
-        const size_t n = read(fd, fbytes, len);
-        if (n < 1) {
-                kfree(fbytes);
-                return nullptr;
-        }
-
-        return fbytes;
-}
-
 bool validate_elf(const void *fbytes) {
         const Elf32_EHdr *elf_header = fbytes;
 
@@ -257,15 +232,9 @@ Elf32_Sections parse_sections(const void *fbytes) {
         return sections;
 }
 
-int load_exec(const char *path) {
-        void *fbytes = read_exec(path);
-        if (!fbytes) {
-                dprintf(2, "File could not be opened.\n");
-                return -1;
-        }
-
+struct ProcessPage *load_exec(void *fbytes) {
         if (!validate_elf(fbytes)) {
-                goto cleanup_error;
+                return nullptr;
         }
 
         const Elf32_EHdr *elf_header = fbytes;
@@ -276,13 +245,13 @@ int load_exec(const char *path) {
         Address _start_address = 0;
 
         if (!sections.text) {
-                dprintf(2, "ELF file not parsed properly.\n");
-                goto cleanup_error;
+                dprintf(2, "ELF file does not contain .text section.\n");
+                return nullptr;
         }
 
 
-        printf("\n.symtab:\n");
-        printf("Indx Name\n");
+        // printf("\n.symtab:\n");
+        // printf("Indx Name\n");
         for (size_t i = 0; i < sections.symtab_len; ++i) {
                 const char *name;
                 if (sections.symtab[i].st_name == 0) {
@@ -297,32 +266,19 @@ int load_exec(const char *path) {
                         _start_address = sections.symtab[i].st_value;
                 }
 
-                printf("[%2zu] %s\n", i, name);
-        }
-        printf("\n.dynsym:\n");
-        printf("Indx Name\n");
-        for (size_t i = 0; i < sections.dynsym_len; ++i) {
-                const char *section_name;
-                if (sections.dynsym[i].st_name == 0) {
-                        const Elf32_SHdr *section = &shdr_table[i];
-                        section_name = (const char *) (fbytes + shstrtab->sh_offset + section->sh_name);
-                }
-                else {
-                        section_name = sections.dynstr + sections.dynsym[i].st_name;
-                }
-
-                printf("[%2zu] %s\n", i, section_name);
+                // printf("[%2zu] %s\n", i, name);
         }
 
 
         constexpr int bufsz = 2 * 4096;
         unsigned char *buffer = kmalloc(bufsz);
         if (!buffer) {
-                goto cleanup_error;
+                return nullptr;
         }
         memset(buffer, 0, bufsz);
 
         size_t index = 0;
+        unsigned int loaded_pages_count = 0;
         for (size_t i = 0; i < elf_header->e_phnum; ++i) {
                 const Elf32_PHdr *phdr = &phdr_table[i];
                 index += phdr->p_paddr;
@@ -332,13 +288,14 @@ int load_exec(const char *path) {
                 }
 
                 if (index + phdr->p_memsz >= bufsz) {
-                        dprintf(2, "Not enough memory.\n");
+                        // dprintf(2, "Not enough memory.\n");
                         kfree(buffer);
-                        goto cleanup_error;
+                        return nullptr;
                 }
 
                 memcpy(buffer + index, fbytes + phdr->p_offset, phdr->p_filesz);
 
+                loaded_pages_count += 1;
                 index += phdr->p_memsz;
         }
 
@@ -356,22 +313,10 @@ int load_exec(const char *path) {
                 memcpy(buffer + rel->r_offset, (char *) &dyn_address_replacement, 4); //endianess?
         }
 
+        struct ProcessPage *ppage = kmalloc(sizeof(*ppage));
+        ppage->page_ptr = buffer;
+        ppage->pages_count = loaded_pages_count;
+        ppage->_start_address = (void *) (uintptr_t) (_start_address + 1); //+1 for the thumb mode
 
-        printf("\n\nExecutable:\n0000\t");
-        for (size_t i = 0; i < index; ++i) {
-                printf("%02x ", buffer[i]);
-
-                if ((i + 1) % 16 == 0) {
-                        printf("\n%04x\t", (int) i + 1);
-                }
-        }
-        printf("\nStart address: %08x\n", _start_address);
-
-        kfree(fbytes);
-        kfree(buffer);
-        return 0;
-
-cleanup_error:
-        kfree(fbytes);
-        return -1;
+        return ppage;
 }

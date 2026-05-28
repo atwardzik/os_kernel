@@ -10,6 +10,7 @@
 #include "signal.h"
 #include "tty.h"
 #include "fs/ramfs.h"
+#include "loader.h"
 
 //TODO: processes should be better organized than a static array with fixed-position for give pid.
 
@@ -352,10 +353,10 @@ pid_t sys_spawn_process(
 ) {
         const struct Process *current = scheduler.current_process;
 
-        // TODO: The file must be always mapped to RAM
         const struct RAMFS_Inode *inode = (struct RAMFS_Inode *) current->files.fdtable[fd]->f_inode;
+        const struct ProcessPage *ppage = load_exec(inode->file_begin);
 
-        return sys_spawnp_process(inode->file_begin + 1, file_actions, attrp, argv, envp);
+        return sys_spawnp_process(ppage->_start_address, file_actions, attrp, argv, envp);
 }
 
 static struct Files setup_init_stdio(struct VFS_Inode *root) {

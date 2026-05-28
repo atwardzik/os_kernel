@@ -5,7 +5,7 @@
 # Find file on: gist.github.com/atwardzik          #
 # File name:    cset.sh                            #
 ####################################################
-.PHONY: clean
+.PHONY: all clean initramfs
 
 ### Compilers options
 CC := arm-none-eabi-gcc
@@ -14,10 +14,10 @@ AS := arm-none-eabi-as
 LINKER := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
 
-CC_ARGS = -Ilibc -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -Wno-unused-parameter -Wno-discarded-qualifiers -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fPIC -c -g -O0
-CXX_ARGS = -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -std=c++23 -c -g -O0
+CC_ARGS = -Ilibc -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -Wno-unused-parameter -Wno-discarded-qualifiers -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fPIC -c -O0
+CXX_ARGS = -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -std=c++23 -c -O0
 AS_ARGS = --warn --fatal-warnings -mcpu=cortex-m33 -mthumb -g
-LINK_ARGS = -ffreestanding -nostdlib -nostartfiles -mthumb -fPIC
+LINK_ARGS = -L. -Wl,-rpath,. -Wl,--dynamic-linker=/get_os/custom/ld.so -Wl,--gc-sections -ffreestanding -nostartfiles -mthumb -mcpu=cortex-m33 -pie
 
 ### Build files structure
 SRCDIR := src
@@ -33,94 +33,74 @@ DIRS := \
 	$(RAWDIR)/etc \
 	$(RAWDIR)/home \
 	$(RAWDIR)/proc \
+	$(RAWDIR)/lib \
 	$(RAWDIR)/sbin
 
 ### Executables
-SHELL_SRCS := $(SRCDIR)/shell.c
-SHELL_OBJS := $(SHELL_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
-SHELL_OUT := $(BINDIR)/shell.out
-SHELL_RAW := $(RAWDIR)/bin/gsh
+GSH_SRCS := $(SRCDIR)/shell.c
+GSH_OBJS := $(GSH_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+GSH := $(BINDIR)/shell
 
 LS_SRCS := $(SRCDIR)/ls.s
 LS_OBJS := $(LS_SRCS:$(SRCDIR)/%.s=$(OBJDIR)/%.o)
-LS_OUT := $(BINDIR)/ls.out
-LS_RAW := $(RAWDIR)/bin/ls
+LS := $(BINDIR)/ls
 
 MKDIR_SRCS := $(SRCDIR)/mkdir.c
 MKDIR_OBJS := $(MKDIR_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
-MKDIR_OUT := $(BINDIR)/mkdir.out
-MKDIR_RAW := $(RAWDIR)/bin/mkdir
+MKDIR := $(BINDIR)/mkdir
 
 TOUCH_SRCS := $(SRCDIR)/touch.c
 TOUCH_OBJS := $(TOUCH_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
-TOUCH_OUT := $(BINDIR)/touch.out
-TOUCH_RAW := $(RAWDIR)/bin/touch
+TOUCH := $(BINDIR)/touch
 
 CAT_SRCS := $(SRCDIR)/cat.c
 CAT_OBJS := $(CAT_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
-CAT_OUT := $(BINDIR)/cat.out
-CAT_RAW := $(RAWDIR)/bin/cat
+CAT := $(BINDIR)/cat
 
 ### Executables' rules
-all: libc.o dirs $(SHELL_RAW) $(MKDIR_RAW) $(TOUCH_RAW) $(CAT_RAW) $(LS_RAW)
+all: libc.so dirs $(GSH) $(MKDIR) $(TOUCH) $(CAT) $(LS)
 
 
 # Link
-$(LS_OUT): $(LS_OBJS)
-	@mkdir -p $(dir $@)
+$(LS): $(LS_OBJS) | dirs
 	$(LINKER) $(LINK_ARGS) $^ -o $@
 
-$(LS_RAW): $(LS_OUT)
-	$(OBJCOPY) -O binary $< $@
+$(GSH): $(GSH_OBJS) | dirs
+	$(LINKER) $(LINK_ARGS) $^ -llibc -o $@
 
+$(MKDIR): $(MKDIR_OBJS) | dirs
+	$(LINKER) $(LINK_ARGS) $^ -llibc -o $@
 
-$(SHELL_OUT): $(SHELL_OBJS)
-	@mkdir -p $(dir $@)
-	$(LINKER) $(LINK_ARGS) $^ $(OBJDIR)/libc.o -o $@
+$(TOUCH): $(TOUCH_OBJS) | dirs
+	$(LINKER) $(LINK_ARGS) $^ -llibc -o $@
 
-$(SHELL_RAW): $(SHELL_OUT)
-	$(OBJCOPY) -O binary $< $@
+$(CAT): $(CAT_OBJS) | dirs
+	$(LINKER) $(LINK_ARGS) $^ -llibc -o $@
 
-
-$(MKDIR_OUT): $(MKDIR_OBJS)
-	@mkdir -p $(dir $@)
-	$(LINKER) $(LINK_ARGS) $^ $(OBJDIR)/libc.o -o $@
-
-$(MKDIR_RAW): $(MKDIR_OUT)
-	$(OBJCOPY) -O binary $< $@
-
-
-$(TOUCH_OUT): $(TOUCH_OBJS)
-	@mkdir -p $(dir $@)
-	$(LINKER) $(LINK_ARGS) $^ $(OBJDIR)/libc.o -o $@
-
-$(TOUCH_RAW): $(TOUCH_OUT)
-	$(OBJCOPY) -O binary $< $@
-
-
-$(CAT_OUT): $(CAT_OBJS)
-	@mkdir -p $(dir $@)
-	$(LINKER) $(LINK_ARGS) $^ $(OBJDIR)/libc.o -o $@
-
-$(CAT_RAW): $(CAT_OUT)
-	$(OBJCOPY) -O binary $< $@
 
 # Generate object files from C and assembly sources
-$(OBJDIR)/%.o: $(SRCDIR)/%.c
-	@mkdir -p $(OBJDIR)
+$(OBJDIR)/%.o: $(SRCDIR)/%.c | dirs
 	$(CC) $(CC_ARGS) -c $< -o $@
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.s
-	@mkdir -p $(OBJDIR)
+$(OBJDIR)/%.o: $(SRCDIR)/%.s | dirs
 	$(AS) $(AS_ARGS) -o $@ $<
 
 
 # Additional rules
 clean:
-	@rm -rf *.o *.elf $(OBJDIR)/* $(BINDIR)/* $(RAWDIR)/*
+	@rm -rf *.o *.elf $(OBJDIR) $(BINDIR) $(RAWDIR)
 
 dirs:
 	@mkdir -p $(DIRS)
+	@mkdir -p $(OBJDIR)
+	@mkdir -p $(BINDIR)
 
-libc.o:
+$(OBJDIR)/libc.o: libc/libc.c | dirs
 	$(CC) $(CC_ARGS) -Wno-discarded-qualifiers -Wno-incompatible-pointer-types libc/libc.c -o $(OBJDIR)/libc.o
+
+libc.so: $(OBJDIR)/libc.o | dirs
+	$(CC) -mthumb -fPIC -ffreestanding -nostartfiles -shared -o liblibc.so $(OBJDIR)/libc.o
+
+initramfs: all
+	@cp bin/* initramfs/bin/
+	@cp liblibc.so initramfs/lib/
