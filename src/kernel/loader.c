@@ -84,6 +84,9 @@ typedef struct {
         Word r_info;
 } Elf32_Rel;
 
+#define ELF32_R_SYM(i) ((i)>>8)
+#define ELF32_R_TYPE(i) ((unsigned char)(i))
+#define ELF32_R_INFO(s,t) (((s)<<8)+(unsigned char)(t))
 
 typedef struct {
         /*INFO*/
@@ -264,11 +267,13 @@ int load_exec(const char *path) {
         if (!validate_elf(fbytes)) {
                 goto cleanup_error;
         }
+
         const Elf32_EHdr *elf_header = fbytes;
         const Elf32_SHdr *shdr_table = fbytes + elf_header->e_shoff;
         const Elf32_PHdr *phdr_table = fbytes + elf_header->e_phoff;
         const Elf32_SHdr *shstrtab = &shdr_table[elf_header->e_shstrndx];
         const Elf32_Sections sections = parse_sections(fbytes);
+        Address _start_address = 0;
 
         if (!sections.text) {
                 dprintf(2, "ELF file not parsed properly.\n");
@@ -276,15 +281,51 @@ int load_exec(const char *path) {
         }
 
 
-        constexpr int bufsz = 4096;
+        printf("\n.symtab:\n");
+        printf("Indx Name\n");
+        for (size_t i = 0; i < sections.symtab_len; ++i) {
+                const char *name;
+                if (sections.symtab[i].st_name == 0) {
+                        const Elf32_SHdr *section = &shdr_table[i];
+                        name = (const char *) (fbytes + shstrtab->sh_offset + section->sh_name);
+                }
+                else {
+                        name = sections.strtab + sections.symtab[i].st_name;
+                }
+
+                if (strcmp(name, "_start") == 0) {
+                        _start_address = sections.symtab[i].st_value;
+                }
+
+                printf("[%2zu] %s\n", i, name);
+        }
+        printf("\n.dynsym:\n");
+        printf("Indx Name\n");
+        for (size_t i = 0; i < sections.dynsym_len; ++i) {
+                const char *section_name;
+                if (sections.dynsym[i].st_name == 0) {
+                        const Elf32_SHdr *section = &shdr_table[i];
+                        section_name = (const char *) (fbytes + shstrtab->sh_offset + section->sh_name);
+                }
+                else {
+                        section_name = sections.dynstr + sections.dynsym[i].st_name;
+                }
+
+                printf("[%2zu] %s\n", i, section_name);
+        }
+
+
+        constexpr int bufsz = 2 * 4096;
         unsigned char *buffer = kmalloc(bufsz);
         if (!buffer) {
                 goto cleanup_error;
         }
+        memset(buffer, 0, bufsz);
 
         size_t index = 0;
         for (size_t i = 0; i < elf_header->e_phnum; ++i) {
                 const Elf32_PHdr *phdr = &phdr_table[i];
+                index += phdr->p_paddr;
 
                 if (phdr->p_type != PT_LOAD) {
                         continue;
@@ -301,32 +342,30 @@ int load_exec(const char *path) {
                 index += phdr->p_memsz;
         }
 
-        printf("\n.symtab:\n");
-        printf("Indx Name\n");
-        for (size_t i = 0; i < sections.symtab_len; ++i) {
-                const char *name;
-                if (sections.symtab[i].st_name == 0) {
-                        const Elf32_SHdr *section = &shdr_table[i];
-                        name = (const char *) (fbytes + shstrtab->sh_offset + section->sh_name);
-                }
-                else {
-                        name = sections.strtab + sections.symtab[i].st_name;
-                }
+        for (size_t i = 0; i < sections.rel_plt_len; ++i) {
+                const Elf32_Rel *rel = &sections.rel_plt[i];
+                const Elf32_Sym *symbol = &sections.dynsym[ELF32_R_SYM(rel->r_info)];
+                const char *symbol_name = &sections.dynstr[symbol->st_shndx];
 
-                printf("[%2zu] %s\n", i, name);
+                //todo: search in .dynamic section for info about whereabouts of dynamic libraries
+                //todo: should one check if it is a function or an object? The readelf shows R_ARM_JUMP_SLOT for functions
+                const uint32_t dyn_address_replacement = get_dyn(symbol_name);
 
-                // if (ELF32_ST_TYPE(sections.symtab[i].st_info) == SST_FUNC && sections.symtab[i].st_shndx == stubs_index) {
-                //         const uint32_t dest_offset = symtab[i].st_value & 0xffff'fffe;
-                //
-                //         const uint32_t dyn_address_replacement = get_dyn(name);
-                //         memcpy(buffer + dest_offset + 4, (char *) &dyn_address_replacement, 4); //endianess?
-                // }
+                //For an executable file or a shared object, the offset is the virtual address of the storage
+                //unit affected by the relocation.
+                memcpy(buffer + rel->r_offset, (char *) &dyn_address_replacement, 4); //endianess?
         }
 
 
+        printf("\n\nExecutable:\n0000\t");
         for (size_t i = 0; i < index; ++i) {
                 printf("%02x ", buffer[i]);
+
+                if ((i + 1) % 16 == 0) {
+                        printf("\n%04x\t", (int) i + 1);
+                }
         }
+        printf("\nStart address: %08x\n", _start_address);
 
         kfree(fbytes);
         kfree(buffer);
