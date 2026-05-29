@@ -10,7 +10,7 @@
 #include "memory.h"
 
 
-uint32_t get_dyn(const char *) { return 0xdeadbeef; }
+static uint32_t get_dyn(const char *) { return 0xdeadbeef; }
 
 constexpr int ELF_NIDENT = 16;
 constexpr int E_TYPE_REL = 1;
@@ -133,7 +133,7 @@ typedef struct {
         size_t bss_len;
 } Elf32_Sections;
 
-bool validate_elf(const void *fbytes) {
+static bool validate_elf(const void *fbytes) {
         const Elf32_EHdr *elf_header = fbytes;
 
         constexpr uint8_t magic[8] = {0x7f, 0x45, 0x4c, 0x46, 0x01, 0x01, 0x01, 0x00};
@@ -160,7 +160,7 @@ bool validate_elf(const void *fbytes) {
         return true;
 }
 
-Elf32_Sections parse_sections(const void *fbytes) {
+static Elf32_Sections parse_sections(const void *fbytes) {
         Elf32_Sections sections = {0};
 
         const Elf32_EHdr *elf_header = fbytes;
@@ -232,22 +232,9 @@ Elf32_Sections parse_sections(const void *fbytes) {
         return sections;
 }
 
-struct ProcessPage *load_exec(void *fbytes) {
-        if (!validate_elf(fbytes)) {
-                return nullptr;
-        }
-
+static struct ProcessPage *load_pages_to_ram(const void *fbytes) {
         const Elf32_EHdr *elf_header = fbytes;
-        const Elf32_SHdr *shdr_table = fbytes + elf_header->e_shoff;
         const Elf32_PHdr *phdr_table = fbytes + elf_header->e_phoff;
-        const Elf32_SHdr *shstrtab = &shdr_table[elf_header->e_shstrndx];
-        const Elf32_Sections sections = parse_sections(fbytes);
-        Address _start_address = 0;
-
-        if (!sections.text) {
-                // dprintf(2, "ELF file does not contain .text section.\n");
-                return nullptr;
-        }
 
         unsigned int bufsz = 2 * 4096;
         unsigned char *buffer = kmalloc(bufsz);
@@ -279,44 +266,91 @@ struct ProcessPage *load_exec(void *fbytes) {
                 loaded_pages_count += 1;
         }
 
-        for (size_t i = 0; i < sections.rel_plt_len; ++i) {
-                const Elf32_Rel *rel = &sections.rel_plt[i];
-                const Elf32_Sym *symbol = &sections.dynsym[ELF32_R_SYM(rel->r_info)];
-                const char *symbol_name = &sections.dynstr[symbol->st_name];
+        struct ProcessPage *ppage = kmalloc(sizeof(*ppage));
+        ppage->page_ptr = buffer;
+        ppage->pages_count = loaded_pages_count;
+
+        return ppage;
+}
+
+static int resolve_dyn_relocations(struct ProcessPage *ppage, const Elf32_Sections *sections) {
+        unsigned char *buffer = ppage->page_ptr;
+
+        for (size_t i = 0; i < sections->rel_plt_len; ++i) {
+                const Elf32_Rel *rel = &sections->rel_plt[i];
+                const Elf32_Sym *symbol = &sections->dynsym[ELF32_R_SYM(rel->r_info)];
+                const char *symbol_name = &sections->dynstr[symbol->st_name];
 
                 //todo: search in .dynamic section for info about whereabouts of dynamic libraries
                 //todo: should one check if it is a function or an object? The readelf shows R_ARM_JUMP_SLOT for functions
                 const uint32_t dyn_address_replacement = get_dyn(symbol_name);
+
+                //1. retrieve dynlib name
+                //2. search in /lib for file (try to open file)
+                //3. find function offsets from the elf file
+                //4. apply relocations
 
                 //For an executable file or a shared object, the offset is the virtual address of the storage
                 //unit affected by the relocation.
                 memcpy(buffer + rel->r_offset, (char *) &dyn_address_replacement, 4); //endianess?
         }
 
+        return 0;
+}
 
-        // printf("\n.symtab:\n");
-        // printf("Indx Name\n");
-        for (size_t i = 0; i < sections.symtab_len; ++i) {
+static Address find_entry_point(const void *fbytes, const Elf32_Sections *sections) {
+        const Elf32_EHdr *elf_header = fbytes;
+        const Elf32_SHdr *shdr_table = fbytes + elf_header->e_shoff;
+        const Elf32_SHdr *shstrtab = &shdr_table[elf_header->e_shstrndx];
+
+        Address _start_address = 0;
+
+        for (size_t i = 0; i < sections->symtab_len; ++i) {
                 const char *name;
-                if (sections.symtab[i].st_name == 0) {
+                if (sections->symtab[i].st_name == 0) {
                         const Elf32_SHdr *section = &shdr_table[i];
                         name = (const char *) (fbytes + shstrtab->sh_offset + section->sh_name);
                 }
                 else {
-                        name = sections.strtab + sections.symtab[i].st_name;
+                        name = sections->strtab + sections->symtab[i].st_name;
                 }
 
                 if (strcmp(name, "_start") == 0) {
-                        _start_address = sections.symtab[i].st_value;
+                        _start_address = sections->symtab[i].st_value;
                 }
-
-                // printf("[%2zu] %s\n", i, name);
         }
 
-        struct ProcessPage *ppage = kmalloc(sizeof(*ppage));
-        ppage->page_ptr = buffer;
-        ppage->pages_count = loaded_pages_count;
-        ppage->_start_offset = _start_address;
+        return _start_address;
+}
+
+struct ProcessPage *load_exec(const void *fbytes) {
+        if (!validate_elf(fbytes)) {
+                return nullptr;
+        }
+
+        const Elf32_Sections sections = parse_sections(fbytes);
+
+        if (!sections.text) {
+                // dprintf(2, "ELF file does not contain .text section.\n");
+                return nullptr;
+        }
+        struct ProcessPage *ppage = load_pages_to_ram(fbytes);
+
+        int res = resolve_dyn_relocations(ppage, &sections);
+        if (res < 0) {
+                goto cleanup_err;
+        }
+
+        const Address entry_point = find_entry_point(fbytes, &sections);
+        if (!entry_point) {
+                goto cleanup_err;
+        }
+        ppage->_start_offset = entry_point;
 
         return ppage;
+
+cleanup_err:
+        kfree(ppage->page_ptr);
+        kfree(ppage);
+        return nullptr;
 }

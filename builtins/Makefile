@@ -57,25 +57,27 @@ CAT_SRCS := $(SRCDIR)/cat.c
 CAT_OBJS := $(CAT_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 CAT := $(BINDIR)/cat
 
+CRT0 := $(OBJDIR)/crt0.o
+
 ### Executables' rules
-all: libc.so crt0.o dirs $(GSH) $(MKDIR) $(TOUCH) $(CAT) $(LS)
+all: liblibc.so $(CRT0) dirs $(GSH) $(MKDIR) $(TOUCH) $(CAT) $(LS)
 
 
 # Link
-$(LS): $(LS_OBJS) $(OBJDIR)/crt0.o | dirs
-	$(LINKER) $(LINK_ARGS) $^ -o $@
+$(LS): $(LS_OBJS) $(CRT0) | dirs
+	$(LINKER) $(LINK_ARGS) $(LS_OBJS) $(CRT0) -o $@
 
-$(GSH): $(GSH_OBJS) $(OBJDIR)/crt0.o | dirs
-	$(LINKER) $(LINK_ARGS) $^ -llibc -o $@
+$(GSH): $(GSH_OBJS) $(CRT0) liblibc.so | dirs
+	$(LINKER) $(LINK_ARGS) $(GSH_OBJS) $(CRT0) -llibc -o $@
 
-$(MKDIR): $(MKDIR_OBJS) $(OBJDIR)/crt0.o | dirs
-	$(LINKER) $(LINK_ARGS) $^ -llibc -o $@
+$(MKDIR): $(MKDIR_OBJS) $(CRT0) liblibc.so | dirs
+	$(LINKER) $(LINK_ARGS) $(MKDIR_OBJS) $(CRT0) -llibc -o $@
 
-$(TOUCH): $(TOUCH_OBJS) $(OBJDIR)/crt0.o | dirs
-	$(LINKER) $(LINK_ARGS) $^ -llibc -o $@
+$(TOUCH): $(TOUCH_OBJS) $(CRT0) liblibc.so | dirs
+	$(LINKER) $(LINK_ARGS) $(TOUCH_OBJS) $(CRT0) -llibc -o $@
 
-$(CAT): $(CAT_OBJS) $(OBJDIR)/crt0.o | dirs
-	$(LINKER) $(LINK_ARGS) $^ -llibc -o $@
+$(CAT): $(CAT_OBJS) $(CRT0) liblibc.so | dirs
+	$(LINKER) $(LINK_ARGS) $(CAT_OBJS) $(CRT0) -llibc -o $@
 
 
 # Generate object files from C and assembly sources
@@ -98,10 +100,10 @@ dirs:
 $(OBJDIR)/libc.o: libc/libc.c | dirs
 	clang -Wno-missing-multilib --target=arm-none-eabi -Ilibc -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fropi -frwpi -c -O0 libc/libc.c -o $(OBJDIR)/libc.o
 
-libc.so: $(OBJDIR)/libc.o | dirs
+liblibc.so: $(OBJDIR)/libc.o | dirs
 	$(CC) -mthumb -fPIC -ffreestanding -nostartfiles -shared -o liblibc.so $(OBJDIR)/libc.o
 
-crt0.o: crt0.s
+$(CRT0): crt0.s
 	$(AS) $(AS_ARGS) $< -o $(OBJDIR)/crt0.o
 
 initramfs: all
