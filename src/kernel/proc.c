@@ -265,8 +265,11 @@ static struct Process *create_blank_process(void (*process_entry_ptr)(void), cha
                                    &exit,
                                    process_entry_ptr,
                                    EXC_RETURN_THREAD_PSP_CODE);
-        *(size_t *) (pstack_begin - offset - 28) = (size_t *) (pstack_begin - offset + sizeof(size_t));
-        *(size_t *) (pstack_begin - offset - 32) = offset / sizeof(size_t);
+        *(size_t *) (pstack_begin - offset - 28) = (size_t *) (pstack_begin - offset + sizeof(size_t)); //argv
+        *(size_t *) (pstack_begin - offset - 32) = offset / sizeof(size_t); //argc
+
+        //FIXME: PLACE R9-PAGE ONLY IF NECCESSARY, TEMPORARILY IS ON THE KERNEL STACK...
+        *(size_t *) (pstack + 28) = (uintptr_t) pstack_begin + 1; //r9 = kernel stack...
 
         struct Process process = {
                 .ptr = process_page,

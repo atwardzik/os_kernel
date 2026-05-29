@@ -101,7 +101,7 @@ $(OBJDIR)/libc.o: libc/libc.c | dirs
 	clang -Wno-missing-multilib --target=arm-none-eabi -Ilibc -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fropi -frwpi -c -O0 libc/libc.c -o $(OBJDIR)/libc.o
 
 liblibc.so: $(OBJDIR)/libc.o | dirs
-	$(CC) -mthumb -fPIC -ffreestanding -nostartfiles -shared -o liblibc.so $(OBJDIR)/libc.o
+	$(CC) -Wl,-Bsymbolic -mthumb -fPIC -ffreestanding -nostartfiles -shared -o liblibc.so $(OBJDIR)/libc.o
 
 $(CRT0): crt0.s
 	$(AS) $(AS_ARGS) $< -o $(OBJDIR)/crt0.o

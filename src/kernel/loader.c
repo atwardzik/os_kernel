@@ -476,9 +476,6 @@ static int resolve_dyn_relocations(
                 //todo: should one check if it is a function or an object? The readelf shows R_ARM_JUMP_SLOT for functions
                 const uint32_t dyn_address_replacement = get_dyn(symbol_name, dynlib_names);
 
-
-                //4. apply relocations
-
                 //For an executable file or a shared object, the offset is the virtual address of the storage
                 //unit affected by the relocation.
                 memcpy(buffer + rel->r_offset, (char *) &dyn_address_replacement, 4); //endianess?
