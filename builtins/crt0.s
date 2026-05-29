@@ -10,8 +10,8 @@
 .thumb_func
 _start:
         @ clear bss
-        ldr     r1, =main
-        blx     r1
+
+        bl      main    @ must be done with bl to be position independent
 
         bkpt    #0
         @ call exit (it is done automatically)
