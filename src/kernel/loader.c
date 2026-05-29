@@ -3,14 +3,17 @@
 //
 
 #include "loader.h"
+#include "errno.h"
+#include "error.h"
 #include "libc.h"
+#include "memory.h"
+#include "proc.h"
+#include "fs/file.h"
+#include "fs/ramfs.h"
+
 
 #include <stdint.h>
 
-#include "memory.h"
-
-
-static uint32_t get_dyn(const char *) { return 0xdeadbeef; }
 
 constexpr int ELF_NIDENT = 16;
 constexpr int E_TYPE_REL = 1;
@@ -19,9 +22,11 @@ constexpr int E_TYPE_DYN = 3;
 constexpr int E_MACHINE_ARM = 0x28;
 constexpr int SST_FUNC = 2;
 constexpr int PT_LOAD = 1;
+constexpr int STN_UNDEF = 0;
 
 typedef uint16_t HalfWord;
 typedef uint32_t Word;
+typedef int32_t Sword;
 typedef uint32_t Address;
 typedef uint32_t Offset;
 
@@ -88,6 +93,63 @@ typedef struct {
 #define ELF32_R_TYPE(i) ((unsigned char)(i))
 #define ELF32_R_INFO(s,t) (((s)<<8)+(unsigned char)(t))
 
+
+typedef struct {
+        Sword d_tag;
+
+        union {
+                Word d_val;
+                Address d_ptr;
+        } d_un;
+} Elf32_Dyn;
+
+typedef enum {
+        DT_NULL            = 0,
+        DT_NEEDED          = 1,
+        DT_PLTRELSZ        = 2,
+        DT_PLTGOT          = 3,
+        DT_HASH            = 4,
+        DT_STRTAB          = 5,
+        DT_SYMTAB          = 6,
+        DT_RELA            = 7,
+        DT_RELASZ          = 8,
+        DT_RELAENT         = 9,
+        DT_STRSZ           = 10,
+        DT_SYMENT          = 11,
+        DT_INIT            = 12,
+        DT_FINI            = 13,
+        DT_SONAME          = 14,
+        DT_RPATH           = 15,
+        DT_SYMBOLIC        = 16,
+        DT_REL             = 17,
+        DT_RELSZ           = 18,
+        DT_RELENT          = 19,
+        DT_PLTREL          = 20,
+        DT_DEBUG           = 21,
+        DT_TEXTREL         = 22,
+        DT_JMPREL          = 23,
+        DT_BIND_NOW        = 24,
+        DT_INIT_ARRAY      = 25,
+        DT_FINI_ARRAY      = 26,
+        DT_INIT_ARRAYSZ    = 27,
+        DT_FINI_ARRAYSZ    = 28,
+        DT_RUNPATH         = 29,
+        DT_FLAGS           = 30,
+        DT_ENCODING        = 32,
+        DT_PREINIT_ARRAY   = 32,
+        DT_PREINIT_ARRAYSZ = 33,
+        DT_SYMTAB_SHNDX    = 34,
+        DT_RELRSZ          = 35,
+        DT_RELR            = 36,
+        DT_RELRENT         = 37,
+        DT_SYMTABSZ        = 39,
+
+        DT_LOOS   = 0x6000000D,
+        DT_HIOS   = 0x6FFFF000,
+        DT_LOPROC = 0x70000000
+} ElfDynamicTag;
+
+
 typedef struct {
         /*INFO*/
 
@@ -116,6 +178,10 @@ typedef struct {
         const Address *got;
         size_t got_len;
 
+        const Elf32_Dyn *dynamic;
+
+        const Word *hash;
+        size_t hash_len;
 
         /*EXEC*/
 
@@ -227,6 +293,13 @@ static Elf32_Sections parse_sections(const void *fbytes) {
                         sections.got = fbytes + shdr->sh_offset;
                         sections.got_len = shdr->sh_size;
                 }
+                else if (strcmp(section_name, ".dynamic") == 0) {
+                        sections.dynamic = fbytes + shdr->sh_offset;
+                }
+                else if (strcmp(section_name, ".hash") == 0) {
+                        sections.hash = fbytes + shdr->sh_offset;
+                        sections.hash_len = shdr->sh_size / sizeof(Word);
+                }
         }
 
         return sections;
@@ -273,7 +346,125 @@ static struct ProcessPage *load_pages_to_ram(const void *fbytes) {
         return ppage;
 }
 
-static int resolve_dyn_relocations(struct ProcessPage *ppage, const Elf32_Sections *sections) {
+static const char **retrieve_dynlib_names(const void *fbytes, const Elf32_Sections *sections) {
+        const char *strtab = nullptr;
+
+        const Elf32_Dyn *dyn_entry = &sections->dynamic[0];
+        int i = 0;
+        while (dyn_entry->d_tag != DT_NULL) {
+                dyn_entry = &sections->dynamic[i];
+                if (dyn_entry->d_tag == DT_STRTAB) {
+                        strtab = fbytes + dyn_entry->d_un.d_ptr;
+                        break;
+                }
+
+                i += 1;
+                dyn_entry = &sections->dynamic[i];
+        }
+
+        if (!strtab) {
+                return nullptr;
+        }
+
+
+        const char **dynlib_names = kmalloc(sizeof(char *) * 10);
+        memset(dynlib_names, 0, sizeof(char *) * 10);
+        if (!dynlib_names) {
+                return ERR_PTR(-ENOMEM);
+        }
+        int names_index = 0;
+
+        i = 0;
+        dyn_entry = &sections->dynamic[0];
+        while (dyn_entry->d_tag != DT_NULL) {
+                if (dyn_entry->d_tag == DT_NEEDED) {
+                        dynlib_names[names_index] = strtab + dyn_entry->d_un.d_val;
+
+                        names_index += 1;
+                }
+
+                i += 1;
+                dyn_entry = &sections->dynamic[i];
+        }
+
+        return dynlib_names;
+}
+
+static unsigned long elf_hash(const unsigned char *name) {
+        unsigned long h = 0, g;
+        while (*name) {
+                h = (h << 4) + *name++;
+                if (g = h & 0xf0000000)
+                        h ^= g >> 24;
+                h &= ~g;
+        }
+        return h;
+}
+
+static uint32_t get_dyn(const char *symbol_name, const char **dynlib_names) {
+        //todo: fix after implementing normal filesystem - all dynamic libraries must be already in ram
+
+        const struct Process *current_process = scheduler_get_current_process();
+        struct Dentry dentry = {
+                .name = "initramfs",
+        };
+        const struct Dentry *initramfs = current_process->root->i_op->lookup(current_process->root, &dentry, 0);
+        dentry.name = "lib";
+        const struct Dentry *libdir = current_process->root->i_op->lookup(initramfs->inode, &dentry, 0);
+        kfree(initramfs);
+
+
+        const unsigned long symbol_hash = elf_hash(symbol_name);
+
+        int i = 0;
+        while (dynlib_names[i]) {
+                dentry.name = dynlib_names[i];
+                struct Dentry *dynlib = current_process->root->i_op->lookup(libdir->inode, &dentry, 0);
+
+                const void *fbytes = ((struct RAMFS_Inode *) dynlib->inode)->file_begin;
+                kfree(dynlib);
+                const Elf32_Sections dynlib_sections = parse_sections(fbytes);
+
+                // bucket[x%nbucket] gives an index, y,
+                // If the symbol
+                // table entry is not the one desired, chain[y] gives the next symbol table entry with the same hash value.
+                // One can follow the chain links until either the selected symbol table entry holds the desired name or
+                // the chain entry contains the value STN_UNDEF.
+
+                const Word *hash = dynlib_sections.hash;
+
+                Word nbucket = hash[0];
+                Word nchain = hash[1];
+
+                const Word *bucket = &hash[2];
+                const Word *chain = &hash[2 + nbucket];
+
+                Word index = bucket[symbol_hash % nbucket];
+
+                while (index != STN_UNDEF) {
+                        const Elf32_Sym *symbol = &dynlib_sections.dynsym[index];
+                        const char *name = &dynlib_sections.dynstr[symbol->st_name];
+
+                        if (strcmp(name, symbol_name) == 0) {
+                                const Address offset = symbol->st_value;
+
+                                return (uintptr_t) (fbytes + offset);
+                        }
+
+                        index = chain[index];
+                }
+
+
+                i += 1;
+        }
+
+        kfree(libdir);
+        return 0x00;
+}
+
+static int resolve_dyn_relocations(
+        struct ProcessPage *ppage, const Elf32_Sections *sections, const char **dynlib_names
+) {
         unsigned char *buffer = ppage->page_ptr;
 
         for (size_t i = 0; i < sections->rel_plt_len; ++i) {
@@ -283,11 +474,9 @@ static int resolve_dyn_relocations(struct ProcessPage *ppage, const Elf32_Sectio
 
                 //todo: search in .dynamic section for info about whereabouts of dynamic libraries
                 //todo: should one check if it is a function or an object? The readelf shows R_ARM_JUMP_SLOT for functions
-                const uint32_t dyn_address_replacement = get_dyn(symbol_name);
+                const uint32_t dyn_address_replacement = get_dyn(symbol_name, dynlib_names);
 
-                //1. retrieve dynlib name
-                //2. search in /lib for file (try to open file)
-                //3. find function offsets from the elf file
+
                 //4. apply relocations
 
                 //For an executable file or a shared object, the offset is the virtual address of the storage
@@ -336,9 +525,13 @@ struct ProcessPage *load_exec(const void *fbytes) {
         }
         struct ProcessPage *ppage = load_pages_to_ram(fbytes);
 
-        int res = resolve_dyn_relocations(ppage, &sections);
-        if (res < 0) {
-                goto cleanup_err;
+        const char **dynlib_names = retrieve_dynlib_names(fbytes, &sections);
+        if (dynlib_names) {
+                const int res = resolve_dyn_relocations(ppage, &sections, dynlib_names);
+                if (res < 0) {
+                        kfree(dynlib_names);
+                        goto cleanup_err;
+                }
         }
 
         const Address entry_point = find_entry_point(fbytes, &sections);
