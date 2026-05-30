@@ -128,6 +128,7 @@ static int get_file_descriptor(struct VFS_Inode *inode) {
         found_file->f_op = inode->i_fop;
         found_file->f_inode = inode;
         found_file->f_pos = 0;
+        found_file->f_owner = current_process->pid;
 
         for (size_t i = 0; i < MAX_OPEN_FILE_DESCRIPTORS; ++i) {
                 if (current_process->files.fdtable[i] == nullptr) {
