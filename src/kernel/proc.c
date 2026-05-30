@@ -19,7 +19,7 @@
 
 static constexpr size_t INITIAL_PROCESS_COUNT = 20;
 
-static constexpr int DEFAULT_PROCESS_SIZE = 8 * 1024; // 8 [KB]
+static constexpr int DEFAULT_PROCESS_SIZE = 8 * 1024; // 8 [KiB]
 
 static constexpr off_t DEFAULT_PROCESS_SP_OFFSET = 6 * 1024;
 
@@ -69,6 +69,7 @@ static int create_idle_process() {
                                    EXC_RETURN_THREAD_PSP_CODE);
 
         struct Process process = {
+                .ppage = nullptr,
                 .ptr = process_page,
                 .pstack = pstack,
                 .pid = PID_IDLE,
@@ -266,12 +267,13 @@ static struct Process *create_blank_process(void (*process_entry_ptr)(void), cha
                                    process_entry_ptr,
                                    EXC_RETURN_THREAD_PSP_CODE);
         *(size_t *) (pstack_begin - offset - 28) = (size_t *) (pstack_begin - offset + sizeof(size_t)); //argv
-        *(size_t *) (pstack_begin - offset - 32) = offset / sizeof(size_t); //argc
+        *(size_t *) (pstack_begin - offset - 32) = offset / sizeof(size_t);                             //argc
 
         //FIXME: PLACE R9-PAGE ONLY IF NECCESSARY, TEMPORARILY IS ON THE KERNEL STACK...
         *(size_t *) (pstack + 28) = (uintptr_t) pstack_begin + 1; //r9 = kernel stack...
 
         struct Process process = {
+                .ppage = nullptr,
                 .ptr = process_page,
                 .pstack = pstack,
                 .pid = pid,
@@ -354,14 +356,50 @@ pid_t sys_spawn_process(
         char *const argv[],
         char *const envp[]
 ) {
-        const struct Process *current = scheduler.current_process;
+        if (!scheduler.processes[0].ptr) {
+                __asm__("bkpt   #0");
+        }
+        struct Process *current = scheduler.current_process;
 
         const struct RAMFS_Inode *inode = (struct RAMFS_Inode *) current->files.fdtable[fd]->f_inode;
-        const struct ProcessPage *ppage = load_exec(inode->file_begin);
+        struct ProcessPage *ppage = load_exec(inode->file_begin);
 
         void *_start_address = (uint8_t *) ppage->page_ptr + ppage->_start_offset;
 
-        return sys_spawnp_process(_start_address, file_actions, attrp, argv, envp);
+
+        struct File **fdtable = kmalloc(sizeof(struct File *) * MAX_OPEN_FILE_DESCRIPTORS);
+        struct Files files = {current->files.count, fdtable};
+        for (size_t i = 0; i < MAX_OPEN_FILE_DESCRIPTORS; ++i) {
+                files.fdtable[i] = current->files.fdtable[i];
+        }
+
+        struct Process *process = create_blank_process(_start_address, argv);
+        if (!process->ptr) {
+                return -1;
+        }
+
+        process->ppage = ppage;
+        process->files = files;
+        process->root = current->root;
+        process->pwd = current->pwd;
+        process->parent = current;
+        process->max_children_count = current->max_children_count - 1;
+        process->children = kmalloc(sizeof(struct Process *) * (current->max_children_count - 1));
+        for (size_t i = 0; i < process->max_children_count; ++i) {
+                process->children[i] = nullptr;
+        }
+
+        for (size_t i = 0; i < current->max_children_count; ++i) {
+                if (current->children[i] == nullptr) {
+                        current->children[i] = process;
+                        current->children_count += 1;
+
+                        break;
+                }
+        }
+
+        process->pstate = READY;
+        return process->pid;
 }
 
 static struct Files setup_init_stdio(struct VFS_Inode *root) {
@@ -470,11 +508,14 @@ void sys_kill(const pid_t pid, int sig) {
                 struct File *file = process->files.fdtable[i];
 
                 if (file->f_owner == process->pid) {
-                        kfree((struct FileOperations *) file->f_op);
                         kfree(file);
                 }
         }
 
+        if (process->ppage) {
+                kfree(process->ppage->page_ptr);
+                kfree(process->ppage);
+        }
         kfree(process->files.fdtable);
         kfree(process->children);
         deallocate_signal_queue(&process->pending_signals);

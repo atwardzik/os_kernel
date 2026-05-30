@@ -8,6 +8,7 @@
 #include "resources.h"
 #include "types.h"
 #include "fs/file.h"
+#include "loader.h"
 
 #include <stdint.h>
 
@@ -38,6 +39,7 @@ typedef struct signal_queue_entry *signal_queue_head_t;
 
 // TODO: by using MPU forbid process to access system resources
 struct Process {
+        struct ProcessPage *ppage;
         void *ptr;
         void *pstack;
         pid_t pid;

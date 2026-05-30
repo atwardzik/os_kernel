@@ -309,7 +309,7 @@ static struct ProcessPage *load_pages_to_ram(const void *fbytes) {
         const Elf32_EHdr *elf_header = fbytes;
         const Elf32_PHdr *phdr_table = fbytes + elf_header->e_phoff;
 
-        unsigned int bufsz = 2 * 4096;
+        unsigned int bufsz = 2 * 4096; //this has to change according to phdrs
         unsigned char *buffer = kmalloc(bufsz);
         if (!buffer) {
                 return nullptr;
@@ -525,8 +525,8 @@ struct ProcessPage *load_exec(const void *fbytes) {
         const char **dynlib_names = retrieve_dynlib_names(fbytes, &sections);
         if (dynlib_names) {
                 const int res = resolve_dyn_relocations(ppage, &sections, dynlib_names);
+                kfree(dynlib_names);
                 if (res < 0) {
-                        kfree(dynlib_names);
                         goto cleanup_err;
                 }
         }
