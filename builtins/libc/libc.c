@@ -8,10 +8,10 @@
 
 #include <stdarg.h>
 
-void __attribute__((naked)) _start() {
-        __asm__("b      main\n\r"
-                "svc    #1\n\r");
-}
+// void __attribute__((naked)) _start() {
+//         __asm__("b      main\n\r"
+//                 "svc    #1\n\r");
+// }
 
 /*
  * Syscalls

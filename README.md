@@ -28,6 +28,8 @@ experimental project intended for learning and research.
 | Feature                                       | Status | Notes                                                                                        |
 |-----------------------------------------------|--------|----------------------------------------------------------------------------------------------|
 | Dynamic memory allocation                     | ✅      | Modified Linked-List allocator                                                               |
+| ELF executables                               | ✅      | Userspace programs can be compiled and linked into ordinary ELF files                        |
+| Dynamic program loader                        | ✅      | Support for linking userspace programs against dynamic libraries – e.g. libc                 |
 | Custom LIBC                                   | ✅      | For kernel and userspace                                                                     |
 | Multitasking                                  | ✅      | Pre-emptive task scheduler                                                                   |
 | POSIX-like syscalls                           | ✅      | [List of syscalls](https://github.com/atwardzik/os_kernel/blob/main/include/syscall_codes.h) |
@@ -49,19 +51,19 @@ experimental project intended for learning and research.
 
 ## Future plans
 
-- Porting LIBC to user space programs as a dynamic library
 - Extending shell and writing user-space programs like vim-like editor
 - Introducing Rust into kernel
-- ELF executable support
 - Memory Protection
 - After full filesystem support move some parts of firmware into bootloader. The kernel and the initramfs should reside
   in the `/boot` directory
+- PS2 mouse driver and a simple GUI
 
 ## Building
 
 ### Prerequisites
 
-- ARM GCC toolchain (`arm-none-eabi-gcc`)
+- ARM GCC toolchain version 15.2.Rel1 (`arm-none-eabi-gcc`)
+- clang version 22.1.4 – only for self-compiling userspace libc (needs `-fropi -frwpi` flags)
 - CMake
 
 ### Build Instructions

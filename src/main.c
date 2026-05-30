@@ -155,15 +155,6 @@ void PATER_ADAMVS(int argc, char *argv[]) {
         printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
         [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
 
-        printf("\x1b[96;40m[!] Testing sending raw frames\x1b[0m\n");
-        [[maybe_unused]] const int raw_frames_pid = spawnp(
-                test_raw_ethernet_frames, nullptr, nullptr, nullptr, nullptr
-        );
-        printf("\x1b[96;40m[!] Running simple www server\x1b[0m\n");
-        [[maybe_unused]] const int server_pid = spawnp(test_tcp_server, nullptr, nullptr, nullptr, nullptr);
-        printf("\x1b[96;40m[!] Running simple TCP client\x1b[0m\n");
-        [[maybe_unused]] const int client_pid = spawnp(test_tcp_client, nullptr, nullptr, nullptr, nullptr);
-
         printf("\x1b[96;40m[!] Unpacking initramfs\x1b[0m\n");
         char *ptr = __cpio_init_start__;
         while (1) {

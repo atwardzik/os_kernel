@@ -106,7 +106,7 @@ static struct Chunk *find_chunk_by_ptr(const void *ptr) {
                 return nullptr;
         }
 
-        while (temp->ptr != ptr || temp->next_node != nullptr) {
+        while (temp->ptr != ptr && temp->next_node != nullptr) {
                 temp = temp->next_node;
         }
 
