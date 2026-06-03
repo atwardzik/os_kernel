@@ -178,6 +178,6 @@ int sys_fstat(int file, struct stat *st);
 char *sys_getcwd(char *buf, unsigned int len);
 
 
-struct Dentry *mount_partition(struct Dentry *parent_dir, uint32_t start_address, const struct HardDriveOperations *hd_op);
+struct Dentry *mount_partition(struct Dentry *parent_dir, uint32_t block_number, const struct HardDriveOperations *hd_op);
 
 #endif // OS_FILE_H

@@ -394,10 +394,10 @@ char *sys_getcwd(char *buf, unsigned int len) {
 }
 
 
-struct Dentry *mount_partition(struct Dentry *parent_dir, const uint32_t start_address, const struct HardDriveOperations *hd_op) {
+struct Dentry *mount_partition(struct Dentry *parent_dir, const uint32_t block_number, const struct HardDriveOperations *hd_op) {
         // brute force for filesystem type
         struct Dentry *partition_root = nullptr;
-        if ((partition_root = FAT16_mount(parent_dir, nullptr, nullptr, 0)) != nullptr) {
+        if ((partition_root = FAT16_mount(parent_dir, block_number, hd_op)) != nullptr) {
                 return partition_root;
         }
 
