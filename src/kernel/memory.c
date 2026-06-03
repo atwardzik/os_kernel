@@ -26,11 +26,12 @@ static struct {
         void *heap_start;
 } Allocator __attribute__ ((section (".data"))) = {nullptr, 0, 0, heap_start_ptr};
 
-static size_t align_size(size_t size) {
-        size_t proposed_size = 1;
-        while (proposed_size < size) {
-                proposed_size *= 2;
-        }
+static size_t align_size(const size_t size) {
+        // size_t proposed_size = 1;
+        // while (proposed_size < size) {
+        //         proposed_size *= 2;
+        // }
+        const size_t proposed_size = size - (size % 4) + 4;
 
         if (proposed_size <= 8) {
                 return 8;

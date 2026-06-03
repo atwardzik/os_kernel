@@ -10,32 +10,34 @@
 struct Dentry *ramfs_mount(
         const char *source, const char *target_dir, const char *filesystemtype, unsigned long mountflags
 ) {
-        struct SuperBlockOperations *fs_op = kmalloc(sizeof(*fs_op));
-        fs_op->alloc_inode = &ramfs_alloc_inode;
-        fs_op->destroy_inode = &ramfs_destroy_inode;
+        struct SuperBlockOperations *sb_op = kmalloc(sizeof(*sb_op));
+        sb_op->alloc_inode = &ramfs_alloc_inode;
+        sb_op->destroy_inode = &ramfs_destroy_inode;
 
-        struct SuperBlock *fs = kmalloc(sizeof(*fs) + 32 * sizeof(void *));
-        fs->name = "ramfs";
-        fs->s_op = fs_op;
+        struct SuperBlock *sb = kmalloc(sizeof(*sb));
+        sb->name = "ramfs";
+        sb->s_op = sb_op;
 
-        fs->current_inode_count = 0;
-        fs->max_inode_count = 32;
+        sb->current_inode_count = 0;
+        sb->max_inode_count = 32;
+        sb->inode_table = kmalloc(sizeof(void *) * sb->max_inode_count);
 
-        struct VFS_Inode *root_inode = fs->s_op->alloc_inode(fs);
+        struct VFS_Inode *root_inode = sb->s_op->alloc_inode(sb);
         root_inode->i_mode |= S_IFDIR;
         struct Dentry *root = kmalloc(sizeof(*root));
         root->name = "/";
         root->inode = root_inode;
-        root->sb = fs;
+        root->sb = sb;
 
-        fs->s_root = root;
+        sb->s_root = root;
 
         return root;
 }
 
 struct VFS_Inode *ramfs_alloc_inode(struct SuperBlock *sb) {
         if (sb->current_inode_count >= sb->max_inode_count - 1) {
-                return nullptr;
+                sb->max_inode_count += 32;
+                sb->inode_table = krealloc(sb->inode_table, sb->max_inode_count);
         }
 
         struct InodeOperations *i_op = kmalloc(sizeof(*i_op));
@@ -54,14 +56,14 @@ struct VFS_Inode *ramfs_alloc_inode(struct SuperBlock *sb) {
         inode->vfs_inode.i_sb = sb;
         inode->file_begin = nullptr;
 
-        sb->inode_table[sb->current_inode_count] = inode;
+        sb->inode_table[sb->current_inode_count] = inode; //todo: iterate through inode_table and find free place
         sb->current_inode_count += 1;
 
         return (struct VFS_Inode *) inode;
 }
 
 void ramfs_destroy_inode(struct VFS_Inode *) {
-        //
+        //todo: mark inode_table[destroyed_inode] as nullptr
 }
 
 

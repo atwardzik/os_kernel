@@ -5,6 +5,7 @@
 #ifndef OS_FILE_H
 #define OS_FILE_H
 
+#include "hard_drive.h"
 #include "libc.h"
 #include "types.h"
 
@@ -70,7 +71,7 @@ struct SuperBlock {
         size_t max_inode_count;
         size_t current_inode_count;
 
-        void *inode_table[] __attribute__((counted_by(max_inode_count)));
+        void **inode_table;
 };
 
 
@@ -175,5 +176,8 @@ int sys_lseek(int file, off_t offset, int whence);
 int sys_fstat(int file, struct stat *st);
 
 char *sys_getcwd(char *buf, unsigned int len);
+
+
+struct Dentry *mount_partition(uint32_t start_address, const struct HardDriveOperations *hd_op);
 
 #endif // OS_FILE_H
