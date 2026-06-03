@@ -6,6 +6,7 @@
 #include "drivers/sd_card.h"
 #include "drivers/time.h"
 #include "fs/file.h"
+#include "fs/mbr.h"
 #include "fs/ramfs.h"
 #include "kernel/network.h"
 #include "kernel/proc.h"
@@ -290,18 +291,11 @@ int main(void) {
         printk_status_finish(res);
 
 
-        res = init_sd_card();
-        if (res == 0) {
-                char buffer[512] = {};
-                sd_card_read512_block(0, buffer);
-                buffer[0] = 0xfa;
-                buffer[1] = 0xb8;
-                buffer[2] = 0x00;
-                buffer[3] = 0x10;
-                sd_card_write512_block(0, buffer);
-                sd_card_read512_block(0, buffer);
+        struct HardDriveOperations *hd_op = init_sd_card();
+        if (hd_op) {
+                struct PartitionTableEntry *partition_table = get_mbr_partition_table(hd_op);
 
-                buffer[0] = 0x00;
+                //todo: mount hard drive
         }
 
 
