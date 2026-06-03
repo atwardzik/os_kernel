@@ -4,6 +4,7 @@
 
 #include "fs/file.h"
 
+#include "fat16.h"
 #include "libc.h"
 #include "tty.h"
 #include "kernel/memory.h"
@@ -390,4 +391,15 @@ char *sys_getcwd(char *buf, unsigned int len) {
         }
 
         return buf + i;
+}
+
+
+struct Dentry *mount_partition(struct Dentry *parent_dir, const uint32_t start_address, const struct HardDriveOperations *hd_op) {
+        // brute force for filesystem type
+        struct Dentry *partition_root = nullptr;
+        if ((partition_root = FAT16_mount(parent_dir, nullptr, nullptr, 0)) != nullptr) {
+                return partition_root;
+        }
+
+        return partition_root;
 }

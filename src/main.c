@@ -8,6 +8,8 @@
 #include "fs/file.h"
 #include "fs/mbr.h"
 #include "fs/ramfs.h"
+#include "kernel/error.h"
+#include "kernel/memory.h"
 #include "kernel/network.h"
 #include "kernel/proc.h"
 #include "kernel/resets.h"
@@ -265,11 +267,12 @@ int main(void) {
 
         printk_status_init("Mounting ramfs");
         struct Dentry *root = ramfs_mount(nullptr, nullptr, nullptr, 0);
-        if (root) {
-                printk_status_step();
+        if (!root) {
+                kernel_panic("RAMFS could not be mounted.", __FILE__, __LINE__, __func__);
         }
-        constexpr size_t root_dirs_count = 1;
-        const char *root_dirs[root_dirs_count] = {"dev"};
+        printk_status_step();
+        constexpr size_t root_dirs_count = 2;
+        const char *root_dirs[root_dirs_count] = {"dev", "mnt"};
         for (size_t i = 0; i < root_dirs_count; ++i) {
                 struct Dentry file = {
                         .name = root_dirs[i],
@@ -291,11 +294,18 @@ int main(void) {
         printk_status_finish(res);
 
 
-        struct HardDriveOperations *hd_op = init_sd_card();
-        if (hd_op) {
-                struct PartitionTableEntry *partition_table = get_mbr_partition_table(hd_op);
+        struct HardDriveOperations *sd_op = init_sd_card();
+        if (sd_op) {
+                struct PartitionTableEntry *partition_table = get_mbr_partition_table(sd_op);
 
                 //todo: mount hard drive
+                struct Dentry mnt_dentry = {.name = "mnt"};
+                struct Dentry *mnt = root->inode->i_op->lookup(root->inode, &mnt_dentry, 0);
+                for (int i = 0; i < 4; ++i) {
+                        mount_partition(mnt, partition_table[i].lba_start, sd_op);
+                }
+
+                kfree(partition_table);
         }
 
 
