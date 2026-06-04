@@ -276,38 +276,45 @@ int main(void) {
         for (size_t i = 0; i < root_dirs_count; ++i) {
                 struct Dentry file = {
                         .name = root_dirs[i],
+                        .inode = root->inode->i_sb->s_op->alloc_inode(root->inode->i_sb),
                 };
+
                 root->inode->i_op->create(root->inode, &file, S_IFDIR | 0666);
         }
         printk_status_step();
 
-        struct Dentry dev_dentry = {.name = "dev"};
-        struct Dentry *dev = root->inode->i_op->lookup(root->inode, &dev_dentry, 0);
+        struct Dentry dev = {.name = "dev"};
+        root->inode->i_op->lookup(root->inode, &dev, 0);
         struct Dentry tty_dentry = {
                 .name = "tty0",
+                .inode = root->inode->i_sb->s_op->alloc_inode(root->inode->i_sb),
         };
-        dev->inode->i_op->create(dev->inode, &tty_dentry, S_IFCHR | 0666);
-        struct Dentry *tty = dev->inode->i_op->lookup(dev->inode, &tty_dentry, 0);
+        dev.inode->i_op->create(dev.inode, &tty_dentry, S_IFCHR | 0666);
+        struct Dentry *tty = dev.inode->i_op->lookup(dev.inode, &tty_dentry, 0);
         printk_status_step();
 
         res = setup_tty_chrfile(tty->inode);
         printk_status_finish(res);
 
-
         struct HardDriveOperations *sd_op = init_sd_card();
-        if (sd_op) {
+        struct Dentry mnt = {.name = "mnt"};
+        root->inode->i_op->lookup(root->inode, &mnt, 0);
+        if (sd_op && mnt.inode) {
                 struct PartitionTableEntry *partition_table = get_mbr_partition_table(sd_op);
 
                 //todo: mount hard drive
-                struct Dentry mnt_dentry = {.name = "mnt"};
-                struct Dentry *mnt = root->inode->i_op->lookup(root->inode, &mnt_dentry, 0);
                 for (int i = 0; i < 4; ++i) {
-                        mount_partition(mnt, partition_table[i].lba_start, sd_op);
+                        mount_partition(&mnt, partition_table[i].lba_start, sd_op);
                 }
 
                 kfree(partition_table);
-        }
 
+                // struct Dentry disk0 = {.name = "disk0"};
+                // mnt.inode->i_op->lookup(mnt.inode, &disk0, 0);
+                // char buf[512];
+                // struct File file = {.f_inode = disk0.inode};
+                // disk0.inode->i_fop->read(&file, buf, 512, 0);
+        }
 
         init_network();
 

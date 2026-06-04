@@ -163,6 +163,8 @@ ssize_t ramfs_read(struct File *file, void *buf, size_t count, off_t file_offset
                 offset += 1;
         }
 
+        file->f_pos += offset;
+
         return offset;
 }
 

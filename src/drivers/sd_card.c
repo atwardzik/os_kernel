@@ -53,7 +53,7 @@ static uint8_t sd_read_res1(void) {
 }
 
 
-static int sd_card_read512_block(const uint32_t block_number, char *buffer, size_t bufsize) {
+static int sd_card_read512_block(const uint32_t block_number, char *buffer) {
         if (!sd_active) {
                 return -ENODEV;
         }
@@ -69,10 +69,7 @@ static int sd_card_read512_block(const uint32_t block_number, char *buffer, size
         while (spi_rx(SD_SPI_BLOCK) != 0xfe) {}
 
         for (int i = 0; i < 512; ++i) {
-                const uint16_t rx = spi_rx(SD_SPI_BLOCK);
-                if (i < bufsize) {
-                        buffer[i] = rx;
-                }
+                buffer[i] = spi_rx(SD_SPI_BLOCK);
         }
 
         //ignore crc
@@ -117,26 +114,21 @@ static int sd_card_write512_block(uint32_t block_number, char *buffer) {
         return 0;
 }
 
-static int sd_card_read(const uint32_t block_number, const size_t block_size, char *buffer, size_t bufsize) {
+static int sd_card_read(const uint32_t block_number, const size_t block_size, char *buffer) {
         if (block_size < 512 || block_size % 512 != 0) {
                 return -1;
         }
 
         if (block_size == 512) {
-                return sd_card_read512_block(block_number, buffer, bufsize);
+                return sd_card_read512_block(block_number, buffer);
         }
 
         for (size_t i = 0; i < block_size / 512; ++i) {
                 char *bufptr = buffer + (i * 512);
 
-                if (sd_card_read512_block(block_number + i, bufptr, bufsize) != 0) {
+                if (sd_card_read512_block(block_number + i, bufptr) != 0) {
                         return -1;
                 }
-
-                if (bufsize - 512 < 0) {
-                        return -1;
-                }
-                bufsize -= 512;
         }
 
         return 0;

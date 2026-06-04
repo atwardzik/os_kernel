@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 struct HardDriveOperations {
-        int (*read_block)(uint32_t block_number, size_t block_size, char *buffer, size_t bufsize);
+        int (*read_block)(uint32_t block_number, size_t block_size, char *buffer);
 
         int (*write_block)(uint32_t block_number, size_t block_size, char *buffer);
 

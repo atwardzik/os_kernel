@@ -325,18 +325,38 @@ int sys_readdir(int dirfd, struct DirectoryEntry *directory_entry) {
         const struct VFS_Inode *parent_inode = parent_handler->f_inode;
 
 
-        size_t bytes_left = parent_inode->i_size - parent_handler->f_pos;
-        if (bytes_left < sizeof(struct DirectoryEntry)) {
-                return 0;
+        const char *fs_name = parent_inode->i_sb->name;
+        if (strcmp(fs_name, "ramfs") == 0) {
+                size_t bytes_left = parent_inode->i_size - parent_handler->f_pos;
+                if (bytes_left < sizeof(struct DirectoryEntry)) {
+                        return 0;
+                }
+
+                char buf[sizeof(struct DirectoryEntry)];
+                parent_handler->f_op->read(parent_handler, buf, sizeof(struct DirectoryEntry), parent_handler->f_pos);
+                *directory_entry = *(struct DirectoryEntry *) buf;
+        }
+        else if (strcmp(fs_name, "fat16") == 0) {
+                char buf[32];
+        next_dir:
+                parent_handler->f_op->read(parent_handler, buf, 32, parent_handler->f_pos);
+
+                const auto entry = (struct FAT16_DirectoryEntry *) buf;
+
+                if (entry->filename[0] == 0) {
+                        return 0;
+                }
+                if (entry->filename[0] == 0xe5 ||                //deleted
+                    entry->attributes & 0x0f ||                  //LFN
+                    entry->attributes & FAT16_ATTRIB_HIDDEN ||   //hidden file
+                    entry->attributes & FAT16_ATTRIB_VOLUME_NAME //disk name
+                ) {
+                        goto next_dir;
+                }
+
+                FAT16_decode_entry_name(entry, directory_entry->name);
         }
 
-        char *buf = kmalloc(sizeof(char) * bytes_left);
-        parent_handler->f_op->read(parent_handler, buf, bytes_left, parent_handler->f_pos);
-        parent_handler->f_pos += sizeof(struct DirectoryEntry);
-
-        *directory_entry = *(struct DirectoryEntry *) buf;
-
-        kfree(buf);
         return 1;
 }
 

@@ -49,21 +49,6 @@ struct FAT16_Inode {
         uint16_t first_cluster;
 };
 
-struct FAT16_DirectoryEntry {
-        const char filename[8];
-        const char extension[3];
-        uint8_t attributes;
-        uint8_t _reserved1;
-        uint8_t c_milis;
-        uint16_t c_time;
-        uint16_t c_date;
-        uint16_t a_time;
-        uint16_t _reserved2;
-        uint16_t m_time;
-        uint16_t m_date;
-        uint16_t first_cluster;
-        uint32_t file_size;
-} __attribute__((packed));
 
 static struct InodeOperations *i_op;
 static struct FileOperations *i_fop;
@@ -89,24 +74,36 @@ static struct Dentry *FAT16_lookup(struct VFS_Inode *parent, struct Dentry *file
 }
 
 static ssize_t FAT16_read(struct File *file, void *buf, size_t count, off_t file_offset) {
-#if 0
         const struct FAT16_Inode *inode = (struct FAT16_Inode *) file->f_inode;
         const auto sb = (struct FAT16_SuperBlock *) file->f_inode->i_sb;
         const auto sb_op = (struct FAT16_SuperBlockOperations *) sb->sb.s_op;
 
         const uint16_t bytes_per_sector = sb->boot_record.bytes_per_sector;
         const off_t cluster_offset = file_offset / bytes_per_sector;
-        const size_t block_size = count - (count % bytes_per_sector) + bytes_per_sector;
-        if (sb_op->hd_op.read_block(inode->first_cluster + cluster_offset, block_size, buf, count)) {
-                file->f_pos += count;
+        const off_t sector_offset = file_offset % bytes_per_sector;
+
+        size_t block_size = 0;
+        if (count % bytes_per_sector == 0) {
+                block_size = count;
         }
-#endif
+        else {
+                block_size = count - (count % bytes_per_sector) + bytes_per_sector;
+        }
+
+        char temp_buf[block_size];
+        if (sb_op->hd_op.read_block(inode->first_cluster + cluster_offset, block_size, temp_buf) == 0) {
+                memcpy(buf, temp_buf + sector_offset, count);
+
+                file->f_pos += count;
+                return count;
+        }
+
         return 0;
 }
 
 static struct FAT16_BootRecord read_boot_sector(const uint32_t block_number, const struct HardDriveOperations *hd_op) {
         char buf[512];
-        hd_op->read_block(block_number, 512, buf, 512);
+        hd_op->read_block(block_number, 512, buf);
 
         const struct FAT16_BootRecord boot_record = *(struct FAT16_BootRecord *) buf;
 
@@ -169,4 +166,39 @@ struct Dentry *FAT16_mount(
 
 
         return root;
+}
+
+
+int FAT16_decode_entry_name(struct FAT16_DirectoryEntry *entry, char *buf) {
+        char name[8] = {};
+        memcpy(name, entry->filename, 8);
+        char extension[3] = {};
+        memcpy(extension, entry->extension, 3);
+
+        int name_last_char = 0;
+        for (int i = 0; i < 8; ++i) {
+                if (name[i] == 0x20) {
+                        break;
+                }
+
+                name_last_char += 1;
+                buf[i] = name[i];
+        }
+
+        if (extension[0] != 0x20) {
+                buf[name_last_char] = '.';
+
+                for (int i = 0; i < 3; ++i) {
+                        if (extension[i] == 0x20) {
+                                break;
+                        }
+
+                        name_last_char += 1;
+                        buf[name_last_char] = extension[i];
+                }
+        }
+
+        buf[name_last_char + 1] = 0;
+
+        return 0;
 }
