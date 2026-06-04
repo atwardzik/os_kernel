@@ -186,7 +186,11 @@ char *strcat(char *dst, const char *src);
 
 int strcmp(const char *s1, const char *s2);
 
+int strcasecmp(const char *s1, const char *s2);
+
 int strncmp(const char *s1, const char *s2, unsigned int n);
+
+int strncasecmp(const char *s1, const char *s2, unsigned int n);
 
 char *strchr(const char *str, int ch);
 
@@ -220,6 +224,14 @@ static inline bool isprint(const int c) {
         }
 
         return false;
+}
+
+static inline char tolower(const char c) {
+        if (c >= 65 && c <= 90) {
+                return c + 32;
+        }
+
+        return c;
 }
 
 #endif // LIBC_H
