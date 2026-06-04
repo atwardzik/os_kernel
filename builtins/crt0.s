@@ -10,8 +10,9 @@
 .thumb_func
 _start:
         @ clear bss
+        mov     r7, #0
+        push    {r7, lr}
 
-        bl      main    @ must be done with bl to be position independent
+        bl      main            @ must be done with bl to be position independent
 
-        bkpt    #0
-        @ call exit (it is done automatically)
+        pop     {r7, pc}        @ call exit (it is done automatically)
