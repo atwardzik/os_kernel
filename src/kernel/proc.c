@@ -37,6 +37,59 @@ static constexpr off_t DEFAULT_PROCESS_SP_OFFSET = 6 * 1024;
 #define RECALL_USERSPACE_STATE RECALL_STATE_FROM(psp)
 #define RECALL_KERNELSPACE_STATE RECALL_STATE_FROM(msp)
 
+
+struct owned_inode_queue_entry {
+        struct VFS_Inode *inode;
+
+        struct owned_inode_queue_entry *next;
+};
+
+int add_to_owned_inodes(owned_inode_head_t *head, struct VFS_Inode *inode) {
+        if (!head) {
+                return -1;
+        }
+
+        struct owned_inode_queue_entry *new_entry = kmalloc(sizeof(*new_entry));
+        if (!new_entry) {
+                return -ENOMEM;
+        }
+        new_entry->inode = inode;
+        new_entry->next = nullptr;
+
+        if (!*head) {
+                *head = new_entry;
+                return 0;
+        }
+
+        struct owned_inode_queue_entry *entry = *head;
+        while (entry->next) {
+                entry = entry->next;
+        }
+
+        entry->next = new_entry;
+
+        return 0;
+}
+
+int deallocate_owned_inodes(owned_inode_head_t *head) {
+        if (!head) {
+                return -1;
+        }
+
+        struct owned_inode_queue_entry *entry = *head;
+        struct owned_inode_queue_entry *next;
+        do {
+                next = entry->next;
+                kfree(entry->inode);
+                kfree(entry);
+
+                entry = next;
+        } while (next != nullptr);
+
+        return 0;
+}
+
+
 static struct {
         size_t max_processes;
         size_t processes_count;
@@ -519,6 +572,7 @@ void sys_kill(const pid_t pid, int sig) {
         kfree(process->files.fdtable);
         kfree(process->children);
         deallocate_signal_queue(&process->pending_signals);
+        deallocate_owned_inodes(&process->owned_inodes);
         kfree(process->ptr);
         scheduler.total_allocated_memory -= process->allocated_memory;
         process->allocated_memory = 0;

@@ -4,6 +4,7 @@
 
 #include "fs/file.h"
 
+#include "errno.h"
 #include "fat16.h"
 #include "libc.h"
 #include "tty.h"
@@ -177,6 +178,7 @@ int sys_open(const char *name, int flags, int mode) {
                 file = create_file(parent, filename, file_mode);
         }
 
+        //todo: move getting_fildes here...
         if (file && flags & O_DIRECTORY && !(file->i_mode & S_IFDIR)) {
                 return -1;
         }

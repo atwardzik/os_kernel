@@ -37,6 +37,12 @@ struct signal_queue_entry;
 
 typedef struct signal_queue_entry *signal_queue_head_t;
 
+struct owned_inode_queue_entry;
+
+typedef struct owned_inode_queue_entry *owned_inode_head_t;
+
+int add_to_owned_inodes(owned_inode_head_t *head, struct VFS_Inode *inode);
+
 // TODO: by using MPU forbid process to access system resources
 struct Process {
         struct ProcessPage *ppage;
@@ -49,6 +55,7 @@ struct Process {
         struct Files files;
         struct VFS_Inode *root;
         struct VFS_Inode *pwd;
+        owned_inode_head_t owned_inodes;
 
         struct Process *parent;
         size_t max_children_count;
