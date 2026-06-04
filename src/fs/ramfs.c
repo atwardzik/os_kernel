@@ -18,10 +18,6 @@ struct Dentry *ramfs_mount(
         sb->name = "ramfs";
         sb->s_op = sb_op;
 
-        sb->current_inode_count = 0;
-        sb->max_inode_count = 32;
-        sb->inode_table = kmalloc(sizeof(void *) * sb->max_inode_count);
-
         struct VFS_Inode *root_inode = sb->s_op->alloc_inode(sb);
         root_inode->i_mode |= S_IFDIR;
         struct Dentry *root = kmalloc(sizeof(*root));
@@ -35,11 +31,6 @@ struct Dentry *ramfs_mount(
 }
 
 struct VFS_Inode *ramfs_alloc_inode(struct SuperBlock *sb) {
-        if (sb->current_inode_count >= sb->max_inode_count - 1) {
-                sb->max_inode_count += 32;
-                sb->inode_table = krealloc(sb->inode_table, sb->max_inode_count);
-        }
-
         struct InodeOperations *i_op = kmalloc(sizeof(*i_op));
         i_op->lookup = &ramfs_lookup;
         i_op->create = &ramfs_create_file;
@@ -56,14 +47,12 @@ struct VFS_Inode *ramfs_alloc_inode(struct SuperBlock *sb) {
         inode->vfs_inode.i_sb = sb;
         inode->file_begin = nullptr;
 
-        sb->inode_table[sb->current_inode_count] = inode; //todo: iterate through inode_table and find free place
-        sb->current_inode_count += 1;
-
         return (struct VFS_Inode *) inode;
 }
 
 void ramfs_destroy_inode(struct VFS_Inode *) {
         //todo: mark inode_table[destroyed_inode] as nullptr
+        //todo: or if the directory contains direct pointers to the inodes invalidate directory entries
 }
 
 
@@ -78,13 +67,13 @@ struct Dentry *ramfs_lookup(struct VFS_Inode *parent, struct Dentry *file, unsig
         while (offset < parent->i_size) {
                 const void *next_offset = buf + offset;
                 const struct DirectoryEntry *file_dentry = next_offset;
-                struct VFS_Inode *file_inode = parent->i_sb->inode_table[file_dentry->inode_index];
+                struct VFS_Inode *file_inode = (struct VFS_Inode *) file_dentry->inode;
 
                 if (strcmp(file_dentry->name, file->name) == 0 || file_inode == file->inode) {
                         struct Dentry *dentry = kmalloc(sizeof(*dentry));
                         dentry->name = file_dentry->name;
                         dentry->inode = file_inode;
-                        dentry->sb = parent->i_sb;
+                        dentry->sb = dentry->inode->i_sb;
 
                         kfree(buf);
                         return dentry;
@@ -99,21 +88,19 @@ struct Dentry *ramfs_lookup(struct VFS_Inode *parent, struct Dentry *file, unsig
 
 
 int ramfs_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_t mode) {
-        struct SuperBlock *fs = parent->i_sb;
+        struct SuperBlock *sb = parent->i_sb;
 
-        struct VFS_Inode *new_inode = fs->s_op->alloc_inode(parent->i_sb);
-        if (!new_inode) {
+        struct VFS_Inode *inode = new_file->inode;
+        if (!inode) {
                 return -1;
         }
-        new_inode->i_mode = mode;
-        new_inode->parent = parent;
-
-        new_file->inode = new_inode;
+        inode->i_mode = mode;
+        inode->parent = parent;
 
         //update parent contents
 
         struct DirectoryEntry *directory_entry = kmalloc(sizeof(*directory_entry));
-        directory_entry->inode_index = fs->current_inode_count - 1;
+        directory_entry->inode = (uint32_t) (uintptr_t) inode;
         if (mode & S_IFREG) {
                 directory_entry->file_type = '-';
         }

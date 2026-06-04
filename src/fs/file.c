@@ -93,7 +93,7 @@ static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
 
                 if (strcmp(file_dentry.name, name) == 0) {
                         kfree(buf);
-                        return parent->i_sb->inode_table[file_dentry.inode_index];
+                        return (struct VFS_Inode *) file_dentry.inode;
                 }
         }
 
@@ -104,10 +104,19 @@ static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
 static struct VFS_Inode *create_file(struct VFS_Inode *parent, const char *name, uint32_t mode) {
         struct Dentry file = {
                 .name = name,
+                .inode = parent->i_sb->s_op->alloc_inode(parent->i_sb),
         };
 
-        parent->i_op->create(parent, &file, mode);
-        return parent->i_sb->inode_table[parent->i_sb->current_inode_count - 1];
+        if (!file.inode) {
+                return nullptr;
+        }
+
+        if (parent->i_op->create(parent, &file, mode) != 0) {
+                kfree(file.inode);
+                return nullptr;
+        }
+
+        return file.inode;
 }
 
 static int get_file_descriptor(struct VFS_Inode *inode) {
@@ -394,7 +403,9 @@ char *sys_getcwd(char *buf, unsigned int len) {
 }
 
 
-struct Dentry *mount_partition(struct Dentry *parent_dir, const uint32_t block_number, const struct HardDriveOperations *hd_op) {
+struct Dentry *mount_partition(
+        struct Dentry *parent_dir, const uint32_t block_number, const struct HardDriveOperations *hd_op
+) {
         // brute force for filesystem type
         struct Dentry *partition_root = nullptr;
         if ((partition_root = FAT16_mount(parent_dir, block_number, hd_op)) != nullptr) {

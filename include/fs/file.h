@@ -67,11 +67,6 @@ struct SuperBlock {
         struct Dentry *s_root;
 
         // struct Dentry *(*mount)();
-
-        size_t max_inode_count;
-        size_t current_inode_count;
-
-        void **inode_table;
 };
 
 
@@ -86,7 +81,7 @@ constexpr size_t MAX_FILENAME_LEN = 32;
 
 struct DirectoryEntry {
         uint8_t file_type;
-        uint32_t inode_index;
+        uint32_t inode;
         // uint16_t rec_len;
         char name[MAX_FILENAME_LEN];
 };
