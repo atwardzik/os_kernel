@@ -48,7 +48,6 @@ static struct VFS_Inode *get_parent_directory(const char *name) {
                 }
 
                 inode = result->inode;
-                kfree(result);
                 token = strtok(nullptr, "/");
         }
         kfree(path);

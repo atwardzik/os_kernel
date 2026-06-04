@@ -70,13 +70,12 @@ struct Dentry *ramfs_lookup(struct VFS_Inode *parent, struct Dentry *file, unsig
                 struct VFS_Inode *file_inode = (struct VFS_Inode *) file_dentry->inode;
 
                 if (strcmp(file_dentry->name, file->name) == 0 || file_inode == file->inode) {
-                        struct Dentry *dentry = kmalloc(sizeof(*dentry));
-                        dentry->name = file_dentry->name;
-                        dentry->inode = file_inode;
-                        dentry->sb = dentry->inode->i_sb;
+                        file->name = file_dentry->name;
+                        file->inode = file_inode;
+                        file->sb = file->inode->i_sb;
 
                         kfree(buf);
-                        return dentry;
+                        return file;
                 }
 
                 offset += sizeof(struct DirectoryEntry);
