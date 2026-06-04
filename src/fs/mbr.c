@@ -10,7 +10,7 @@
 
 struct PartitionTableEntry *get_mbr_partition_table(struct HardDriveOperations *hd_op) {
         char buffer[512] = {};
-        hd_op->read_block(0, 512, buffer);
+        hd_op->read_block(0, 512, buffer, 512);
 
         if (buffer[510] != 0x55 || buffer[511] != 0xaa) {
                 return nullptr;
