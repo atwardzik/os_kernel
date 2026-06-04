@@ -146,6 +146,7 @@ ssize_t ramfs_write(struct File *file, void *buf, size_t count, off_t file_offse
         }
 
         inode_ptr->vfs_inode.i_size += count;
+        file->f_pos += count;
 
         return count;
 }

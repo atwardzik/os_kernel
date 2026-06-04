@@ -73,30 +73,11 @@ static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
                 return parent;
         }
 
-        struct File parent_handler = {
-                .f_inode = parent,
-                .f_op = parent->i_fop,
-        };
-
-        char *buf = kmalloc(sizeof(char) * parent->i_size);
-
-        parent_handler.f_op->read(&parent_handler, buf, parent->i_size, 0);
-
-        size_t offset = 0;
-        while (offset < parent->i_size) {
-                struct DirectoryEntry file_dentry;
-                for (size_t i = 0; i < sizeof(file_dentry); ++i) {
-                        *((char *) (&file_dentry) + i) = buf[offset];
-                        offset += 1;
-                }
-
-                if (strcmp(file_dentry.name, name) == 0) {
-                        kfree(buf);
-                        return (struct VFS_Inode *) file_dentry.inode;
-                }
+        struct Dentry dentry = {.name = name};
+        if (parent->i_op->lookup(parent, &dentry, 0)) {
+                return dentry.inode;
         }
 
-        kfree(buf);
         return nullptr;
 }
 
@@ -256,11 +237,7 @@ int sys_read(int file, char *ptr, int len) {
 
         struct File *current_file = current_process->files.fdtable[file];
         if (current_file->f_op->read) {
-                int offset = current_file->f_op->read(current_file, ptr, len, current_file->f_pos);
-
-                current_file->f_pos += offset;
-
-                return offset;
+                return current_file->f_op->read(current_file, ptr, len, current_file->f_pos);
         }
 
         return -1;
@@ -277,11 +254,7 @@ int sys_write(const int file, char *ptr, const int len) {
 
         struct File *current_file = current_process->files.fdtable[file];
         if (current_file->f_op->write) {
-                int offset = current_file->f_op->write(current_file, ptr, len, current_file->f_pos);
-
-                current_file->f_pos += offset;
-
-                return offset;
+                return current_file->f_op->write(current_file, ptr, len, current_file->f_pos);
         }
 
         return -1;
