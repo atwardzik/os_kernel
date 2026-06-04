@@ -131,8 +131,9 @@ extern uint8_t __cpio_init_start__[];
 
 int load_initramfs(void) {
         const int fd = open("/mnt/disk0/initrfs.cio", O_RDONLY, 0);
-        char buf[512];
-        read(fd, buf, 512);
+        char buf[1024];
+        read(fd, buf, 1024);
+        read(fd, buf, 1024);
 #if 0
 
         char *ptr = __cpio_init_start__;

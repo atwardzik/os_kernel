@@ -8,6 +8,8 @@
 #include "kernel/memory.h"
 #include "kernel/proc.h"
 
+//FIXME: THIS IS ALL HIGHLY UNTESTED FOR BLOCK SIZES OTHER THAN 512
+
 struct FAT16_BootRecord {
         uint8_t jump_code[3];
         const char oem_name[8];
@@ -112,20 +114,49 @@ static ssize_t follow_fat_chain(struct File *file, void *buf, const size_t count
         const size_t aligned_size = align_block_size(count, bytes_per_sector);
 
 
-        const size_t fat_size = sb->boot_record.sectors_per_FAT * sb->boot_record.bytes_per_sector;
+        const size_t fat_size = sb->boot_record.sectors_per_FAT * bytes_per_sector;
         char *fat = kmalloc(fat_size);
         if (!fat) {
                 return -ENOMEM;
         }
-        if (sb_op->hd_op.read_block(sb->boot_record.reserved_sectors, fat_size, fat) != 0) {
+
+
+        const uint16_t root_cluster = ((struct FAT16_Inode *) sb->sb.s_root->inode)->first_cluster;
+        const uint16_t fat_start = root_cluster - (sb->boot_record.FAT_copies * sb->boot_record.sectors_per_FAT);
+        if (sb_op->hd_op.read_block(fat_start, fat_size, fat) != 0) {
                 return -1; //could not read FAT
         }
 
-        const uint16_t first_cluster = inode->first_cluster;
-        //follow FAT
+        const uint16_t data_region_start =
+                root_cluster + (sb->boot_record.max_root_dentries * 32 / bytes_per_sector);
+        uint16_t cluster = inode->first_cluster;
+        uint16_t fat_entry;
+        //determine cluster for current file offset
+        for (int i = 0; i < cluster_offset - 1; ++i) { //fixme: boundaries?
+                fat_entry = *(uint16_t *) (fat + cluster * 2);
+                cluster = fat_entry;
+        }
 
+        int i = 0;
 
+        size_t read_bytes = 0;
+        do {
+                const uint16_t physical_sector =
+                        data_region_start + ((cluster - 2) * sb->boot_record.sectors_per_cluster);
 
+                if (sb_op->hd_op.read_block(physical_sector,
+                                            sb->boot_record.sectors_per_cluster * bytes_per_sector,
+                                            buf + i * bytes_per_sector) != 0
+                ) {
+                        return -1;
+                }
+                read_bytes += sb->boot_record.sectors_per_cluster * bytes_per_sector;
+
+                fat_entry = *(uint16_t *) (fat + cluster * 2);
+                cluster = fat_entry;
+        } while (read_bytes < count && fat_entry >= 3 && fat_entry <= 0xffef);
+
+        file->f_pos += read_bytes;
         return 0;
 }
 
