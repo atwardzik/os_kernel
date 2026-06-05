@@ -156,7 +156,7 @@ int load_initramfs(void) {
 
                 const off_t current_offset = lseek(fd, 0, SEEK_CUR);
                 char next_bytes[10];
-                read(fd, next_bytes, 10); //fixme: the f_pos of the current file is broken here
+                read(fd, next_bytes, 10);
                 if (memcmp(next_bytes, "TRAILER!!!", 10) == 0) {
                         printf("\x1b[96;40m[!] Unpacking ended successfully.\x1b[0m\n");
                         break;
@@ -197,7 +197,7 @@ int load_initramfs(void) {
                         int padding = 4 - (offset % 4);
                         lseek(fd, padding % 4, SEEK_CUR);
 
-                        char file_buffer[c_filesize];
+                        char file_buffer[c_filesize]; //malloc or it will go VERY bad, as e.g. gsh is 8060 bytes!!!
                         read(fd, file_buffer, c_filesize);
                         write(created_fd, file_buffer, c_filesize);
 

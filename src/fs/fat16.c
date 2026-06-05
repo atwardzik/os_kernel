@@ -177,15 +177,20 @@ static ssize_t follow_fat_chain(struct File *file, void *buf, const size_t count
                         memcpy(buf, temp_buf + offset_in_cluster, count);
                         break;
                 }
-                else if (i == 0 && (int) count - cluster_bytes_len > 0) {}
+                else if (i == 0 && (int) count - cluster_bytes_len > 0) {
+                        memcpy(buf, temp_buf, cluster_bytes_len);
+                        read_bytes += cluster_bytes_len;
+                }
                 else if (i == 0 && (int) count - cluster_bytes_len < 0) {
                         memcpy(buf, temp_buf, count);
                         break;
                 }
-                else if ((int) count - read_bytes > 0) {
+                else if ((int) count - read_bytes > 0) { //fixme: breaks when: count = 8060; read_bytes = 7436 - last bytes
+                        memcpy(buf + read_bytes, temp_buf, cluster_bytes_len);
                         read_bytes += cluster_bytes_len;
                 }
                 else if ((int) count - read_bytes < 0) {
+                        memcpy(buf + read_bytes, temp_buf, count - read_bytes);
                         read_bytes += count - read_bytes;
                 }
                 i += 1;
@@ -197,7 +202,12 @@ static ssize_t follow_fat_chain(struct File *file, void *buf, const size_t count
 
         kfree(FAT);
         kfree(temp_buf);
-        file->f_pos = count;
+        if (file->f_pos + count > file->f_inode->i_size) {
+                file->f_pos = file->f_inode->i_size;
+        }
+        else {
+                file->f_pos += count;
+        }
         return count;
 }
 
@@ -213,7 +223,7 @@ static ssize_t FAT16_read(struct File *file, void *buf, const size_t count, cons
         return follow_fat_chain(file, buf, count, file_offset);
 }
 
-static uint16_t FAT16_find_file_start_cluster(
+static struct FAT16_DirectoryEntry *FAT16_find_file_dentry(
         const char *direntries, const size_t direntries_size, struct Dentry *file
 ) {
         char name[9] = {};
@@ -236,8 +246,8 @@ static uint16_t FAT16_find_file_start_cluster(
                 }
         }
 
-        int name_length = strlen(name);
-        int extension_length = strlen(extension);
+        const unsigned int name_length = strlen(name);
+        const unsigned int extension_length = strlen(extension);
 
 
         for (size_t i = 0; i < direntries_size / 32; ++i) {
@@ -247,23 +257,27 @@ static uint16_t FAT16_find_file_start_cluster(
                     ((!extension[0] && dirent->extension[0] == 0x20) ||
                      strncasecmp(extension, dirent->extension, extension_length) == 0)
                 ) {
-                        return dirent->first_cluster;
+                        return dirent;
                 }
         }
 
-        return 0;
+        return nullptr;
 }
 
-static struct Dentry *FAT16_lookup_root_directory(struct FAT16_Inode *inode, struct Dentry *file, unsigned int) {
-        struct File file_wrapper = {.f_inode = (struct VFS_Inode *) inode, .f_pos = 0};
-        while (file_wrapper.f_pos != inode->vfs_inode.i_size - 1) {
+static struct Dentry *FAT16_lookup_root_directory(struct FAT16_Inode *parent, struct Dentry *file, unsigned int) {
+        struct File file_wrapper = {.f_inode = (struct VFS_Inode *) parent, .f_pos = 0};
+        while (file_wrapper.f_pos != parent->vfs_inode.i_size - 1) {
                 char buf[512];
                 read_root_directory(&file_wrapper, buf, 512, file_wrapper.f_pos);
 
-                uint16_t first_cluster = 0;
-                if ((first_cluster = FAT16_find_file_start_cluster(buf, 512, file))) {
-                        const auto found = (struct FAT16_Inode *) FAT16_alloc_inode(inode->vfs_inode.i_sb);
-                        found->first_cluster = first_cluster;
+                struct FAT16_DirectoryEntry *dirent;
+                if ((dirent = FAT16_find_file_dentry(buf, 512, file))) {
+                        const auto found = (struct FAT16_Inode *) FAT16_alloc_inode(parent->vfs_inode.i_sb);
+                        found->first_cluster = dirent->first_cluster;
+                        found->vfs_inode.i_size = dirent->file_size;
+                        found->vfs_inode.parent = (struct VFS_Inode *) parent;
+                        //todo: creation, access and modification time
+
 
                         struct Process *current_process = scheduler_get_current_process();
                         add_to_owned_inodes(&current_process->owned_inodes, (struct VFS_Inode *) found);
