@@ -5,6 +5,7 @@
 #include "fat16.h"
 
 #include "errno.h"
+#include "kernel/error.h"
 #include "kernel/memory.h"
 #include "kernel/proc.h"
 
@@ -44,6 +45,9 @@ struct FAT16_SuperBlock {
         struct SuperBlock sb;
 
         struct FAT16_BootRecord boot_record;
+
+        uint16_t fat_first_sector;
+        uint16_t data_region_start;
 };
 
 struct FAT16_Inode {
@@ -102,62 +106,99 @@ static ssize_t read_root_directory(struct File *file, void *buf, const size_t co
         return 0;
 }
 
+static uint16_t *fetch_FAT(struct FAT16_SuperBlock *sb) {
+        const auto sb_op = (struct FAT16_SuperBlockOperations *) sb->sb.s_op;
+
+        //FIXME: FAT should not really be loaded fully at once, and should be followed...
+        //TODO: create FAT struct with access functions with simple cacheing (?)
+        const size_t fat_size = sb->boot_record.sectors_per_FAT * sb->boot_record.bytes_per_sector;
+        char *fat = kmalloc(fat_size);
+        if (!fat) {
+                return nullptr;
+        }
+
+        const uint16_t fat_start = sb->fat_first_sector;
+        if (sb_op->hd_op.read_block(fat_start, fat_size, fat) != 0) {
+                return nullptr; //could not read FAT
+        }
+
+        return (uint16_t *) fat;
+}
+
 static ssize_t follow_fat_chain(struct File *file, void *buf, const size_t count, const off_t file_offset) {
         const struct FAT16_Inode *inode = (struct FAT16_Inode *) file->f_inode;
         const auto sb = (struct FAT16_SuperBlock *) file->f_inode->i_sb;
         const auto sb_op = (struct FAT16_SuperBlockOperations *) sb->sb.s_op;
 
         const uint16_t bytes_per_sector = sb->boot_record.bytes_per_sector;
-        const off_t cluster_offset = file_offset / bytes_per_sector;
-        const off_t sector_offset = file_offset % bytes_per_sector;
+        const uint16_t bytes_per_cluster = sb->boot_record.sectors_per_cluster * bytes_per_sector;
 
-        const size_t aligned_size = align_block_size(count, bytes_per_sector);
+        const off_t cluster_start_offset = file_offset / bytes_per_cluster;
+        const off_t offset_in_cluster = file_offset - (cluster_start_offset * bytes_per_cluster);
 
+        // const size_t aligned_size = align_block_size(count, bytes_per_sector);
 
-        const size_t fat_size = sb->boot_record.sectors_per_FAT * bytes_per_sector;
-        char *fat = kmalloc(fat_size);
-        if (!fat) {
+        uint16_t *FAT = fetch_FAT(sb);
+        if (!FAT) {
                 return -ENOMEM;
         }
 
-
-        const uint16_t root_cluster = ((struct FAT16_Inode *) sb->sb.s_root->inode)->first_cluster;
-        const uint16_t fat_start = root_cluster - (sb->boot_record.FAT_copies * sb->boot_record.sectors_per_FAT);
-        if (sb_op->hd_op.read_block(fat_start, fat_size, fat) != 0) {
-                return -1; //could not read FAT
-        }
-
-        const uint16_t data_region_start =
-                root_cluster + (sb->boot_record.max_root_dentries * 32 / bytes_per_sector);
         uint16_t cluster = inode->first_cluster;
         uint16_t fat_entry;
         //determine cluster for current file offset
-        for (int i = 0; i < cluster_offset - 1; ++i) { //fixme: boundaries?
-                fat_entry = *(uint16_t *) (fat + cluster * 2);
+        for (int i = 0; i < cluster_start_offset - 1; ++i) { //fixme: boundaries?
+                fat_entry = FAT[cluster];
                 cluster = fat_entry;
         }
 
         int i = 0;
+        const int cluster_bytes_len = sb->boot_record.sectors_per_cluster * bytes_per_sector;
+        char *temp_buf = kmalloc(cluster_bytes_len);
+        if (!temp_buf) {
+                return -ENOMEM;
+        }
 
         size_t read_bytes = 0;
         do {
-                const uint16_t physical_sector =
-                        data_region_start + ((cluster - 2) * sb->boot_record.sectors_per_cluster);
+                const uint16_t physical_sector = sb->data_region_start +
+                                                 ((cluster - 2) * sb->boot_record.sectors_per_cluster);
 
-                if (sb_op->hd_op.read_block(physical_sector,
-                                            sb->boot_record.sectors_per_cluster * bytes_per_sector,
-                                            buf + i * bytes_per_sector) != 0
-                ) {
-                        return -1;
+
+                if (sb_op->hd_op.read_block(physical_sector, cluster_bytes_len, temp_buf) != 0) {
+                        return -1; //could not read sectors
                 }
-                read_bytes += sb->boot_record.sectors_per_cluster * bytes_per_sector;
 
-                fat_entry = *(uint16_t *) (fat + cluster * 2);
+                //todo: check validity of number of bytes written
+                if (i == 0 && offset_in_cluster > 0 && count > cluster_bytes_len - offset_in_cluster) {
+                        memcpy(buf, temp_buf + offset_in_cluster, cluster_bytes_len - offset_in_cluster);
+                        read_bytes += cluster_bytes_len - offset_in_cluster;
+                }
+                else if (i == 0 && offset_in_cluster > 0 && count <= cluster_bytes_len - offset_in_cluster) {
+                        memcpy(buf, temp_buf + offset_in_cluster, count);
+                        break;
+                }
+                else if (i == 0 && (int) count - cluster_bytes_len > 0) {}
+                else if (i == 0 && (int) count - cluster_bytes_len < 0) {
+                        memcpy(buf, temp_buf, count);
+                        break;
+                }
+                else if ((int) count - read_bytes > 0) {
+                        read_bytes += cluster_bytes_len;
+                }
+                else if ((int) count - read_bytes < 0) {
+                        read_bytes += count - read_bytes;
+                }
+                i += 1;
+
+                fat_entry = FAT[cluster];
                 cluster = fat_entry;
+                //fixme: what if file_offset + count > filesize?
         } while (read_bytes < count && fat_entry >= 3 && fat_entry <= 0xffef);
 
-        file->f_pos += read_bytes;
-        return 0;
+        kfree(FAT);
+        kfree(temp_buf);
+        file->f_pos = count;
+        return count;
 }
 
 static ssize_t FAT16_read(struct File *file, void *buf, const size_t count, const off_t file_offset) {
@@ -283,6 +324,7 @@ struct Dentry *FAT16_mount(
 
         const auto boot_record = read_boot_sector(block_number, hd_op);
         memcpy(&sb->boot_record, &boot_record, sizeof(boot_record));
+        sb->fat_first_sector = block_number + boot_record.reserved_sectors;
 
         struct FAT16_Inode *root_inode = (struct FAT16_Inode *) FAT16_alloc_inode((struct SuperBlock *) sb);
         root_inode->vfs_inode.i_mode = S_IFDIR;
@@ -293,6 +335,9 @@ struct Dentry *FAT16_mount(
                                     + boot_record.reserved_sectors
                                     + boot_record.FAT_copies * boot_record.sectors_per_FAT;
         root_inode->vfs_inode.i_size = boot_record.max_root_dentries * 32;
+
+        sb->data_region_start = root_inode->first_cluster + (
+                                        boot_record.max_root_dentries * 32 / boot_record.bytes_per_sector);
 
         struct Dentry *root = kmalloc(sizeof(*root));
         root->name = "/";

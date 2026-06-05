@@ -126,16 +126,124 @@ struct cpio_newc_header {
         char c_check[8];
 };
 
+constexpr int cpio_header_len = sizeof(struct cpio_newc_header);
 
-extern uint8_t __cpio_init_start__[];
 
 int load_initramfs(void) {
         const int fd = open("/mnt/disk0/initrfs.cio", O_RDONLY, 0);
-        char buf[1024];
-        read(fd, buf, 1024);
-        read(fd, buf, 1024);
-#if 0
+        if (fd < 0) {
+                return ENOENT;
+        }
 
+        // This is not optimal solution. The one would be to load multiples of 512 chunks
+        // and parse the bytes from the array. The problem is at the end of such buffer,
+        // as when the header is split and not read fully, one would have to read half the
+        // header, load the other half and write to it.
+        // To avoid this additional logic, we will rely on the logic of the FS.
+
+        while (1) {
+                char header_buffer[cpio_header_len];
+                if (read(fd, header_buffer, cpio_header_len) < cpio_header_len) {
+                        dprintf(2, "CPIO header broken. Could not read header.");
+                }
+
+                const struct cpio_newc_header *header = (struct cpio_newc_header *) header_buffer;
+
+                if (memcmp(header->c_magic, "070701", 6) != 0) {
+                        printf("Error parsing cpio header.\n");
+                        break;
+                }
+
+                const off_t current_offset = lseek(fd, 0, SEEK_CUR);
+                char next_bytes[10];
+                read(fd, next_bytes, 10); //fixme: the f_pos of the current file is broken here
+                if (memcmp(next_bytes, "TRAILER!!!", 10) == 0) {
+                        printf("\x1b[96;40m[!] Unpacking ended successfully.\x1b[0m\n");
+                        break;
+                }
+                lseek(fd, current_offset, SEEK_SET);
+
+
+                char buf[128] = {};
+                buf[8] = 0;
+
+                memcpy(buf, header->c_mode, 8);
+                const auto c_mode = strtoul(buf, nullptr, 16);
+                memcpy(buf, header->c_namesize, 8);
+                const auto c_namesize = strtoul(buf, nullptr, 16);
+                memcpy(buf, header->c_filesize, 8);
+                const auto c_filesize = strtoul(buf, nullptr, 16);
+
+                if (c_namesize > 128) {
+                        printf("Path too long, currently unsupported.\n");
+                        break;
+                }
+                buf[127] = 0;
+                read(fd, buf, c_namesize);
+
+
+                if ((c_mode & 0xf000) == 0x4000) {
+                        const int dirfd = open(buf, O_DIRECTORY | O_CREAT, 0);
+                        close(dirfd);
+
+                        const off_t offset = lseek(fd, 0, SEEK_CUR);
+                        const int padding = 4 - (offset % 4);
+                        lseek(fd, padding % 4, SEEK_CUR);
+                }
+                else {
+                        const int created_fd = open(buf, O_CREAT, 0);
+
+                        off_t offset = lseek(fd, 0, SEEK_CUR);
+                        int padding = 4 - (offset % 4);
+                        lseek(fd, padding % 4, SEEK_CUR);
+
+                        char file_buffer[c_filesize];
+                        read(fd, file_buffer, c_filesize);
+                        write(created_fd, file_buffer, c_filesize);
+
+                        close(created_fd);
+
+                        offset = lseek(fd, 0, SEEK_CUR);
+                        padding = 4 - (offset % 4);
+                        lseek(fd, padding % 4, SEEK_CUR);
+                }
+        }
+}
+
+void proc1_terminate_signal_handler(int signum) {
+        if (signum == SIGTERM) {
+                printf("[SIGTERM DETECTED] I don't want to exit, but as you wish.\n");
+        }
+
+        exit(-1);
+}
+
+void proc1(void) {
+        signal(SIGTERM, proc1_terminate_signal_handler);
+
+        while (1) {
+                xor_pin(11);
+                delay_ms(250);
+        }
+}
+
+void PATER_ADAMVS_SIGINT(int signum) {
+        printf("\x1b[91;40mTrying to exit the init process is a bloody bad idea.\x1b[0m\n");
+}
+
+
+void PATER_ADAMVS(int argc, char *argv[]) {
+        signal(SIGINT, PATER_ADAMVS_SIGINT);
+        printf(
+                "\n\x1b[96;40m  PATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n\n");
+
+
+        printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
+        [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
+
+        printf("\x1b[96;40m[!] Unpacking initramfs\x1b[0m\n");
+        load_initramfs();
+#if 0
         char *ptr = __cpio_init_start__;
         while (1) {
                 const struct cpio_newc_header *header = (struct cpio_newc_header *) ptr;
@@ -194,98 +302,6 @@ int load_initramfs(void) {
                 }
         }
 #endif
-}
-
-void proc1_terminate_signal_handler(int signum) {
-        if (signum == SIGTERM) {
-                printf("[SIGTERM DETECTED] I don't want to exit, but as you wish.\n");
-        }
-
-        exit(-1);
-}
-
-void proc1(void) {
-        signal(SIGTERM, proc1_terminate_signal_handler);
-
-        while (1) {
-                xor_pin(11);
-                delay_ms(250);
-        }
-}
-
-void PATER_ADAMVS_SIGINT(int signum) {
-        printf("\x1b[91;40mTrying to exit the init process is a bloody bad idea.\x1b[0m\n");
-}
-
-
-void PATER_ADAMVS(int argc, char *argv[]) {
-        signal(SIGINT, PATER_ADAMVS_SIGINT);
-        printf(
-                "\n\x1b[96;40m  PATER ADAMVS QUI EST IN PARADISO VOLVPTATIS SALVTAT SEQUENTES PROCESS FILIOS\x1b[0m\n\n");
-
-
-        printf("\x1b[96;40m[!] Running process LED\x1b[0m\n");
-        [[maybe_unused]] const int proc1_pid = spawnp(proc1, nullptr, nullptr, nullptr, nullptr);
-
-        printf("\x1b[96;40m[!] Unpacking initramfs\x1b[0m\n");
-        load_initramfs();
-        char *ptr = __cpio_init_start__;
-        while (1) {
-                const struct cpio_newc_header *header = (struct cpio_newc_header *) ptr;
-
-                if (memcmp(header->c_magic, "070701", 6) != 0) {
-                        printf("Error parsing cpio header.\n");
-                        break;
-                }
-
-                if (memcmp(ptr + sizeof(*header), "TRAILER!!!", 10) == 0) {
-                        printf("\x1b[96;40m[!] Unpacking ended successfully.\x1b[0m\n");
-                        break;
-                }
-
-                char buf[128] = {};
-                buf[8] = 0;
-                buf[127] = 0;
-
-                memcpy(buf, header->c_mode, 8);
-                const auto c_mode = strtoul(buf, nullptr, 16);
-                memcpy(buf, header->c_namesize, 8);
-                const auto c_namesize = strtoul(buf, nullptr, 16);
-                memcpy(buf, header->c_filesize, 8);
-                const auto c_filesize = strtoul(buf, nullptr, 16);
-
-                ptr += sizeof(*header);
-                if (c_namesize > 128) {
-                        printf("Path too long, currently unsupported.\n");
-                        break;
-                }
-                memcpy(buf, ptr, c_namesize);
-
-                if ((c_mode & 0xf000) == 0x4000) {
-                        const int dirfd = open(buf, O_DIRECTORY | O_CREAT, 0);
-                        close(dirfd);
-
-                        ptr += c_namesize;
-
-                        const unsigned int padding = 4 - ((unsigned int) ptr % 4);
-                        ptr += padding % 4;
-                }
-                else {
-                        const int fd = open(buf, O_CREAT, 0);
-                        ptr += c_namesize;
-                        unsigned int padding = 4 - ((unsigned int) ptr % 4);
-                        ptr += padding % 4;
-
-                        write(fd, ptr, c_filesize);
-
-                        close(fd);
-
-                        ptr += c_filesize;
-
-                        padding = 4 - ((unsigned int) ptr % 4);
-                        ptr += padding % 4;
-                }
-        }
 
         printf("\x1b[96;40m[!] Mounting initramfs\x1b[0m\n");
         const int cd_code = chdir("initramfs");
