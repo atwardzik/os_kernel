@@ -236,8 +236,9 @@ static struct FAT16_DirectoryEntry *FAT16_find_file_dentry(
 
 static struct Dentry *FAT16_lookup_root_directory(struct FAT16_Inode *parent, struct Dentry *file, unsigned int) {
         struct File file_wrapper = {.f_inode = (struct VFS_Inode *) parent, .f_pos = 0};
+        char *buf = kmalloc(sizeof(char) * 512);
+
         while (file_wrapper.f_pos != parent->vfs_inode.i_size - 1) {
-                char buf[512];
                 read_root_directory(&file_wrapper, buf, 512, file_wrapper.f_pos);
 
                 struct FAT16_DirectoryEntry *dirent;
@@ -253,10 +254,12 @@ static struct Dentry *FAT16_lookup_root_directory(struct FAT16_Inode *parent, st
                         add_to_owned_inodes(&current_process->owned_inodes, (struct VFS_Inode *) found);
 
                         file->inode = (struct VFS_Inode *) found;
+                        kfree(buf);
                         return file;
                 }
         }
 
+        kfree(buf);
         return nullptr;
 }
 
@@ -269,7 +272,7 @@ static struct Dentry *FAT16_lookup(struct VFS_Inode *parent, struct Dentry *file
         if (inode->first_cluster == root_cluster) {
                 return FAT16_lookup_root_directory(inode, file, 0);
         }
-
+        //todo: implement lookup for subdirectories
         return nullptr;
 }
 
