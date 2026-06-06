@@ -414,8 +414,15 @@ pid_t sys_spawn_process(
         }
         struct Process *current = scheduler.current_process;
 
-        const struct RAMFS_Inode *inode = (struct RAMFS_Inode *) current->files.fdtable[fd]->f_inode;
-        struct ProcessPage *ppage = load_exec(inode->file_begin);
+        const size_t executable_size = current->files.fdtable[fd]->f_inode->i_size;
+        char *executable_buffer = kmalloc(executable_size);
+        sys_read(fd, executable_buffer, executable_size);
+        struct ProcessPage *ppage = load_exec(executable_buffer);
+        kfree(executable_buffer);
+
+        if (!ppage) {
+                return -ENOEXEC;
+        }
 
         void *_start_address = (uint8_t *) ppage->page_ptr + ppage->_start_offset;
 
