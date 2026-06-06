@@ -20,6 +20,6 @@ static inline bool IS_ERR(const void *ptr) {
         return (uint32_t) ptr >= (uint32_t) -MAX_ERRNO;
 }
 
-void kernel_panic(const char *msg, const char *file, int line, const char *func);
+[[noreturn]] void kernel_panic(const char *msg, const char *file, int line, const char *func);
 
 #endif //OS_ERROR_H

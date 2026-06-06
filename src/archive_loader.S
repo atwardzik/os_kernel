@@ -10,4 +10,4 @@
 .section .text
 
 .section .cpio_init, "wa"
-.incbin "builtins/initramfs.cpio"
+@.incbin "builtins/initramfs.cpio"

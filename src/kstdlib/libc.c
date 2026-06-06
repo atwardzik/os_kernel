@@ -293,7 +293,16 @@ int strcmp(const char *s1, const char *s2) {
                 s2 += 1;
         }
 
-        return *(const unsigned char *) s1 - *(const unsigned char *) s2;
+        return *s1 - *s2;
+}
+
+int strcasecmp(const char *s1, const char *s2) {
+        while (*s1 && (tolower(*s1) == tolower(*s2))) {
+                s1 += 1;
+                s2 += 1;
+        }
+
+        return tolower(*s1) - tolower(*s2);
 }
 
 int strncmp(const char *s1, const char *s2, unsigned int n) {
@@ -303,11 +312,25 @@ int strncmp(const char *s1, const char *s2, unsigned int n) {
                 i += 1;
 
                 if (i == n) {
-                        break;
+                        return 0;
                 }
         }
 
-        return (unsigned char) s1[i] - (unsigned char) s2[i];
+        return s1[i] - s2[i];
+}
+
+int strncasecmp(const char *s1, const char *s2, unsigned int n) {
+        int i = 0;
+
+        while (s1[i] && (tolower(s1[i]) == tolower(s2[i]))) {
+                i += 1;
+
+                if (i == n) {
+                        return 0;
+                }
+        }
+
+        return tolower(s1[i]) - tolower(s2[i]);
 }
 
 char *strchr(const char *str, const int ch) {

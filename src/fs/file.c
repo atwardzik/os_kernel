@@ -4,6 +4,8 @@
 
 #include "fs/file.h"
 
+#include "errno.h"
+#include "fat16.h"
 #include "libc.h"
 #include "tty.h"
 #include "kernel/memory.h"
@@ -47,7 +49,6 @@ static struct VFS_Inode *get_parent_directory(const char *name) {
                 }
 
                 inode = result->inode;
-                kfree(result);
                 token = strtok(nullptr, "/");
         }
         kfree(path);
@@ -73,40 +74,30 @@ static struct VFS_Inode *get_file(struct VFS_Inode *parent, const char *name) {
                 return parent;
         }
 
-        struct File parent_handler = {
-                .f_inode = parent,
-                .f_op = parent->i_fop,
-        };
-
-        char *buf = kmalloc(sizeof(char) * parent->i_size);
-
-        parent_handler.f_op->read(&parent_handler, buf, parent->i_size, 0);
-
-        size_t offset = 0;
-        while (offset < parent->i_size) {
-                struct DirectoryEntry file_dentry;
-                for (size_t i = 0; i < sizeof(file_dentry); ++i) {
-                        *((char *) (&file_dentry) + i) = buf[offset];
-                        offset += 1;
-                }
-
-                if (strcmp(file_dentry.name, name) == 0) {
-                        kfree(buf);
-                        return parent->i_sb->inode_table[file_dentry.inode_index];
-                }
+        struct Dentry dentry = {.name = name};
+        if (parent->i_op->lookup(parent, &dentry, 0)) {
+                return dentry.inode;
         }
 
-        kfree(buf);
         return nullptr;
 }
 
 static struct VFS_Inode *create_file(struct VFS_Inode *parent, const char *name, uint32_t mode) {
         struct Dentry file = {
                 .name = name,
+                .inode = parent->i_sb->s_op->alloc_inode(parent->i_sb),
         };
 
-        parent->i_op->create(parent, &file, mode);
-        return parent->i_sb->inode_table[parent->i_sb->current_inode_count - 1];
+        if (!file.inode) {
+                return nullptr;
+        }
+
+        if (parent->i_op->create(parent, &file, mode) != 0) {
+                kfree(file.inode);
+                return nullptr;
+        }
+
+        return file.inode;
 }
 
 static int get_file_descriptor(struct VFS_Inode *inode) {
@@ -187,6 +178,7 @@ int sys_open(const char *name, int flags, int mode) {
                 file = create_file(parent, filename, file_mode);
         }
 
+        //todo: move getting_fildes here...
         if (file && flags & O_DIRECTORY && !(file->i_mode & S_IFDIR)) {
                 return -1;
         }
@@ -247,11 +239,7 @@ int sys_read(int file, char *ptr, int len) {
 
         struct File *current_file = current_process->files.fdtable[file];
         if (current_file->f_op->read) {
-                int offset = current_file->f_op->read(current_file, ptr, len, current_file->f_pos);
-
-                current_file->f_pos += offset;
-
-                return offset;
+                return current_file->f_op->read(current_file, ptr, len, current_file->f_pos);
         }
 
         return -1;
@@ -268,11 +256,7 @@ int sys_write(const int file, char *ptr, const int len) {
 
         struct File *current_file = current_process->files.fdtable[file];
         if (current_file->f_op->write) {
-                int offset = current_file->f_op->write(current_file, ptr, len, current_file->f_pos);
-
-                current_file->f_pos += offset;
-
-                return offset;
+                return current_file->f_op->write(current_file, ptr, len, current_file->f_pos);
         }
 
         return -1;
@@ -316,18 +300,38 @@ int sys_readdir(int dirfd, struct DirectoryEntry *directory_entry) {
         const struct VFS_Inode *parent_inode = parent_handler->f_inode;
 
 
-        size_t bytes_left = parent_inode->i_size - parent_handler->f_pos;
-        if (bytes_left < sizeof(struct DirectoryEntry)) {
-                return 0;
+        const char *fs_name = parent_inode->i_sb->name;
+        if (strcmp(fs_name, "ramfs") == 0) {
+                size_t bytes_left = parent_inode->i_size - parent_handler->f_pos;
+                if (bytes_left < sizeof(struct DirectoryEntry)) {
+                        return 0;
+                }
+
+                char buf[sizeof(struct DirectoryEntry)];
+                parent_handler->f_op->read(parent_handler, buf, sizeof(struct DirectoryEntry), parent_handler->f_pos);
+                *directory_entry = *(struct DirectoryEntry *) buf;
+        }
+        else if (strcmp(fs_name, "fat16") == 0) {
+                char buf[32];
+        next_dir:
+                parent_handler->f_op->read(parent_handler, buf, 32, parent_handler->f_pos);
+
+                const auto entry = (struct FAT16_DirectoryEntry *) buf;
+
+                if (entry->filename[0] == 0) {
+                        return 0;
+                }
+                if (entry->filename[0] == 0xe5 ||                //deleted
+                    entry->attributes & 0x0f ||                  //LFN
+                    entry->attributes & FAT16_ATTRIB_HIDDEN ||   //hidden file
+                    entry->attributes & FAT16_ATTRIB_VOLUME_NAME //disk name
+                ) {
+                        goto next_dir;
+                }
+
+                FAT16_decode_entry_name(entry, directory_entry->name);
         }
 
-        char *buf = kmalloc(sizeof(char) * bytes_left);
-        parent_handler->f_op->read(parent_handler, buf, bytes_left, parent_handler->f_pos);
-        parent_handler->f_pos += sizeof(struct DirectoryEntry);
-
-        *directory_entry = *(struct DirectoryEntry *) buf;
-
-        kfree(buf);
         return 1;
 }
 
@@ -390,4 +394,17 @@ char *sys_getcwd(char *buf, unsigned int len) {
         }
 
         return buf + i;
+}
+
+
+struct Dentry *mount_partition(
+        struct Dentry *parent_dir, const uint32_t block_number, const struct HardDriveOperations *hd_op
+) {
+        // brute force for filesystem type
+        struct Dentry *partition_root = nullptr;
+        if ((partition_root = FAT16_mount(parent_dir, block_number, hd_op)) != nullptr) {
+                return partition_root;
+        }
+
+        return partition_root;
 }

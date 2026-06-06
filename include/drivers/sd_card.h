@@ -4,12 +4,11 @@
 
 #ifndef OS_SD_CARD_H
 #define OS_SD_CARD_H
+
+#include "fs/hard_drive.h"
+
 #include <stdint.h>
 
-int init_sd_card(void);
-
-int sd_card_read512_block(uint32_t block_number, char *buffer);
-
-int sd_card_write512_block(uint32_t block_number, char *buffer);
+struct HardDriveOperations *init_sd_card(void);
 
 #endif //OS_SD_CARD_H

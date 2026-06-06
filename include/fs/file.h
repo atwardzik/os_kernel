@@ -5,6 +5,7 @@
 #ifndef OS_FILE_H
 #define OS_FILE_H
 
+#include "hard_drive.h"
 #include "libc.h"
 #include "types.h"
 
@@ -66,11 +67,6 @@ struct SuperBlock {
         struct Dentry *s_root;
 
         // struct Dentry *(*mount)();
-
-        size_t max_inode_count;
-        size_t current_inode_count;
-
-        void *inode_table[] __attribute__((counted_by(max_inode_count)));
 };
 
 
@@ -85,7 +81,7 @@ constexpr size_t MAX_FILENAME_LEN = 32;
 
 struct DirectoryEntry {
         uint8_t file_type;
-        uint32_t inode_index;
+        uint32_t inode;
         // uint16_t rec_len;
         char name[MAX_FILENAME_LEN];
 };
@@ -175,5 +171,8 @@ int sys_lseek(int file, off_t offset, int whence);
 int sys_fstat(int file, struct stat *st);
 
 char *sys_getcwd(char *buf, unsigned int len);
+
+
+struct Dentry *mount_partition(struct Dentry *parent_dir, uint32_t block_number, const struct HardDriveOperations *hd_op);
 
 #endif // OS_FILE_H

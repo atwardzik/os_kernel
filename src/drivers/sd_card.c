@@ -4,10 +4,12 @@
 
 #include "sd_card.h"
 
+#include "errno.h"
 #include "gpio.h"
 #include "spi.h"
 #include "time.h"
 #include "tty.h"
+#include "kernel/memory.h"
 
 static constexpr int SD_CS = 13;
 static constexpr int SD_SPI_BLOCK = 1;
@@ -21,6 +23,9 @@ static constexpr uint8_t CMD58 = 58;
 static constexpr uint8_t ACMD41 = 41;
 
 
+static bool sd_active = false;
+
+
 static void sd_write_cmd(uint8_t cmd, uint32_t argument, uint8_t crc) {
         spi_tx(SD_SPI_BLOCK, cmd | 0x40);
 
@@ -31,7 +36,6 @@ static void sd_write_cmd(uint8_t cmd, uint32_t argument, uint8_t crc) {
 
         spi_tx(SD_SPI_BLOCK, crc | 0x01);
 }
-
 
 static uint8_t sd_read_res1(void) {
         uint8_t i = 0;
@@ -48,8 +52,110 @@ static uint8_t sd_read_res1(void) {
         return res1;
 }
 
+
+static int sd_card_read512_block(const uint32_t block_number, char *buffer) {
+        if (!sd_active) {
+                return -ENODEV;
+        }
+
+        spi_tx(SD_SPI_BLOCK, 0xff);
+        clr_pin(SD_CS);
+
+        sd_write_cmd(CMD17, block_number, 0);
+        if (sd_read_res1() == 0xff) {
+                return -1; //not read
+        }
+
+        while (spi_rx(SD_SPI_BLOCK) != 0xfe) {}
+
+        for (int i = 0; i < 512; ++i) {
+                buffer[i] = spi_rx(SD_SPI_BLOCK);
+        }
+
+        //ignore crc
+        spi_rx(SD_SPI_BLOCK);
+        spi_rx(SD_SPI_BLOCK);
+
+        set_pin(SD_CS);
+        return 0;
+}
+
+static int sd_card_write512_block(uint32_t block_number, char *buffer) {
+        if (!sd_active) {
+                return -ENODEV;
+        }
+
+        spi_tx(SD_SPI_BLOCK, 0xff);
+        clr_pin(SD_CS);
+
+        sd_write_cmd(CMD24, block_number, 0);
+        if (sd_read_res1() == 0xff) {
+                return -1; //not read
+        }
+
+        spi_tx(SD_SPI_BLOCK, 0xfe); //data start token
+
+        for (int i = 0; i < 512; ++i) {
+                spi_tx(SD_SPI_BLOCK, buffer[i]);
+        }
+
+        uint8_t res;
+        while ((res = spi_rx(SD_SPI_BLOCK)) == 0xff) {}
+
+        if ((res & 0x1f) == 0x05) {
+                //data accepted
+                while ((res = spi_rx(SD_SPI_BLOCK)) == 0x00) {}
+        }
+
+        spi_tx(SD_SPI_BLOCK, 0xff);
+        set_pin(SD_CS);
+        spi_tx(SD_SPI_BLOCK, 0xff);
+
+        return 0;
+}
+
+static int sd_card_read(const uint32_t block_number, const size_t block_size, char *buffer) {
+        if (block_size < 512 || block_size % 512 != 0) {
+                return -1;
+        }
+
+        if (block_size == 512) {
+                return sd_card_read512_block(block_number, buffer);
+        }
+
+        for (size_t i = 0; i < block_size / 512; ++i) {
+                char *bufptr = buffer + (i * 512);
+
+                if (sd_card_read512_block(block_number + i, bufptr) != 0) {
+                        return -1;
+                }
+        }
+
+        return 0;
+}
+
+static int sd_card_write(uint32_t block_number, size_t block_size, char *buffer) {
+        if (block_size < 512 || block_size % 512 != 0) {
+                return -1;
+        }
+
+        if (block_size == 512) {
+                return sd_card_write512_block(block_number, buffer);
+        }
+
+        for (size_t i = 0; i < block_size / 512; ++i) {
+                char *bufptr = buffer + (i * 512);
+
+                if (sd_card_write512_block(block_number + i, bufptr) != 0) {
+                        return -1;
+                }
+        }
+
+        return 0;
+}
+
 //FIXME: deassert CS on failure
-int init_sd_card(void) {
+struct HardDriveOperations *init_sd_card(void) {
         printk_status_init("Initializing SD card");
 
         GPIO_function_select(15, 1);
@@ -164,65 +270,20 @@ int init_sd_card(void) {
         bool is_sdhc = (ocr[0] & 0x40) != 0;
 
         set_pin(SD_CS);
+
+
+        struct HardDriveOperations *hd_op = kmalloc(sizeof(*hd_op));
+        hd_op->read_block = sd_card_read;
+        hd_op->write_block = sd_card_write;
+        hd_op->deinit = nullptr;
+
+        sd_active = true;
         printk_status_finish(0);
-        return 0;
+
+        return hd_op;
 
 error_ret:
         set_pin(SD_CS);
         printk_status_finish(-1);
-        return -1;
-}
-
-int sd_card_read512_block(const uint32_t block_number, char *buffer) {
-        spi_tx(SD_SPI_BLOCK, 0xff);
-        clr_pin(SD_CS);
-
-        sd_write_cmd(CMD17, block_number, 0);
-        if (sd_read_res1() == 0xff) {
-                return -1; //not read
-        }
-
-        while (spi_rx(SD_SPI_BLOCK) != 0xfe) {}
-
-        for (int i = 0; i < 512; ++i) {
-                buffer[i] = spi_rx(SD_SPI_BLOCK);
-        }
-
-        //ignore crc
-        spi_rx(SD_SPI_BLOCK);
-        spi_rx(SD_SPI_BLOCK);
-
-        set_pin(SD_CS);
-        return 0;
-}
-
-
-int sd_card_write512_block(uint32_t block_number, char *buffer) {
-        spi_tx(SD_SPI_BLOCK, 0xff);
-        clr_pin(SD_CS);
-
-        sd_write_cmd(CMD24, block_number, 0);
-        if (sd_read_res1() == 0xff) {
-                return -1; //not read
-        }
-
-        spi_tx(SD_SPI_BLOCK, 0xfe); //data start token
-
-        for (int i = 0; i < 512; ++i) {
-                spi_tx(SD_SPI_BLOCK, buffer[i]);
-        }
-
-        uint8_t res;
-        while ((res = spi_rx(SD_SPI_BLOCK)) == 0xff) {}
-
-        if ((res & 0x1f) == 0x05) {
-                //data accepted
-                while ((res = spi_rx(SD_SPI_BLOCK)) == 0x00) {}
-        }
-
-        spi_tx(SD_SPI_BLOCK, 0xff);
-        set_pin(SD_CS);
-        spi_tx(SD_SPI_BLOCK, 0xff);
-
-        return 0;
+        return nullptr;
 }

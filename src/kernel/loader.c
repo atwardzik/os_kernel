@@ -496,6 +496,7 @@ static Address find_entry_point(const void *fbytes, const Elf32_Sections *sectio
                 if (sections->symtab[i].st_name == 0) {
                         const Elf32_SHdr *section = &shdr_table[i];
                         name = (const char *) (fbytes + shstrtab->sh_offset + section->sh_name);
+                        continue;
                 }
                 else {
                         name = sections->strtab + sections->symtab[i].st_name;
@@ -510,7 +511,7 @@ static Address find_entry_point(const void *fbytes, const Elf32_Sections *sectio
 }
 
 struct ProcessPage *load_exec(const void *fbytes) {
-        if (!validate_elf(fbytes)) {
+        if (!fbytes || !validate_elf(fbytes)) {
                 return nullptr;
         }
 

@@ -25,19 +25,20 @@ experimental project intended for learning and research.
 
 ## Features
 
-| Feature                                       | Status | Notes                                                                                        |
-|-----------------------------------------------|--------|----------------------------------------------------------------------------------------------|
-| Dynamic memory allocation                     | ✅      | Modified Linked-List allocator                                                               |
-| ELF executables                               | ✅      | Userspace programs can be compiled and linked into ordinary ELF files                        |
-| Dynamic program loader                        | ✅      | Support for linking userspace programs against dynamic libraries – e.g. libc                 |
-| Custom LIBC                                   | ✅      | For kernel and userspace                                                                     |
-| Multitasking                                  | ✅      | Pre-emptive task scheduler                                                                   |
-| POSIX-like syscalls                           | ✅      | [List of syscalls](https://github.com/atwardzik/os_kernel/blob/main/include/syscall_codes.h) |
-| Filesystem                                    | ✅      | Virtual Filessystem structure and RAMFS                                                      |
-| Networking                                    | ✅      | Raw sockets, TCP client and server                                                           |
-| EXT2 support                                  | 🚧     | Planned                                                                                      |
-| Multithreading                                | 🚧     | In progress                                                                                  |
-| Custom C compiler and assembler for userspace | 🚧     | In progress                                                                                  |
+| Feature                                       | Status | Notes                                                                                                                |
+|-----------------------------------------------|--------|----------------------------------------------------------------------------------------------------------------------|
+| Dynamic memory allocation                     | ✅      | Modified Linked-List allocator                                                                                       |
+| ELF executables                               | ✅      | Userspace programs can be compiled and linked into ordinary ELF files                                                |
+| Dynamic program loader                        | ✅      | Support for linking userspace programs against dynamic libraries – e.g. libc                                         |
+| Custom LIBC                                   | ✅      | For kernel and userspace                                                                                             |
+| Multitasking                                  | ✅      | Pre-emptive task scheduler                                                                                           |
+| POSIX-like syscalls                           | ✅      | [List of syscalls](https://github.com/atwardzik/os_kernel/blob/main/include/syscall_codes.h)                         |
+| Filesystem                                    | ✅      | Virtual Filessystem structure and RAMFS                                                                              |
+| Networking                                    | ✅      | Raw sockets, TCP client and server                                                                                   |
+| FAT16 SD Cards support                        |        | Basic FAT16 support, currently for read-only files on the root directory. Initramfs is already stored in initrfs.cio |
+| EXT2 support                                  | 🚧     | Planned                                                                                                              |
+| Multithreading                                | 🚧     | In progress                                                                                                          |
+| Custom C compiler and assembler for userspace | 🚧     | In progress                                                                                                          |
 
 ## Drivers
 
