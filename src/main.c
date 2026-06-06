@@ -245,65 +245,6 @@ void PATER_ADAMVS(int argc, char *argv[]) {
 
         printf("\x1b[96;40m[!] Unpacking initramfs\x1b[0m\n");
         load_initramfs();
-#if 0
-        char *ptr = __cpio_init_start__;
-        while (1) {
-                const struct cpio_newc_header *header = (struct cpio_newc_header *) ptr;
-
-                if (memcmp(header->c_magic, "070701", 6) != 0) {
-                        printf("Error parsing cpio header.\n");
-                        break;
-                }
-
-                if (memcmp(ptr + sizeof(*header), "TRAILER!!!", 10) == 0) {
-                        printf("\x1b[96;40m[!] Unpacking ended successfully.\x1b[0m\n");
-                        break;
-                }
-
-                char buf[128] = {};
-                buf[8] = 0;
-                buf[127] = 0;
-
-                memcpy(buf, header->c_mode, 8);
-                const auto c_mode = strtoul(buf, nullptr, 16);
-                memcpy(buf, header->c_namesize, 8);
-                const auto c_namesize = strtoul(buf, nullptr, 16);
-                memcpy(buf, header->c_filesize, 8);
-                const auto c_filesize = strtoul(buf, nullptr, 16);
-
-                ptr += sizeof(*header);
-                if (c_namesize > 128) {
-                        printf("Path too long, currently unsupported.\n");
-                        break;
-                }
-                memcpy(buf, ptr, c_namesize);
-
-                if ((c_mode & 0xf000) == 0x4000) {
-                        const int dirfd = open(buf, O_DIRECTORY | O_CREAT, 0);
-                        close(dirfd);
-
-                        ptr += c_namesize;
-
-                        const unsigned int padding = 4 - ((unsigned int) ptr % 4);
-                        ptr += padding % 4;
-                }
-                else {
-                        const int fd = open(buf, O_CREAT, 0);
-                        ptr += c_namesize;
-                        unsigned int padding = 4 - ((unsigned int) ptr % 4);
-                        ptr += padding % 4;
-
-                        write(fd, ptr, c_filesize);
-
-                        close(fd);
-
-                        ptr += c_filesize;
-
-                        padding = 4 - ((unsigned int) ptr % 4);
-                        ptr += padding % 4;
-                }
-        }
-#endif
 
         printf("\x1b[96;40m[!] Mounting initramfs\x1b[0m\n");
         const int cd_code = chdir("initramfs");
