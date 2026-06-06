@@ -197,9 +197,11 @@ int load_initramfs(void) {
                         int padding = 4 - (offset % 4);
                         lseek(fd, padding % 4, SEEK_CUR);
 
-                        char file_buffer[c_filesize]; //malloc or it will go VERY bad, as e.g. gsh is 8060 bytes!!!
+                        // char file_buffer[c_filesize]; //malloc or it will go VERY bad, as e.g. gsh is 8060 bytes!!!
+                        char *file_buffer = kmalloc(sizeof(char) * c_filesize);
                         read(fd, file_buffer, c_filesize);
                         write(created_fd, file_buffer, c_filesize);
+                        kfree(file_buffer);
 
                         close(created_fd);
 

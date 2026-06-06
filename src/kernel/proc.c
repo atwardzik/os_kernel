@@ -72,7 +72,7 @@ int add_to_owned_inodes(owned_inode_head_t *head, struct VFS_Inode *inode) {
 }
 
 int deallocate_owned_inodes(owned_inode_head_t *head) {
-        if (!head) {
+        if (!*head) {
                 return -1;
         }
 
