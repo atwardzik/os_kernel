@@ -126,6 +126,10 @@ static uint16_t FAT_fetch_next_cluster(struct FAT16_SuperBlock *sb, const uint16
 
 static ssize_t follow_fat_chain(struct File *file, void *buf, const size_t count, const off_t file_offset) {
         const struct FAT16_Inode *inode = (struct FAT16_Inode *) file->f_inode;
+        if (file_offset >= inode->vfs_inode.i_size) {
+                ((char *) buf)[0] = 0;
+                return 0;
+        }
         const auto sb = (struct FAT16_SuperBlock *) file->f_inode->i_sb;
         const auto sb_op = (struct FAT16_SuperBlockOperations *) sb->sb.s_op;
 
@@ -235,6 +239,20 @@ static struct FAT16_DirectoryEntry *FAT16_find_file_dentry(
         return nullptr;
 }
 
+static struct FAT16_DirectoryEntry *FAT16_find_file_dentry_with_first_cluster(
+        const char *direntries, const size_t direntries_size, const uint16_t first_cluster
+) {
+        for (size_t i = 0; i < direntries_size / 32; ++i) {
+                const auto dirent = (struct FAT16_DirectoryEntry *) (direntries + i * 32);
+
+                if (dirent->first_cluster == first_cluster) {
+                        return dirent;
+                }
+        }
+
+        return nullptr;
+}
+
 static struct Dentry *FAT16_lookup_root_directory(struct FAT16_Inode *parent, struct Dentry *file, unsigned int) {
         struct File file_wrapper = {.f_inode = (struct VFS_Inode *) parent, .f_pos = 0};
         char *buf = kmalloc(sizeof(char) * 512);
@@ -291,9 +309,20 @@ static ssize_t FAT16_write(struct File *file, void *buf, size_t count, off_t fil
         if (count - file_offset > sb->boot_record.bytes_per_sector * sb->boot_record.sectors_per_cluster) {
                 return -EINVAL;
         }
-        sb_op->hd_op.write_block(inode->first_cluster, 512, buf); //fixme: unsafe boundaries, writing garbage
-        const size_t size_written = count > 512 ? 512 : count;
 
+        //write file contents to the cluster
+        char *current_file_block = kmalloc(512);
+        const uint32_t physical_sector = sb->data_region_start + (inode->first_cluster - 2) * sb->boot_record.
+                                         sectors_per_cluster;
+        sb_op->hd_op.read_block(physical_sector, 512, current_file_block);
+        const size_t available = 512 - file->f_pos;
+        const size_t to_write = count > available ? available : count;
+        memcpy(current_file_block + file->f_pos, buf, to_write);
+
+        sb_op->hd_op.write_block(physical_sector, 512, buf); //fixme: unsafe boundaries, writing garbage
+        kfree(current_file_block);
+
+        //get root directory entries
         char *rootbuf = kmalloc(rootdir->vfs_inode.i_size);
         struct File file_wrapper = {.f_inode = inode->vfs_inode.parent, .f_pos = 0};
         if (read_root_directory(&file_wrapper, rootbuf, rootdir->vfs_inode.i_size, 0) != rootdir->vfs_inode.i_size) {
@@ -301,16 +330,18 @@ static ssize_t FAT16_write(struct File *file, void *buf, size_t count, off_t fil
                 return -1; //why would that happen?
         }
 
-        struct Dentry dentry_wrapper = {.name = file->f_path}; //fixme: resolve name correctly
-        auto dentry = FAT16_find_file_dentry(rootbuf, 512, &dentry_wrapper);
+        //update root directory entries
+        const auto dentry = FAT16_find_file_dentry_with_first_cluster(rootbuf, 512, inode->first_cluster);
         if (dentry) {
-                dentry->file_size = size_written;
+                dentry->file_size = to_write;
                 sb_op->hd_op.write_block(rootdir->first_cluster, rootdir->vfs_inode.i_size, rootbuf);
+                inode->vfs_inode.i_size = to_write;
+                file->f_pos += to_write;
         }
         kfree(rootbuf);
 
 
-        return size_written;
+        return to_write;
 }
 
 static int FAT16_create_file(struct VFS_Inode *parent, struct Dentry *new_file, uint16_t mode) {
