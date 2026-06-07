@@ -10,8 +10,8 @@
 #include <stdint.h>
 
 struct FAT16_DirectoryEntry {
-        const char filename[8];
-        const char extension[3];
+        char filename[8];
+        char extension[3];
         uint8_t attributes;
         uint8_t _reserved1;
         uint8_t c_milis;
