@@ -346,7 +346,7 @@ static struct ProcessPage *load_pages_to_ram(const void *fbytes) {
         return ppage;
 }
 
-static const char **retrieve_dynlib_names(const void *fbytes, const Elf32_Sections *sections) {
+static const char *retrieve_dynlib_name(const void *fbytes, const Elf32_Sections *sections) {
         const char *strtab = nullptr;
 
         const Elf32_Dyn *dyn_entry = &sections->dynamic[0];
@@ -367,18 +367,19 @@ static const char **retrieve_dynlib_names(const void *fbytes, const Elf32_Sectio
         }
 
 
-        const char **dynlib_names = kmalloc(sizeof(char *) * 10);
-        memset(dynlib_names, 0, sizeof(char *) * 10);
-        if (!dynlib_names) {
-                return ERR_PTR(-ENOMEM);
-        }
+        const char *dynlib_name = nullptr;
         int names_index = 0;
 
         i = 0;
         dyn_entry = &sections->dynamic[0];
         while (dyn_entry->d_tag != DT_NULL) {
+                if (dyn_entry->d_tag == DT_NEEDED && names_index > 0) {
+                        //fixme: this should not panic. The error should be handled gracefully...
+                        kernel_panic("Only one shared library supported due to linear memory constraints!", __FILE__, __LINE__, __func__);
+                        return nullptr;
+                }
                 if (dyn_entry->d_tag == DT_NEEDED) {
-                        dynlib_names[names_index] = strtab + dyn_entry->d_un.d_val;
+                        dynlib_name = strtab + dyn_entry->d_un.d_val;
 
                         names_index += 1;
                 }
@@ -387,7 +388,7 @@ static const char **retrieve_dynlib_names(const void *fbytes, const Elf32_Sectio
                 dyn_entry = &sections->dynamic[i];
         }
 
-        return dynlib_names;
+        return dynlib_name;
 }
 
 static unsigned long elf_hash(const unsigned char *name) {
@@ -401,7 +402,7 @@ static unsigned long elf_hash(const unsigned char *name) {
         return h;
 }
 
-static uint32_t get_dyn(const char *symbol_name, const char **dynlib_names) {
+static uint32_t get_dyn(const char *symbol_name, const char *dynlib_name) {
         //todo: fix after implementing normal filesystem - all dynamic libraries must be already in ram
 
         const struct Process *current_process = scheduler_get_current_process();
@@ -416,54 +417,51 @@ static uint32_t get_dyn(const char *symbol_name, const char **dynlib_names) {
 
         const unsigned long symbol_hash = elf_hash(symbol_name);
 
-        int i = 0;
-        while (dynlib_names[i]) {
-                dentry.name = dynlib_names[i];
-                struct Dentry *dynlib = current_process->root->i_op->lookup(libdir->inode, &dentry, 0);
 
-                const void *fbytes = ((struct RAMFS_Inode *) dynlib->inode)->file_begin;
-                kfree(dynlib);
-                const Elf32_Sections dynlib_sections = parse_sections(fbytes);
+        dentry.name = dynlib_name;
+        struct Dentry *dynlib = current_process->root->i_op->lookup(libdir->inode, &dentry, 0);
+        kfree(libdir);
 
-                // bucket[x%nbucket] gives an index, y,
-                // If the symbol
-                // table entry is not the one desired, chain[y] gives the next symbol table entry with the same hash value.
-                // One can follow the chain links until either the selected symbol table entry holds the desired name or
-                // the chain entry contains the value STN_UNDEF.
+        const void *fbytes = ((struct RAMFS_Inode *) dynlib->inode)->file_begin;
+        kfree(dynlib);
+        const Elf32_Sections dynlib_sections = parse_sections(fbytes);
 
-                const Word *hash = dynlib_sections.hash;
+        // bucket[x%nbucket] gives an index, y,
+        // If the symbol
+        // table entry is not the one desired, chain[y] gives the next symbol table entry with the same hash value.
+        // One can follow the chain links until either the selected symbol table entry holds the desired name or
+        // the chain entry contains the value STN_UNDEF.
 
-                Word nbucket = hash[0];
-                Word nchain = hash[1];
+        const Word *hash = dynlib_sections.hash;
 
-                const Word *bucket = &hash[2];
-                const Word *chain = &hash[2 + nbucket];
+        Word nbucket = hash[0];
+        Word nchain = hash[1];
 
-                Word index = bucket[symbol_hash % nbucket];
+        const Word *bucket = &hash[2];
+        const Word *chain = &hash[2 + nbucket];
 
-                while (index != STN_UNDEF) {
-                        const Elf32_Sym *symbol = &dynlib_sections.dynsym[index];
-                        const char *name = &dynlib_sections.dynstr[symbol->st_name];
+        Word index = bucket[symbol_hash % nbucket];
 
-                        if (strcmp(name, symbol_name) == 0) {
-                                const Address offset = symbol->st_value;
+        while (index != STN_UNDEF) {
+                const Elf32_Sym *symbol = &dynlib_sections.dynsym[index];
+                const char *name = &dynlib_sections.dynstr[symbol->st_name];
 
-                                return (uintptr_t) (fbytes + offset);
-                        }
+                if (strcmp(name, symbol_name) == 0) {
+                        const Address offset = symbol->st_value;
 
-                        index = chain[index];
+                        return (uintptr_t) (fbytes + (uintptr_t) dynlib_sections.data + offset);
+                        //fixme: symbol value is relative to ...? Sometimes beginning of a file, sometimes .data section
                 }
 
-
-                i += 1;
+                index = chain[index];
         }
 
-        kfree(libdir);
+
         return 0x00;
 }
 
 static int resolve_dyn_relocations(
-        struct ProcessPage *ppage, const Elf32_Sections *sections, const char **dynlib_names
+        struct ProcessPage *ppage, const Elf32_Sections *sections, const char *dynlib_name
 ) {
         unsigned char *buffer = ppage->page_ptr;
 
@@ -474,7 +472,10 @@ static int resolve_dyn_relocations(
 
                 //todo: search in .dynamic section for info about whereabouts of dynamic libraries
                 //todo: should one check if it is a function or an object? The readelf shows R_ARM_JUMP_SLOT for functions
-                const uint32_t dyn_address_replacement = get_dyn(symbol_name, dynlib_names);
+                const uint32_t dyn_address_replacement = get_dyn(symbol_name, dynlib_name);
+                if (!dyn_address_replacement) {
+                        return -1; //no entry found
+                }
 
                 //For an executable file or a shared object, the offset is the virtual address of the storage
                 //unit affected by the relocation.
@@ -523,10 +524,10 @@ struct ProcessPage *load_exec(const void *fbytes) {
         }
         struct ProcessPage *ppage = load_pages_to_ram(fbytes);
 
-        const char **dynlib_names = retrieve_dynlib_names(fbytes, &sections);
-        if (dynlib_names) {
-                const int res = resolve_dyn_relocations(ppage, &sections, dynlib_names);
-                kfree(dynlib_names);
+        const char *dynlib_name = retrieve_dynlib_name(fbytes, &sections);
+        //fixme: may return nullptr if no dynamic relocations needed, but should return error when more than one dynlib
+        if (dynlib_name) {
+                const int res = resolve_dyn_relocations(ppage, &sections, dynlib_name);
                 if (res < 0) {
                         goto cleanup_err;
                 }
