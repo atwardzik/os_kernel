@@ -179,6 +179,10 @@ typedef struct {
         size_t got_len;
 
         const Elf32_Dyn *dynamic;
+        size_t dynamic_len;
+
+        const Address *got_plt;
+        size_t got_plt_len;
 
         const Word *hash;
         size_t hash_len;
@@ -293,8 +297,13 @@ static Elf32_Sections parse_sections(const void *fbytes) {
                         sections.got = fbytes + shdr->sh_offset;
                         sections.got_len = shdr->sh_size;
                 }
+                else if (strcmp(section_name, ".got.plt") == 0) {
+                        sections.got_plt = fbytes + shdr->sh_offset;
+                        sections.got_plt_len = shdr->sh_size;
+                }
                 else if (strcmp(section_name, ".dynamic") == 0) {
                         sections.dynamic = fbytes + shdr->sh_offset;
+                        sections.dynamic_len = shdr->sh_size;
                 }
                 else if (strcmp(section_name, ".hash") == 0) {
                         sections.hash = fbytes + shdr->sh_offset;
@@ -346,7 +355,14 @@ static struct ProcessPage *load_pages_to_ram(const void *fbytes) {
         return ppage;
 }
 
-static const char *retrieve_dynlib_name(const void *fbytes, const Elf32_Sections *sections) {
+enum DynlibStatus {
+        OK,
+
+        ERR_NO_STRTAB_FOUND,
+        ERR_ONE_DYNLIB_SUPPORTED,
+};
+
+static enum DynlibStatus retrieve_dynlib_name(const char **name, const void *fbytes, const Elf32_Sections *sections) {
         const char *strtab = nullptr;
 
         const Elf32_Dyn *dyn_entry = &sections->dynamic[0];
@@ -363,23 +379,20 @@ static const char *retrieve_dynlib_name(const void *fbytes, const Elf32_Sections
         }
 
         if (!strtab) {
-                return nullptr;
+                return ERR_NO_STRTAB_FOUND;
         }
 
 
-        const char *dynlib_name = nullptr;
         int names_index = 0;
 
         i = 0;
         dyn_entry = &sections->dynamic[0];
         while (dyn_entry->d_tag != DT_NULL) {
                 if (dyn_entry->d_tag == DT_NEEDED && names_index > 0) {
-                        //fixme: this should not panic. The error should be handled gracefully...
-                        kernel_panic("Only one shared library supported due to linear memory constraints!", __FILE__, __LINE__, __func__);
-                        return nullptr;
+                        return ERR_ONE_DYNLIB_SUPPORTED;
                 }
                 if (dyn_entry->d_tag == DT_NEEDED) {
-                        dynlib_name = strtab + dyn_entry->d_un.d_val;
+                        *name = strtab + dyn_entry->d_un.d_val;
 
                         names_index += 1;
                 }
@@ -388,7 +401,7 @@ static const char *retrieve_dynlib_name(const void *fbytes, const Elf32_Sections
                 dyn_entry = &sections->dynamic[i];
         }
 
-        return dynlib_name;
+        return OK;
 }
 
 static unsigned long elf_hash(const unsigned char *name) {
@@ -402,7 +415,15 @@ static unsigned long elf_hash(const unsigned char *name) {
         return h;
 }
 
-static uint32_t get_dyn(const char *symbol_name, const char *dynlib_name) {
+struct Dynlib {
+        const char *name;
+
+        Elf32_Sections sections;
+        void *fbytes;
+        void *static_base;
+};
+
+static int load_dynlib(struct Dynlib *dynlib) {
         //todo: fix after implementing normal filesystem - all dynamic libraries must be already in ram
 
         const struct Process *current_process = scheduler_get_current_process();
@@ -414,25 +435,39 @@ static uint32_t get_dyn(const char *symbol_name, const char *dynlib_name) {
         const struct Dentry *libdir = current_process->root->i_op->lookup(initramfs->inode, &dentry, 0);
         kfree(initramfs);
 
-
-        const unsigned long symbol_hash = elf_hash(symbol_name);
-
-
-        dentry.name = dynlib_name;
-        struct Dentry *dynlib = current_process->root->i_op->lookup(libdir->inode, &dentry, 0);
+        dentry.name = dynlib->name;
+        struct Dentry *dynlib_file = current_process->root->i_op->lookup(libdir->inode, &dentry, 0);
         kfree(libdir);
 
-        const void *fbytes = ((struct RAMFS_Inode *) dynlib->inode)->file_begin;
-        kfree(dynlib);
-        const Elf32_Sections dynlib_sections = parse_sections(fbytes);
+        const void *fbytes = ((struct RAMFS_Inode *) dynlib_file->inode)->file_begin;
+        kfree(dynlib_file);
 
+        const Elf32_Sections sections = parse_sections(fbytes);
+        const size_t static_base_len = sections.data_len + sections.dynamic_len +
+                                       sections.got_plt_len + sections.bss_len;
+        void *static_base = kmalloc(static_base_len);
+        if (!static_base) {
+                return -ENOMEM;
+        }
+
+        dynlib->fbytes = fbytes;
+        dynlib->sections = sections;
+        dynlib->static_base = static_base;
+
+        return 0;
+}
+
+static uint32_t get_dyn(const char *symbol_name, const struct Dynlib *dynlib) {
+        //todo: fix after implementing normal filesystem - all dynamic libraries must be already in ram
+
+        const unsigned long symbol_hash = elf_hash(symbol_name);
         // bucket[x%nbucket] gives an index, y,
         // If the symbol
         // table entry is not the one desired, chain[y] gives the next symbol table entry with the same hash value.
         // One can follow the chain links until either the selected symbol table entry holds the desired name or
         // the chain entry contains the value STN_UNDEF.
 
-        const Word *hash = dynlib_sections.hash;
+        const Word *hash = dynlib->sections.hash;
 
         Word nbucket = hash[0];
         Word nchain = hash[1];
@@ -443,13 +478,13 @@ static uint32_t get_dyn(const char *symbol_name, const char *dynlib_name) {
         Word index = bucket[symbol_hash % nbucket];
 
         while (index != STN_UNDEF) {
-                const Elf32_Sym *symbol = &dynlib_sections.dynsym[index];
-                const char *name = &dynlib_sections.dynstr[symbol->st_name];
+                const Elf32_Sym *symbol = &dynlib->sections.dynsym[index];
+                const char *name = &dynlib->sections.dynstr[symbol->st_name];
 
                 if (strcmp(name, symbol_name) == 0) {
                         const Address offset = symbol->st_value;
 
-                        return (uintptr_t) (fbytes + (uintptr_t) dynlib_sections.data + offset);
+                        return (uintptr_t) (dynlib->fbytes + (uintptr_t) dynlib->sections.data + offset);
                         //fixme: symbol value is relative to ...? Sometimes beginning of a file, sometimes .data section
                 }
 
@@ -461,7 +496,7 @@ static uint32_t get_dyn(const char *symbol_name, const char *dynlib_name) {
 }
 
 static int resolve_dyn_relocations(
-        struct ProcessPage *ppage, const Elf32_Sections *sections, const char *dynlib_name
+        struct ProcessPage *ppage, const Elf32_Sections *sections, const struct Dynlib *dynlib
 ) {
         unsigned char *buffer = ppage->page_ptr;
 
@@ -472,7 +507,7 @@ static int resolve_dyn_relocations(
 
                 //todo: search in .dynamic section for info about whereabouts of dynamic libraries
                 //todo: should one check if it is a function or an object? The readelf shows R_ARM_JUMP_SLOT for functions
-                const uint32_t dyn_address_replacement = get_dyn(symbol_name, dynlib_name);
+                const uint32_t dyn_address_replacement = get_dyn(symbol_name, dynlib);
                 if (!dyn_address_replacement) {
                         return -1; //no entry found
                 }
@@ -524,14 +559,23 @@ struct ProcessPage *load_exec(const void *fbytes) {
         }
         struct ProcessPage *ppage = load_pages_to_ram(fbytes);
 
-        const char *dynlib_name = retrieve_dynlib_name(fbytes, &sections);
-        //fixme: may return nullptr if no dynamic relocations needed, but should return error when more than one dynlib
-        if (dynlib_name) {
-                const int res = resolve_dyn_relocations(ppage, &sections, dynlib_name);
-                if (res < 0) {
+        const char *dynlib_name = nullptr;
+        const enum DynlibStatus status = retrieve_dynlib_name(&dynlib_name, fbytes, &sections);
+        if (status == OK && dynlib_name) {
+                struct Dynlib dynlib = {.name = dynlib_name};
+                if (load_dynlib(&dynlib) != 0) {
+                        return nullptr; //todo: graceful error
+                }
+                ppage->static_base = dynlib.static_base;
+
+                const int res = resolve_dyn_relocations(ppage, &sections, &dynlib);
+                if (res != 0) {
                         goto cleanup_err;
                 }
         }
+        else if (status == OK) {
+                ppage->static_base = nullptr;
+        } //todo: handle error cases
 
         const Address entry_point = find_entry_point(fbytes, &sections);
         if (!entry_point) {

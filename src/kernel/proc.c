@@ -303,7 +303,7 @@ static size_t process_stack_init_argv(void *pstack, char *const argv[]) {
         return i * sizeof(size_t);
 }
 
-static struct Process *create_blank_process(void (*process_entry_ptr)(void), char *const argv[]) {
+static struct Process *create_blank_process(void (*process_entry_ptr)(void), void *static_base, char *const argv[]) {
         static pid_t pid = 0;
 
         if (pid >= scheduler.max_processes) {
@@ -322,8 +322,7 @@ static struct Process *create_blank_process(void (*process_entry_ptr)(void), cha
         *(size_t *) (pstack_begin - offset - 28) = (size_t *) (pstack_begin - offset + sizeof(size_t)); //argv
         *(size_t *) (pstack_begin - offset - 32) = offset / sizeof(size_t);                             //argc
 
-        //FIXME: PLACE R9-PAGE ONLY IF NECCESSARY, TEMPORARILY IS ON THE KERNEL STACK...
-        *(size_t *) (pstack + 28) = (uintptr_t) pstack_begin + 1; //r9 = kernel stack...
+        *(size_t *) (pstack + 28) = (uintptr_t) static_base; //r9 = static base register
 
         struct Process process = {
                 .ppage = nullptr,
@@ -374,7 +373,7 @@ pid_t sys_spawnp_process(
                 files.fdtable[i] = current->files.fdtable[i];
         }
 
-        struct Process *process = create_blank_process(process_entry_ptr, argv);
+        struct Process *process = create_blank_process(process_entry_ptr, nullptr, argv);
         if (!process->ptr) {
                 return -1;
         }
@@ -433,7 +432,7 @@ pid_t sys_spawn_process(
                 files.fdtable[i] = current->files.fdtable[i];
         }
 
-        struct Process *process = create_blank_process(_start_address, argv);
+        struct Process *process = create_blank_process(_start_address, ppage->static_base, argv);
         if (!process->ptr) {
                 return -1;
         }
@@ -517,7 +516,7 @@ pid_t create_process_init(void (*process_entry_ptr)(void), struct VFS_Inode *roo
         }
 
         char *argv[] = {"init", "test", nullptr};
-        struct Process *process = create_blank_process(process_entry_ptr, argv);
+        struct Process *process = create_blank_process(process_entry_ptr, nullptr, argv);
         if (!process->ptr) {
                 __asm__("bkpt   #0");
         }
@@ -574,6 +573,7 @@ void sys_kill(const pid_t pid, int sig) {
 
         if (process->ppage) {
                 kfree(process->ppage->page_ptr);
+                kfree(process->ppage->static_base);
                 kfree(process->ppage);
         }
         kfree(process->files.fdtable);
