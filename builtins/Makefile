@@ -14,7 +14,7 @@ AS := arm-none-eabi-as
 LINKER := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
 
-CC_ARGS = -Ilibc -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -Wno-unused-parameter -Wno-discarded-qualifiers -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fPIC -c -O0
+CC_ARGS = -Ilibc -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -Wno-unused-parameter -Wno-discarded-qualifiers -Wno-missing-field-initializers -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fPIC -c -O0
 CXX_ARGS = -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -std=c++23 -c -O0
 AS_ARGS = --warn --fatal-warnings -mcpu=cortex-m33 -mthumb -g
 LINK_ARGS = -L. -Wl,-rpath,. -Wl,--dynamic-linker=/get_os/custom/ld.so -Wl,--gc-sections -ffreestanding -nostartfiles -mthumb -mcpu=cortex-m33 -pie
@@ -57,10 +57,14 @@ CAT_SRCS := $(SRCDIR)/cat.c
 CAT_OBJS := $(CAT_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 CAT := $(BINDIR)/cat
 
+MODBUS_SRCS := $(SRCDIR)/modbustcp.c
+MODBUS_OBJS := $(MODBUS_SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+MODBUS := $(BINDIR)/modbgen
+
 CRT0 := $(OBJDIR)/crt0.o
 
 ### Executables' rules
-all: liblibc.so $(CRT0) dirs $(GSH) $(MKDIR) $(TOUCH) $(CAT) $(LS)
+all: liblibc.so $(CRT0) dirs $(GSH) $(MKDIR) $(TOUCH) $(CAT) $(LS) $(MODBUS)
 
 
 # Link
@@ -79,6 +83,9 @@ $(TOUCH): $(TOUCH_OBJS) $(CRT0) liblibc.so | dirs
 $(CAT): $(CAT_OBJS) $(CRT0) liblibc.so | dirs
 	$(LINKER) $(LINK_ARGS) $(CAT_OBJS) $(CRT0) -llibc -o $@
 
+$(MODBUS): $(MODBUS_OBJS) $(CRT0) liblibc.so | dirs
+	$(LINKER) $(LINK_ARGS) $(MODBUS_OBJS) $(CRT0) -llibc -o $@
+
 
 # Generate object files from C and assembly sources
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | dirs
@@ -90,7 +97,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.s | dirs
 
 # Additional rules
 clean:
-	@rm -rf *.o *.elf $(OBJDIR) $(BINDIR) $(RAWDIR)
+	@rm -rf *.o *.elf $(OBJDIR) $(BINDIR) $(RAWDIR) liblibc.so
 
 dirs:
 	@mkdir -p $(DIRS)
@@ -101,11 +108,11 @@ $(OBJDIR)/libc.o: libc/libc.c | dirs
 	clang -Wno-missing-multilib --target=arm-none-eabi -Ilibc -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fropi -frwpi -c -O0 libc/libc.c -o $(OBJDIR)/libc.o
 
 liblibc.so: $(OBJDIR)/libc.o | dirs
-	$(CC) -Wl,-Bsymbolic -mthumb -fPIC -ffreestanding -nostartfiles -shared -o liblibc.so $(OBJDIR)/libc.o
+	$(CC) -Wl,-Bsymbolic -mthumb -fPIC -ffreestanding -nostartfiles -shared -Wl,-Trwpi.ld -o liblibc.so $(OBJDIR)/libc.o
 
 $(CRT0): crt0.s
 	$(AS) $(AS_ARGS) $< -o $(OBJDIR)/crt0.o
 
 initramfs: all
-	@cp bin/* initramfs/bin/
+	@cp bin/gsh bin/ls initramfs/bin/
 	@cp liblibc.so initramfs/lib/

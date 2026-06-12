@@ -69,8 +69,6 @@
 extern int optind;
 extern const char *optargs;
 
-void __attribute__((naked)) _start();
-
 /*
  * Syscalls
  */
