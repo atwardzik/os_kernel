@@ -16,6 +16,7 @@ struct ProcessPage {
 
         off_t _start_offset;
 
+        void *static_base;
         //todo: add leftover memory from process pages to reuse in the heap
 };
 

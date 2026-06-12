@@ -453,6 +453,9 @@ static int load_dynlib(struct Dynlib *dynlib) {
         dynlib->fbytes = fbytes;
         dynlib->sections = sections;
         dynlib->static_base = static_base;
+        memcpy(static_base, fbytes + (uintptr_t) dynlib->sections.data, dynlib->sections.data_len);
+        memset(static_base + dynlib->sections.data_len, 0, static_base_len - dynlib->sections.data_len);
+        //fixme: what about .dynamic and .got.plt?
 
         return 0;
 }
