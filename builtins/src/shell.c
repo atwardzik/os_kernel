@@ -181,15 +181,20 @@ void rawecho() {
 
 void run_program(const char *cmd) {
         // find if the program starts with dot slash
-        // find multiple arguments
         // find if there is an ampersand to get background processes (memchr)
-        // check if the program is an executable
+        // check if the program is an executable (from filesystem flags)
         // dummy solution for run parameters
-        char const *arg1 = strtok(nullptr, " ");
-        char const *arg2 = strtok(nullptr, " ");
-        char const *arg3 = strtok(nullptr, " ");
-        char const *arg4 = strtok(nullptr, " ");
-        char const *arg5 = strtok(nullptr, " ");
+        const char *program_args[20] = {cmd, nullptr};
+        int i = 1;
+        const char *arg;
+        while ((arg = strtok(nullptr, " ")) != nullptr) {
+                if (i == 19) { //the last one MUST be nullptr
+                        break;
+                }
+                program_args[i] = arg;
+                i += 1;
+        }
+        program_args[i] = nullptr;
 
         int fd = open(cmd, O_BINARY, 0);
         if (fd < 0) {
@@ -203,8 +208,7 @@ void run_program(const char *cmd) {
                 }
         }
 
-        char *const program_args[] = {cmd, arg1, arg2, arg3, arg4, arg5, nullptr};
-        spawn(fd, nullptr, nullptr, program_args, nullptr);
+        spawn(fd, nullptr, nullptr, (char * const *) program_args, nullptr);
 
         int code;
         const int returned_pid = wait(&code);

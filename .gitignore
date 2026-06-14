@@ -7,3 +7,5 @@ build/
 *.o
 *.elf
 *.uf2
+*.cio
+*.cpio

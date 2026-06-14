@@ -14,7 +14,7 @@ AS := arm-none-eabi-as
 LINKER := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
 
-CC_ARGS = -Ilibc -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -Wno-unused-parameter -Wno-discarded-qualifiers -Wno-missing-field-initializers -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fPIC -c -O0
+CC_ARGS = -Ilibc -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -Wno-unused-parameter -Wno-discarded-qualifiers -Wno-missing-field-initializers -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fPIC -c -g -O0
 CXX_ARGS = -Wall -Wextra -Wpedantic -Werror -Wno-unused-variable -std=c++23 -c -O0
 AS_ARGS = --warn --fatal-warnings -mcpu=cortex-m33 -mthumb -g
 LINK_ARGS = -L. -Wl,-rpath,. -Wl,--dynamic-linker=/get_os/custom/ld.so -Wl,--gc-sections -ffreestanding -nostartfiles -mthumb -mcpu=cortex-m33 -pie
@@ -105,10 +105,18 @@ dirs:
 	@mkdir -p $(BINDIR)
 
 $(OBJDIR)/libc.o: libc/libc.c | dirs
-	clang -Wno-missing-multilib --target=arm-none-eabi -Ilibc -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fropi -frwpi -c -O0 libc/libc.c -o $(OBJDIR)/libc.o
+	clang -Wno-missing-multilib --target=arm-none-eabi -Ilibc -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fropi -frwpi -c -g -O0 libc/libc.c -o $(OBJDIR)/libc.o
+	arm-none-eabi-objcopy \
+        --only-keep-debug \
+        build/libc.o \
+        build/libc.dbg
+	arm-none-eabi-objcopy \
+        --strip-debug \
+        build/libc.o \
+        build/libc_stripped.o
 
 liblibc.so: $(OBJDIR)/libc.o | dirs
-	$(CC) -Wl,-Bsymbolic -mthumb -fPIC -ffreestanding -nostartfiles -shared -Wl,-Trwpi.ld -o liblibc.so $(OBJDIR)/libc.o
+	$(CC) -Wl,-Bsymbolic -mthumb -fPIC -ffreestanding -nostartfiles -shared -Wl,-Trwpi.ld -o liblibc.so $(OBJDIR)/libc_stripped.o
 
 $(CRT0): crt0.s
 	$(AS) $(AS_ARGS) $< -o $(OBJDIR)/crt0.o

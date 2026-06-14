@@ -596,7 +596,7 @@ int getopt(int argc, char *const argv[], const char *optstring) {
                 index += 1;
         }
         else if (option == PARAM && argv[index + 1]) {
-                // optargs = argv[index + 1];
+                optargs = argv[index + 1];
                 index += 2;
         }
         else if (option == PARAM) {
