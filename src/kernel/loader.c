@@ -169,6 +169,9 @@ typedef struct {
         const Elf32_Rel *rel_plt;
         size_t rel_plt_len;
 
+        const Elf32_Rel *rel_dyn;
+        size_t rel_dyn_len;
+
         const Elf32_Rel *rel_data;
         size_t rel_data_len;
 
@@ -284,6 +287,10 @@ static Elf32_Sections parse_sections(const void *fbytes) {
                 else if (strcmp(section_name, ".rel.plt") == 0) {
                         sections.rel_plt = (Elf32_Rel *) (fbytes + shdr->sh_offset);
                         sections.rel_plt_len = shdr->sh_size / sizeof(Elf32_Rel);
+                }
+                else if (strcmp(section_name, ".rel.dyn") == 0) {
+                        sections.rel_dyn = (Elf32_Rel *) (fbytes + shdr->sh_offset);
+                        sections.rel_dyn_len = shdr->sh_size / sizeof(Elf32_Rel);
                 }
                 else if (strcmp(section_name, ".rel.data") == 0) {
                         sections.rel_data = (Elf32_Rel *) (fbytes + shdr->sh_offset);
@@ -487,8 +494,7 @@ static uint32_t get_dyn(const char *symbol_name, const struct Dynlib *dynlib) {
                 if (strcmp(name, symbol_name) == 0) {
                         const Address offset = symbol->st_value;
 
-                        return (uintptr_t) (dynlib->fbytes + (uintptr_t) dynlib->sections.data + offset);
-                        //fixme: symbol value is relative to ...? Sometimes beginning of a file, sometimes .data section
+                        return offset;
                 }
 
                 index = chain[index];
@@ -510,14 +516,31 @@ static int resolve_dyn_relocations(
 
                 //todo: search in .dynamic section for info about whereabouts of dynamic libraries
                 //todo: should one check if it is a function or an object? The readelf shows R_ARM_JUMP_SLOT for functions
-                const uint32_t dyn_address_replacement = get_dyn(symbol_name, dynlib);
+                //fixme: symbol value is relative to ...? Sometimes beginning of a file, sometimes .data section...
+                const uintptr_t dyn_address_replacement = (uintptr_t) dynlib->fbytes +
+                                                          (uintptr_t) dynlib->sections.data +
+                                                          get_dyn(symbol_name, dynlib);
                 if (!dyn_address_replacement) {
                         return -1; //no entry found
                 }
 
                 //For an executable file or a shared object, the offset is the virtual address of the storage
                 //unit affected by the relocation.
-                memcpy(buffer + rel->r_offset, (char *) &dyn_address_replacement, 4); //endianess?
+                memcpy(buffer + rel->r_offset, (char *) &dyn_address_replacement, 4);
+        }
+
+        for (size_t i = 0; i < sections->rel_dyn_len; ++i) {
+                const Elf32_Rel *rel = &sections->rel_dyn[i];
+                const Elf32_Sym *symbol = &sections->dynsym[ELF32_R_SYM(rel->r_info)];
+                const char *symbol_name = &sections->dynstr[symbol->st_name];
+
+                //fixme: is it always sb relative?
+                const uintptr_t dyn_address_replacement = (uintptr_t) ppage->static_base + get_dyn(symbol_name, dynlib);
+                if (!dyn_address_replacement) {
+                        return -1; //no entry found
+                }
+
+                memcpy(buffer + rel->r_offset, (char *) &dyn_address_replacement, 4);
         }
 
         return 0;
