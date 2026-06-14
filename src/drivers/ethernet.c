@@ -506,7 +506,7 @@ static int tx_frame(struct File *socket_file, void *frame, const size_t frame_si
 
         socket_command(socket->index, CMD_SEND);
         const int status = wait_send_complete(socket);
-        return status;
+        return status == 0 ? frame_size : 0;
 }
 
 static int rx_frame(struct File *socket_file, void *buf, size_t count, off_t) {
